@@ -34,7 +34,7 @@ in (
       lib.lists.forEach
       cfgConfigInterface
       ( interface_conf: {
-        links = {
+        links = lib.attrsets.optionalAttrs (builtins.isString interface_conf.mac) {
           "${interfaceFilename interface_conf.name}" = {
             matchConfig.PermanentMACAddress = interface_conf.mac;
             linkConfig = interface_conf.linkConfig // {
@@ -68,7 +68,11 @@ in (
             enable = true;
             matchConfig.Name = bridge_conf.name;
             linkConfig = {
-              RequiredForOnline = lib.mkDefault false;
+              RequiredForOnline =
+                if interface_conf.requiredForOnline == null
+                then lib.mkDefault false
+                else interface_conf.requiredForOnline
+              ;
             };
             networkConfig = {
               LinkLocalAddressing = lib.mkDefault "no";
@@ -187,7 +191,7 @@ in (
                 csv-format = true;
                 data = cidr.minAddr;
               }
-            ] ++ lib.lists.optional (dhcp_interface_conf.dhcp.server.default_route) { # code = 3;
+            ] ++ lib.lists.optional (dhcp_interface_conf.dhcp.server.default-route) { # code = 3;
               name = "routers";
               data = cidr.address;
             } ++ lib.lists.optional (dhcp_interface_conf.dhcp.server.classless-static-route) {
