@@ -201,9 +201,12 @@ let
             };
 
             reservations-only = mkOption {
-              description = '''';
+              description = ''
+                Only reply to the client which matches the information in `dhcp.server.reservations`.
+              '';
               type = bool;
               default = false;
+              example = true;
             };
 
             reservations = mkOption {
