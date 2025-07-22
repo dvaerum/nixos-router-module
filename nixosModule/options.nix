@@ -19,6 +19,7 @@ let
     path
     package
     enum
+    attrs
 
     nullOr
     listOf
@@ -344,56 +345,81 @@ let
 
     # Alias for `systemd.network.links.<name>.linkConfig`,
     # but with the description updated to share this info.
-    linkConfig = (
-      builtins.elemAt
-      ( builtins.elemAt
-        options.systemd.network.links.type.getSubModules
-        0
-      ).imports
-      0
-    ).options.linkConfig // {
+    linkConfig = let
       description = ''
         Alias for `systemd.network.links.<name>.linkConfig`.
 
         Basically live copy-paste of the NixOS `options` for this systemd setting.
       '';
-    };
+    in (
+      # To-do: This if-else statement "hack" is done, because otherwise
+      #        I would have to provide `pkgs.nixosOptionsDoc` with part of
+      #        `systemd` module from NixOS otherwise `pkgs.nixosOptionsDoc`
+      #        would fail.
+      #        I hope to find a better way to handle this alias.
+      if builtins.hasAttr "systemd" options
+      then (
+        ( builtins.elemAt
+          ( builtins.elemAt
+            options.systemd.network.links.type.getSubModules
+            0
+          ).imports
+          0
+        ).options.linkConfig // { inherit description; }
+      )
+      else (
+        mkOption {
+          description = description;
+          type = attrs;
+        }
+      )
+    );
 
     vlans = mkOption {
+      description = ''
+        Create a interface to handle VLAN tagged packages recieved on this interface.
+      '';
       default = [];
       type = listOf (submodule {options = setVlanOptions;});
     };
 
     bridges = mkOption {
+      description = ''
+        Creating a bridge interface with and include this interface in the bridge.
+      '';
       default = [];
       type = listOf (submodule {options = setBridgeOptions;});
     };
   } // interfaceSharedOptions;
 
 in {
-  my.router = with lib; {
-    enable = mkOption {
-      description = "Enable Router module";
-      type = bool;
-      default = false;
-      example = true;
-    };
+  imports = [];
+  options = {
+    my.router = {
+      enable = mkOption {
+        description = "Enable Router module";
+        type = bool;
+        default = false;
+        example = true;
+      };
 
-    configInterface = mkOption {
-      description = "List of configured network interfaces";
-      type = listOf (submodule {options = setInterfaceOptions;});
-      default = [];
-    };
+      configInterface = mkOption {
+        description = "List of configured network interfaces";
+        type = listOf (submodule {options = setInterfaceOptions;});
+        default = [];
+      };
 
-    defaultRouteInterface = mkOption {
-      description = "Name of the network interface with the default route";
-      type = networkTypes.interfaceName;
-      default = defaultInterfaceName;
-    };
+      defaultRouteInterface = mkOption {
+        description = "Name of the network interface with the default route";
+        type = networkTypes.interfaceName;
+        default = defaultInterfaceName;
+      };
 
-    dhcp.server = {
-      generalSettings = setGeneralSettings;
-      leaseDatabase = setLeaseDatabase;
+      dhcp.server = {
+        generalSettings = setGeneralSettings;
+        leaseDatabase = setLeaseDatabase;
+      };
     };
   };
+  config = {};
 }

@@ -8,9 +8,11 @@
 }:
 
 {
-  imports = [];
+  imports = [
+    ./options.nix
+  ];
 
-  options = import ./options.nix { inherit pkgs lib options; };
+  options = {};
 
   config = import ./config.nix { inherit pkgs lib config; };
 }
