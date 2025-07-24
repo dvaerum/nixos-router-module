@@ -73,6 +73,8 @@ rec {
     )
   ));
 
+  cfgSetDhcpServerInterfaceOnlyFilter = (fn: lib.lists.filter fn cfgSetDhcpServerInterfaceOnly);
+
   getInterfaceConf = (name: (
     lib.lists.findSingle
     (link_conf: link_conf.linkConfig.Name == name)

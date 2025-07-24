@@ -25,6 +25,7 @@ let
     listOf
     attrsOf
     attrTag
+    either
 
     submodule
   ;
@@ -231,6 +232,24 @@ let
               example = { "00:11:22:33:44:55" = { ip-address = "192.168.1.2"; }; };
             };
 
+            ipxe-boot = {
+              enable = mkOption {
+                description = ''
+                  Enable iPXE Boot support for this network interface.
+                '';
+                type = bool;
+                default = false;
+                example = true;
+              };
+              environment = mkOption {
+                description = ''
+                  Name of the boot environment.
+                '';
+                type = str;
+                example = "RHEL9.6";
+              };
+            };
+
             domainName = domainName;
           };};
           default = {};
@@ -418,6 +437,61 @@ in {
       dhcp.server = {
         generalSettings = setGeneralSettings;
         leaseDatabase = setLeaseDatabase;
+      };
+
+
+      ipxe-boot = {
+        enable = mkOption {
+          description = ''
+            Enable support for iPXE Boot.
+
+            This will download iPXE boot binaries and
+            prepare supported Linux distrobutions for download.
+          '';
+          type = bool;
+          default = false;
+          example = true;
+        };
+        isoFolderPath = mkOption {
+          description = ''
+            Path to the folder which contains the iso files.
+          '';
+          type = path;
+          example = "/data/iso";
+        };
+        environments = mkOption {
+          description = ''
+            Configure distrobutions which can be iPXE Booted.
+          '';
+          default = {};
+          example = {"RHEL9.6" = {isoName = "rhel-9.6-x86_64-dvd.iso"; type = "RHEL";};};
+          type = attrsOf (submodule { options = {
+            isoName = mkOption {
+              description = ''
+                Name of the ISO file which should be booted.
+              '';
+              type = str;
+              example = "rhel-9.6-x86_64-dvd.iso";
+            };
+            type = mkOption {
+              description = ''
+                Select the provider of the ISO file.
+              '';
+              type = enum ["RHEL"];
+              example = "RHEL";
+            };
+            kStartScript = mkOption {
+              description = ''
+                If a kstart-script is provided
+                it will be used to create an unattented install
+                of the new OS.
+              '';
+              type = nullOr (either path str);
+              default = null;
+              example = ./path/to/script.kstart;
+            };
+          };});
+        };
       };
     };
   };

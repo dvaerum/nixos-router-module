@@ -15,6 +15,7 @@
     cfgDefaultRouteInterface
 
     cfgSetDhcpServerInterfaceOnly
+    cfgSetDhcpServerInterfaceOnlyFilter
 
     vlanName
     vlanFilename
@@ -155,29 +156,92 @@ in (
           severity = "DEBU";
         }];
 
+        client-classes = ( lib.lists.concatMap
+          ( dhcp_interface_conf: let
+
+            dhcp_server = dhcp_interface_conf.dhcp.server;
+            gateway = ( ipv4_fn.fromCidrString dhcp_server.gateway ).address;
+            ipxe-boot = dhcp_server.ipxe-boot;
+
+          in [
+            { name = "iPXE-${builtins.toString dhcp_server.id}";
+              # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
+              only-if-required = true;
+              test = "option[175].exists";
+              option-data = [
+                { name = "tftp-server-name";
+                  data = gateway;
+                }
+                { name = "boot-file-name";
+#                   data = "tftp://${gateway}/ipxe-boot/${ipxe-boot.environment}/BOOT/BOOTX64.EFI";
+                  data = "tftp://${gateway}/ipxe-boot/main-${builtins.toString dhcp_server.id}.ipxe";
+                }
+              ];
+            }
+            { name = "UEFI clients-${builtins.toString dhcp_server.id}";
+              # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
+              only-if-required = true;
+              test = "option[93].hex == 0x0007 and not option[175].exists";
+              option-data = [
+                { name = "tftp-server-name";
+                  data = gateway;
+                }
+                { name = "boot-file-name";
+                  data = "ipxe-boot/ipxe.efi";
+                }
+              ];
+            }
+            { name = "BIOS clients-${builtins.toString dhcp_server.id}";
+              # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
+              only-if-required = true;
+              test = "option[93].hex == 0x0000 and not option[175].exists";
+              option-data = [
+                { name = "tftp-server-name";
+                  data = gateway;
+                }
+                { name = "boot-file-name";
+                  data = "ipxe-boot/undionly.kpxe";
+                }
+              ];
+            }
+          ])
+          ( cfgSetDhcpServerInterfaceOnlyFilter (
+              dhcp_interface_conf: dhcp_interface_conf.dhcp.server.ipxe-boot.enable
+            )
+          )
+        );
 
         subnet4 = lib.forEach cfgSetDhcpServerInterfaceOnly (dhcp_interface_conf: let
-            cidr = ipv4_fn.fromCidrString dhcp_interface_conf.dhcp.server.gateway;
+            dhcp_server = dhcp_interface_conf.dhcp.server;
+
+            cidr = ipv4_fn.fromCidrString dhcp_server.gateway;
 
             subnet = "${cidr.network}/${builtins.toString cidr.prefix}";
 
-            dhcpFirstIP = if dhcp_interface_conf.dhcp.server.firstIP == null
+            dhcpFirstIP = if dhcp_server.firstIP == null
               then ipv4_fn.increase {
                 ip = cidr.network; by = 5; subnet = subnet;}
               else ipv4_fn.increase {
                 ip = cidr.network;
-                by = dhcp_interface_conf.dhcp.server.firstIP;
+                by = dhcp_server.firstIP;
                 subnet = subnet;};
 
-            domainNames = dhcp_interface_conf.dhcp.server.domainName
+            domainNames = dhcp_server.domainName
               ++ cfg.dhcp.server.generalSettings.domainName;
 
           in {
-            id = dhcp_interface_conf.dhcp.server.id;
+            id = dhcp_server.id;
             pools = [
               ( { pool = "${dhcpFirstIP} - ${cidr.maxAddr}";
-                } // lib.attrsets.optionalAttrs dhcp_interface_conf.dhcp.server.reservations-only {
+                } // lib.attrsets.optionalAttrs dhcp_server.reservations-only {
                   client-class = "KNOWN";
+                } // lib.attrsets.optionalAttrs dhcp_server.ipxe-boot.enable {
+                  # To-do: Rename `require-client-classes` -> `evaluate-additional-classes` in v2.7.4+ of kea
+                  require-client-classes = [
+                    "iPXE-${builtins.toString dhcp_server.id}"
+                    "UEFI clients-${builtins.toString dhcp_server.id}"
+                    "BIOS clients-${builtins.toString dhcp_server.id}"
+                  ];
                 }
               )
             ];
@@ -191,10 +255,10 @@ in (
                 csv-format = true;
                 data = cidr.minAddr;
               }
-            ] ++ lib.lists.optional (dhcp_interface_conf.dhcp.server.default-route) { # code = 3;
+            ] ++ lib.lists.optional (dhcp_server.default-route) { # code = 3;
               name = "routers";
               data = cidr.address;
-            } ++ lib.lists.optional (dhcp_interface_conf.dhcp.server.classless-static-route) {
+            } ++ lib.lists.optional (dhcp_server.classless-static-route) {
               # source (example): https://github.com/isc-projects/kea/blob/60222843a6b2c4e7a6c7d4e63f88d0dcfa0d5b97/doc/examples/kea4/all-options.json#L1322-L1328
               name = "classless-static-route";
               data =
@@ -304,7 +368,7 @@ in (
         if (lib.pathExists ./netfilter.ruleset)
         then { rulesetFile = ./netfilter.ruleset; }
         else {
-#           checkRuleset = false;
+          # checkRuleset = false;
           tables."masquerade-ip-address" = {
             enable = true;
             family = "ip";

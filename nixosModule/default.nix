@@ -10,9 +10,12 @@
 {
   imports = [
     ./options.nix
+
+    ./config.nix
+    ./config-tftp.nix
   ];
 
   options = {};
 
-  config = import ./config.nix { inherit pkgs lib config; };
+  config = {};
 }
