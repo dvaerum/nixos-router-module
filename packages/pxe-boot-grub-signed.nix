@@ -22,9 +22,16 @@ stdenvNoCC.mkDerivation rec {
   installPhase = ''
     install --directory "$out"
 
-    install --target-directory "$out" \
+    install --mode 0444 --target-directory "$out" \
       "bootx64.efi" \
-      "pxelinux.0"
+      "pxelinux.0" \
+      "grubx64.efi"
+
+
+    install --directory "$out/linux"
+    install --mode 0444 --target-directory "$out/linux" \
+      "linux" \
+      "initrd"
   '';
 
   meta = {

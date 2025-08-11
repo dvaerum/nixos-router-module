@@ -53,6 +53,8 @@
     ''
   );
 
+  signed-grub = import ./../packages/pxe-boot-grub-signed.nix { inherit pkgs; };
+
 in (
   lib.mkIf cfg.ipxe-boot.enable {
 
@@ -78,7 +80,6 @@ in (
 
           dhcp_server = dhcp_interface_conf.dhcp.server;
           gateway = ( fromCidrString dhcp_server.gateway ).address;
-          ipxe-boot = dhcp_server.ipxe-boot;
 
         in
           ''
@@ -107,6 +108,8 @@ in (
         set -eu
         set -x
 
+        TFTP_ROOT_FOLDER_PATH="${config.services.atftpd.root}"
+
         ROOT_FOLDER_PATH=/run/ipxe-boot
         ISO_MOUNT_FOLDER_PATH="$ROOT_FOLDER_PATH/iso-mountpoint"
         ISO_UNATTENTED_INSTALL_FOLDER_PATH="$ROOT_FOLDER_PATH/unattented-install"
@@ -115,6 +118,69 @@ in (
         JSON_PATH="${json_path}"
         IPXE_BOOT_FOLDER_PATH="${ipxe_boot_folder}"
 
+        ### Grub Boot: Begin
+        url_base="(http,${"192.168.1.129"}:1337)"
+        url_iso_mountpoint="$url_base/iso-mountpoint"
+        url_iso_folder="http://${"192.168.1.129"}:1338"
+
+        rsync -a "${signed-grub}/." "$TFTP_ROOT_FOLDER_PATH/."
+        mkdir -p "$TFTP_ROOT_FOLDER_PATH/grub"
+        echo "" > "$TFTP_ROOT_FOLDER_PATH/grub/grub.cfg"
+
+        find "$ISO_FOLDER_PATH" -iname "*.iso" | while read -r absolute_iso_path; do
+          # k_start_script_path="$(jq -r ".[\"$name\"].kStartScriptPath" "$JSON_PATH")"
+          # iso_unattented_install_folder_path="$ISO_UNATTENTED_INSTALL_FOLDER_PATH/$name"
+          iso_file_name="$(basename "$absolute_iso_path")"
+          url_mounted_iso="$url_iso_mountpoint/$iso_file_name"
+
+          mount_folder_path="$ISO_MOUNT_FOLDER_PATH/$(basename "$absolute_iso_path")"
+
+          if ! [[ -d "$mount_folder_path" ]]; then
+            mkdir -p "$mount_folder_path"
+          fi
+          if mountpoint -q "$mount_folder_path"; then
+            if ! mount | awk '$3=="'"$mount_folder_path"'"' | grep "^$absolute_iso_path"; then
+              umount "$mount_folder_path"
+            fi
+          fi
+          if ! mountpoint -q "$mount_folder_path"; then
+            mount -t iso9660 "$absolute_iso_path" "$mount_folder_path" -o loop,ro
+          fi
+
+          squashfs_file_name="$(basename "$(find "$mount_folder_path" -iname '*.squashfs' | head -1 | tr -d '\n')")"
+          case "$squashfs_file_name" in
+            nix-store.squashfs)
+                linux_file_path="$(cd "$mount_folder_path" && find boot -iname "bzImage")"
+                initrd_file_path="$(cd "$mount_folder_path" && find boot -iname "initrd")"
+                iso_file_path="$url_iso_folder/$iso_file_name"
+
+                echo 'menuentry "'"$iso_file_name"'" {' >> "$TFTP_ROOT_FOLDER_PATH/grub/grub.cfg"
+                echo '    set gfxpayload=keep' >> "$TFTP_ROOT_FOLDER_PATH/grub/grub.cfg"
+                echo "    linux  $url_mounted_iso/$linux_file_path findiso=$iso_file_path root=LABEL=nixos-minimal-25.05-x86_64 boot.shell_on_fail nohibernate loglevel=4 lsm=landlock,yama,bpf" >> "$TFTP_ROOT_FOLDER_PATH/grub/grub.cfg"
+                echo "    initrd $url_mounted_iso/$initrd_file_path" >> "$TFTP_ROOT_FOLDER_PATH/grub/grub.cfg"
+                echo '}' >> "$TFTP_ROOT_FOLDER_PATH/grub/grub.cfg"
+              ;;
+
+            *)
+              echo "ERROR: Unable to detect boot ISO, cause the squashfs filename is unknown: $squashfs_file_name"
+              ;;
+          esac
+        done
+
+        echo 'menuentry "Reload Grub" {' >> "$TFTP_ROOT_FOLDER_PATH/grub/grub.cfg"
+        echo '    configfile /grub/grub.cfg' >> "$TFTP_ROOT_FOLDER_PATH/grub/grub.cfg"
+        echo '}' >> "$TFTP_ROOT_FOLDER_PATH/grub/grub.cfg"
+
+        find "$ISO_FOLDER_PATH" -iname "*.iso" | while read -r absolute_iso_path; do
+            iso_path="''${absolute_iso_path#$ISO_FOLDER_PATH/}"
+
+            echo 'menuentry "'"$iso_path"'" {' >> "$TFTP_ROOT_FOLDER_PATH/grub/grub.cfg"
+            echo '    set gfxpayload=keep' >> "$TFTP_ROOT_FOLDER_PATH/grub/grub.cfg"
+            echo "    linux   /linux/linux ignore_uuid iso-url=http://${"192.168.1.129"}:1337/$iso_path ip=dhcp ---" >> "$TFTP_ROOT_FOLDER_PATH/grub/grub.cfg"
+            echo '    initrd  /linux/initrd' >> "$TFTP_ROOT_FOLDER_PATH/grub/grub.cfg"
+            echo '}' >> "$TFTP_ROOT_FOLDER_PATH/grub/grub.cfg"
+        done
+        ### Grub Boot: End
 
         mkdir -p "$IPXE_BOOT_FOLDER_PATH"
         (
@@ -153,7 +219,6 @@ in (
             mount -t iso9660 "$iso_file_path" "$mount_folder_path" -o loop,ro
           fi
 
-
           if ! [[ -d "$iso_unattented_install_folder_path" ]]; then
             mkdir -p "$iso_unattented_install_folder_path"
           fi
@@ -172,7 +237,23 @@ in (
       serviceConfig = {
         RuntimeDirectory="ipxe-boot";
         DynamicUser=true;
+#         ExecStart=''${lib.getExe pkgs.darkhttpd} ${iso_folder_path} --port 1337'';
         ExecStart=''${lib.getExe pkgs.darkhttpd} /run/ipxe-boot --port 1337'';
+#         ExecStop=''/run/wrappers/bin/umount --recursive /run/ipxe-boot'';
+      };
+    };
+
+    systemd.services."ipxe-boot-http-server2" = {
+      enable = true;
+      description = "iPXE Boot - HTTP Server2";
+      after = [ "network.target" ];
+      wantedBy = [ "multi-user.target" ];
+
+      path = with pkgs; [darkhttpd];
+      serviceConfig = {
+        DynamicUser=true;
+        ExecStart=''${lib.getExe pkgs.darkhttpd} ${iso_folder_path} --port 1338'';
+#         ExecStart=''${lib.getExe pkgs.darkhttpd} /run/ipxe-boot --port 1337'';
 #         ExecStop=''/run/wrappers/bin/umount --recursive /run/ipxe-boot'';
       };
     };
