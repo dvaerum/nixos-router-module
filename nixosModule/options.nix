@@ -74,13 +74,13 @@ let
     };
   };
 
-  domainName = with lib; mkOption {
+  domainName = mkOption {
     description = "Provide list of Domain Name(s)";
     type = listOf networkTypes.FQDN;
     default = [];
   };
 
-  setLeaseDatabase = with lib; mkOption {
+  setLeaseDatabase = mkOption {
     description = "Specify the type of lease database";
     type = submodule { options = {
       name = mkOption {
@@ -102,7 +102,7 @@ let
     default = {};
   };
 
-  setGeneralSettings = with lib; mkOption {
+  setGeneralSettings = mkOption {
     description = "Config";
     type = submodule { options = {
       rebindTimer = mkOption {
@@ -125,7 +125,7 @@ let
     default = {};
   };
 
-  setDhcpOptions = with lib; mkOption {
+  setDhcpOptions = mkOption {
     description = ''
       Select if this network interface should be configured for DHCP Server or Client.
       It is also possible to just assign a static IP.
@@ -258,7 +258,7 @@ let
     );
   };
 
-  interfaceSharedOptions = with lib; {
+  interfaceSharedOptions = {
     dhcp = setDhcpOptions;
 
     forwarding = mkOption {
@@ -323,7 +323,7 @@ let
     };
   };
 
-  setBridgeOptions = with lib; {
+  setBridgeOptions = {
     name = mkOption {
       description = ''
         Select the name of the bridge interface
@@ -333,7 +333,7 @@ let
     };
   };
 
-  setVlanOptions = with lib; {
+  setVlanOptions = {
     id = mkOption {
       description = "Set VLan ID of the network interface";
       type = ints.between 1 4096;
@@ -350,7 +350,7 @@ let
     };
   } // interfaceSharedOptions;
 
-  setInterfaceOptions = with lib; {
+  setInterfaceOptions = {
     mac = mkOption {
       description = "MAC address of the network interface";
       type = nullOr networkTypes.macAddress;
