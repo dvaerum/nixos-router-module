@@ -5,11 +5,11 @@
 with pkgs;
 stdenvNoCC.mkDerivation rec {
   pname = "grub-netboot-with-secure-boot";
-  version = "24.04.2";
+  version = "24.04.3";
 
   src = fetchurl {
     url = "https://releases.ubuntu.com/${lib.strings.substring 0 5 version}/ubuntu-${version}-netboot-amd64.tar.gz";
-    hash = "sha256-0aZfi6c3V6PccEviPDgwUP+KalChfOtRh1lb8kVQr0E=";
+    hash = "sha256-eSXr1ipHvUCF7iqgZVyVSPgl9E8Ok8KsHjyyx5jvic0=";
   };
 
   dontPatch = true;
