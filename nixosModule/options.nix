@@ -232,21 +232,30 @@ let
               example = { "00:11:22:33:44:55" = { ip-address = "192.168.1.2"; }; };
             };
 
-            ipxe-boot = {
+            pxe-boot = {
               enable = mkOption {
                 description = ''
-                  Enable iPXE Boot support for this network interface.
+                  Enable PXE Boot support for this network interface.
                 '';
                 type = bool;
                 default = false;
                 example = true;
               };
-              environment = mkOption {
+              defaultIso = mkOption {
                 description = ''
-                  Name of the boot environment.
+                  Select which ISO file should be selected by default.
                 '';
                 type = str;
-                example = "RHEL9.6";
+                default = "";
+                example = "rhel-9.6-x86_64-dvd.iso";
+              };
+              defaultScriptName = mkOption {
+                description = ''
+                  Select which autoinstall script should be selected by default.
+                '';
+                type = str;
+                default = "";
+                example = "minimal-environment.kstart";
               };
             };
 
@@ -440,12 +449,12 @@ in {
       };
 
 
-      ipxe-boot = {
+      pxe-boot = {
         enable = mkOption {
           description = ''
-            Enable support for iPXE Boot.
+            Enable support for PXE Boot.
 
-            This will download iPXE boot binaries and
+            This will download PXE boot binaries and
             prepare supported Linux distrobutions for download.
           '';
           type = bool;
@@ -459,38 +468,54 @@ in {
           type = path;
           example = "/data/iso";
         };
-        environments = mkOption {
+#         environments = mkOption {
+#           description = ''
+#             Configure autoinstall script for the different ISOs
+#           '';
+#           default = {};
+#           type = attrsOf (submodule { options = {
+#             scriptName = mkOption {
+#               description = ''
+#                 Name of the script in the GRUB Menu.
+#               '';
+#               type = str;
+#               example = "minimal-environment.kstart";
+#             };
+#             script = mkOption {
+#               description = ''
+#                 Provide the content of the script or the path to the script
+#               '';
+#               type = either path str;
+#               default = null;
+#               example = ./path/to/script.kstart;
+#             };
+#           };});
+#         };
+
+        autoinstall = mkOption {
           description = ''
-            Configure distrobutions which can be iPXE Booted.
+            Configure autoinstall script for the different ISOs
           '';
           default = {};
-          example = {"RHEL9.6" = {isoName = "rhel-9.6-x86_64-dvd.iso"; type = "RHEL";};};
-          type = attrsOf (submodule { options = {
-            isoName = mkOption {
+          example = { "rhel-9.6-x86_64-dvd.iso" = {
+            scriptName = "minimal-environment.kstart"; script = ./path/to/script.kstart;
+          };};
+          type = attrsOf (listOf (submodule {options = {
+            scriptName = mkOption {
               description = ''
-                Name of the ISO file which should be booted.
+                Name of the script in the GRUB Menu.
               '';
               type = str;
-              example = "rhel-9.6-x86_64-dvd.iso";
+              example = "minimal-environment.kstart";
             };
-            type = mkOption {
+            script = mkOption {
               description = ''
-                Select the provider of the ISO file.
+                Provide the content of the script or the path to the script
               '';
-              type = enum ["RHEL"];
-              example = "RHEL";
-            };
-            kStartScript = mkOption {
-              description = ''
-                If a kstart-script is provided
-                it will be used to create an unattented install
-                of the new OS.
-              '';
-              type = nullOr (either path str);
-              default = null;
+              type = either path str;
               example = ./path/to/script.kstart;
             };
-          };});
+          };}));
         };
       };
     };

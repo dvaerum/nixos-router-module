@@ -161,7 +161,7 @@ in (
 
             dhcp_server = dhcp_interface_conf.dhcp.server;
             gateway = ( ipv4_fn.fromCidrString dhcp_server.gateway ).address;
-            ipxe-boot = dhcp_server.ipxe-boot;
+            pxe-boot = dhcp_server.pxe-boot;
 
           in [
             { name = "iPXE-${builtins.toString dhcp_server.id}";
@@ -173,8 +173,8 @@ in (
                   data = gateway;
                 }
                 { name = "boot-file-name";
-#                   data = "tftp://${gateway}/ipxe-boot/${ipxe-boot.environment}/BOOT/BOOTX64.EFI";
-                  data = "tftp://${gateway}/ipxe-boot/main-${builtins.toString dhcp_server.id}.ipxe";
+#                   data = "tftp://${gateway}/pxe-boot/${pxe-boot.environment}/BOOT/BOOTX64.EFI";
+                  data = "tftp://${gateway}/main.ipxe";
                 }
               ];
             }
@@ -182,12 +182,16 @@ in (
               # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
               only-if-required = true;
               test = "option[93].hex == 0x0007 and not option[175].exists";
+
+              # This is apparently need for Grub2 or it will not load `/grub/grub.cfg`
+              next-server = gateway;
+
               option-data = [
                 { name = "tftp-server-name";
                   data = gateway;
                 }
                 { name = "boot-file-name";
-                  data = "ipxe-boot/ipxe.efi";
+                  data = "grubx64.efi";
                 }
               ];
             }
@@ -200,13 +204,13 @@ in (
                   data = gateway;
                 }
                 { name = "boot-file-name";
-                  data = "ipxe-boot/undionly.kpxe";
+                  data = "grub.pxe";
                 }
               ];
             }
           ])
           ( cfgSetDhcpServerInterfaceOnlyFilter (
-              dhcp_interface_conf: dhcp_interface_conf.dhcp.server.ipxe-boot.enable
+              dhcp_interface_conf: dhcp_interface_conf.dhcp.server.pxe-boot.enable
             )
           )
         );
@@ -235,7 +239,7 @@ in (
               ( { pool = "${dhcpFirstIP} - ${cidr.maxAddr}";
                 } // lib.attrsets.optionalAttrs dhcp_server.reservations-only {
                   client-class = "KNOWN";
-                } // lib.attrsets.optionalAttrs dhcp_server.ipxe-boot.enable {
+                } // lib.attrsets.optionalAttrs dhcp_server.pxe-boot.enable {
                   # To-do: Rename `require-client-classes` -> `evaluate-additional-classes` in v2.7.4+ of kea
                   require-client-classes = [
                     "iPXE-${builtins.toString dhcp_server.id}"
