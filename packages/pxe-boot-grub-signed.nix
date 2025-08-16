@@ -15,7 +15,15 @@ stdenvNoCC.mkDerivation rec {
   dontPatch = true;
   dontConfigure = true;
 
+  nativeBuildInputs = [ grub2 ];
+
   buildPhase = ''
+    grub-mkimage \
+      -O i386-pc-pxe \
+      -o "grub.pxe" \
+      -p /grub \
+      pxe tftp http configfile normal linux
+
     ls -la
   '';
 
@@ -23,15 +31,9 @@ stdenvNoCC.mkDerivation rec {
     install --directory "$out"
 
     install --mode 0444 --target-directory "$out" \
+      "grub.pxe" \
       "bootx64.efi" \
-      "pxelinux.0" \
       "grubx64.efi"
-
-
-    install --directory "$out/linux"
-    install --mode 0444 --target-directory "$out/linux" \
-      "linux" \
-      "initrd"
   '';
 
   meta = {
