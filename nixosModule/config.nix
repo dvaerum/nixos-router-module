@@ -118,8 +118,19 @@ in (
       })
     ));
 
+    systemd.services.kea-dhcp4-server = {
+      serviceConfig = {
+        Restart = "always";
+        RestartSec = "10s";
+      };
+    };
+    services.kea.dhcp4 = let
 
-    services.kea.dhcp4 = lib.attrsets.optionalAttrs (lib.length cfgSetDhcpServerInterfaceOnly > 0) {
+      dhcp_server_interface_pxeboot_enabled = cfgSetDhcpServerInterfaceOnlyFilter (
+        dhcp_interface_conf: dhcp_interface_conf.dhcp.server.pxe-boot.enable
+      );
+
+    in lib.attrsets.optionalAttrs (lib.length cfgSetDhcpServerInterfaceOnly > 0) {
       enable = true;
       settings = {
         control-socket = {
@@ -155,65 +166,6 @@ in (
           ];
           severity = "DEBU";
         }];
-
-        client-classes = ( lib.lists.concatMap
-          ( dhcp_interface_conf: let
-
-            dhcp_server = dhcp_interface_conf.dhcp.server;
-            gateway = ( ipv4_fn.fromCidrString dhcp_server.gateway ).address;
-            pxe-boot = dhcp_server.pxe-boot;
-
-          in [
-            { name = "iPXE-${builtins.toString dhcp_server.id}";
-              # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
-              only-if-required = true;
-              test = "option[175].exists";
-              option-data = [
-                { name = "tftp-server-name";
-                  data = gateway;
-                }
-                { name = "boot-file-name";
-#                   data = "tftp://${gateway}/pxe-boot/${pxe-boot.environment}/BOOT/BOOTX64.EFI";
-                  data = "tftp://${gateway}/main.ipxe";
-                }
-              ];
-            }
-            { name = "UEFI clients-${builtins.toString dhcp_server.id}";
-              # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
-              only-if-required = true;
-              test = "option[93].hex == 0x0007 and not option[175].exists";
-
-              # This is apparently need for Grub2 or it will not load `/grub/grub.cfg`
-              next-server = gateway;
-
-              option-data = [
-                { name = "tftp-server-name";
-                  data = gateway;
-                }
-                { name = "boot-file-name";
-                  data = "grubx64.efi";
-                }
-              ];
-            }
-            { name = "BIOS clients-${builtins.toString dhcp_server.id}";
-              # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
-              only-if-required = true;
-              test = "option[93].hex == 0x0000 and not option[175].exists";
-              option-data = [
-                { name = "tftp-server-name";
-                  data = gateway;
-                }
-                { name = "boot-file-name";
-                  data = "grub.pxe";
-                }
-              ];
-            }
-          ])
-          ( cfgSetDhcpServerInterfaceOnlyFilter (
-              dhcp_interface_conf: dhcp_interface_conf.dhcp.server.pxe-boot.enable
-            )
-          )
-        );
 
         subnet4 = lib.forEach cfgSetDhcpServerInterfaceOnly (dhcp_interface_conf: let
             dhcp_server = dhcp_interface_conf.dhcp.server;
@@ -300,7 +252,62 @@ in (
               }
             ) dhcp_interface_conf.dhcp.server.reservations;
         });
-      };
+      } // (lib.attrsets.optionalAttrs (lib.lists.length dhcp_server_interface_pxeboot_enabled > 0) {
+        client-classes = ( lib.lists.concatMap
+          ( dhcp_interface_conf: let
+
+            dhcp_server = dhcp_interface_conf.dhcp.server;
+            gateway = ( ipv4_fn.fromCidrString dhcp_server.gateway ).address;
+            pxe-boot = dhcp_server.pxe-boot;
+
+          in [
+            { name = "iPXE-${builtins.toString dhcp_server.id}";
+              # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
+              only-if-required = true;
+              test = "option[175].exists";
+              option-data = [
+                { name = "tftp-server-name";
+                  data = gateway;
+                }
+                { name = "boot-file-name";
+                  data = "tftp://${gateway}/main.ipxe";
+                }
+              ];
+            }
+            { name = "UEFI clients-${builtins.toString dhcp_server.id}";
+              # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
+              only-if-required = true;
+              test = "option[93].hex == 0x0007 and not option[175].exists";
+
+              # This is apparently need for Grub2 or it will not load `/grub/grub.cfg`
+              next-server = gateway;
+
+              option-data = [
+                { name = "tftp-server-name";
+                  data = gateway;
+                }
+                { name = "boot-file-name";
+                  data = "grubx64.efi";
+                }
+              ];
+            }
+            { name = "BIOS clients-${builtins.toString dhcp_server.id}";
+              # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
+              only-if-required = true;
+              test = "option[93].hex == 0x0000 and not option[175].exists";
+              option-data = [
+                { name = "tftp-server-name";
+                  data = gateway;
+                }
+                { name = "boot-file-name";
+                  data = "grub.pxe";
+                }
+              ];
+            }
+          ])
+          dhcp_server_interface_pxeboot_enabled
+        );
+      });
     };
 
 
