@@ -651,12 +651,18 @@ attribute set
 
 
 
-MAC address of the network interface
+MAC address of the network interface\.
+
+It can be either a MAC-address or list of MAC-addresses\.
+
+**Example:** A list of MAC-addresses can make sense if you have multiple
+USB adapter which are not connected at the same time, but you want to have
+the same network interface name (and want to be configured the same)
 
 
 
 *Type:*
-null or (Mac Address (use \`:\` or \`-\` as separator))
+null or (list of (Mac Address (use \`:\` or \`-\` as separator))) or (Mac Address (use \`:\` or \`-\` as separator))
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
