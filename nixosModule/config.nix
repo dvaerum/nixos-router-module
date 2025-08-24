@@ -120,7 +120,7 @@ in (
 
     systemd.services.kea-dhcp4-server = {
       serviceConfig = {
-        Restart = "always";
+        Restart = lib.mkForce "always";
         RestartSec = "10s";
       };
     };
