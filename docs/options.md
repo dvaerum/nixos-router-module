@@ -616,6 +616,14 @@ boolean
 
 
 
+```
+    Enable ip masquerade (aka NAT) on the interface.
+
+This is needed e.g. if the interface is the WAN interface.
+```
+
+
+
 *Type:*
 boolean
 
@@ -1279,6 +1287,14 @@ integer between 1 and 4096 (both inclusive)
 
 
 ## my\.router\.configInterface\.\*\.vlans\.\*\.ipMasquerade
+
+
+
+```
+    Enable ip masquerade (aka NAT) on the interface.
+
+This is needed e.g. if the interface is the WAN interface.
+```
 
 
 
