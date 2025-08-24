@@ -293,7 +293,11 @@ let
     };
 
     ipMasquerade = mkOption {
-      description = '''';
+      description = ''
+        Enable ip masquerade (aka NAT) on the interface.
+
+	This is needed e.g. if the interface is the WAN interface.
+      '';
       type = bool;
       default = false;
     };
