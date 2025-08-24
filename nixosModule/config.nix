@@ -35,7 +35,7 @@ in (
       lib.lists.forEach
       cfgConfigInterface
       ( interface_conf: {
-        links = lib.attrsets.optionalAttrs (builtins.isString interface_conf.mac) {
+        links = lib.attrsets.optionalAttrs (! builtins.isNull interface_conf.mac) {
           "${interfaceFilename interface_conf.name}" = {
             matchConfig.PermanentMACAddress = interface_conf.mac;
             linkConfig = interface_conf.linkConfig // {

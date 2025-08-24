@@ -361,8 +361,19 @@ let
 
   setInterfaceOptions = {
     mac = mkOption {
-      description = "MAC address of the network interface";
-      type = nullOr networkTypes.macAddress;
+      description = ''
+        MAC address of the network interface.
+
+        It can be either a MAC-address or list of MAC-addresses.
+
+        **Example:** A list of MAC-addresses can make sense if you have multiple
+        USB adapter which are not connected at the same time, but you want to have
+        the same network interface name (and want to be configured the same)
+      '';
+      type = nullOr (either
+        (listOf networkTypes.macAddress)
+        networkTypes.macAddress
+      );
     };
 
     name = mkOption {
