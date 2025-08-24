@@ -379,7 +379,6 @@ let
     name = mkOption {
       description = "Set the name of the network interface";
       type = networkTypes.interfaceName;
-#       default = "${defaultInterfaceName}";
     };
 
     # Alias for `systemd.network.links.<name>.linkConfig`,
@@ -479,30 +478,6 @@ in {
           type = path;
           example = "/data/iso";
         };
-#         environments = mkOption {
-#           description = ''
-#             Configure autoinstall script for the different ISOs
-#           '';
-#           default = {};
-#           type = attrsOf (submodule { options = {
-#             scriptName = mkOption {
-#               description = ''
-#                 Name of the script in the GRUB Menu.
-#               '';
-#               type = str;
-#               example = "minimal-environment.kstart";
-#             };
-#             script = mkOption {
-#               description = ''
-#                 Provide the content of the script or the path to the script
-#               '';
-#               type = either path str;
-#               default = null;
-#               example = ./path/to/script.kstart;
-#             };
-#           };});
-#         };
-
         autoinstall = mkOption {
           description = ''
             Configure autoinstall script for the different ISOs
