@@ -195,8 +195,9 @@ in (
                   # To-do: Rename `require-client-classes` -> `evaluate-additional-classes` in v2.7.4+ of kea
                   require-client-classes = [
                     "iPXE-${builtins.toString dhcp_server.id}"
-                    "UEFI clients-${builtins.toString dhcp_server.id}"
-                    "BIOS clients-${builtins.toString dhcp_server.id}"
+                    "UEFI (x86_64) Client-${builtins.toString dhcp_server.id}"
+                    "BIOS Legacy (x86_64) Client-${builtins.toString dhcp_server.id}"
+                    "UEFI (aarch64) Client-${builtins.toString dhcp_server.id}"
                   ];
                 }
               )
@@ -274,7 +275,8 @@ in (
                 }
               ];
             }
-            { name = "UEFI clients-${builtins.toString dhcp_server.id}";
+
+            { name = "UEFI (x86_64) Client-${builtins.toString dhcp_server.id}";
               # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
               only-if-required = true;
               test = "option[93].hex == 0x0007 and not option[175].exists";
@@ -291,7 +293,7 @@ in (
                 }
               ];
             }
-            { name = "BIOS clients-${builtins.toString dhcp_server.id}";
+            { name = "BIOS Legacy (x86_64) Client-${builtins.toString dhcp_server.id}";
               # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
               only-if-required = true;
               test = "option[93].hex == 0x0000 and not option[175].exists";
@@ -301,6 +303,25 @@ in (
                 }
                 { name = "boot-file-name";
                   data = "grub.pxe";
+                }
+              ];
+            }
+
+            { name = "UEFI (aarch64) Client-${builtins.toString dhcp_server.id}";
+              # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
+              only-if-required = true;
+              test = "option[93].hex == 0x000b and not option[175].exists";
+
+              # This is apparently need for Grub2 or it will not load `/grub/grub.cfg`
+              next-server = gateway;
+
+              option-data = [
+                { name = "tftp-server-name";
+                  data = gateway;
+                }
+                { name = "boot-file-name";
+                  data = "grubaa64.efi";
+                  always-send = true;
                 }
               ];
             }

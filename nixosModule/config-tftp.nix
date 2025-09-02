@@ -108,7 +108,7 @@ in (
               IPXE_BOOT_FOLDER_PATH="${pxe_boot_folder}/${builtins.toString dhcp_server.id}"
               mkdir -p "$IPXE_BOOT_FOLDER_PATH"
               rsync "${main_ipxe_file_fn gateway}" "$IPXE_BOOT_FOLDER_PATH/main.ipxe" &
-              rsync -a "${signed-grub}/." "$IPXE_BOOT_FOLDER_PATH/." &
+              rsync -a --checksum "${signed-grub}/." "$IPXE_BOOT_FOLDER_PATH/." &
             ''
         )
         ( cfgSetDhcpServerInterfaceOnlyFilter (
@@ -144,6 +144,10 @@ in (
           ISO_FOLDER_PATH="${iso_folder_path}"
           JSON_PATH="${json_path}"
           TFTP_ROOT_FOLDER_PATH="${pxe_boot_folder}"
+
+          function auto_import_iso_files {
+            ''${1:-}
+          }
 
           function menuentry {
             menu_title="$1"
@@ -230,7 +234,7 @@ in (
                 )")"
                 case "$squashfs_file_name" in
                   nix-store.squashfs)
-                      linux_file_path="$(cd "$mount_folder_path" && find boot -iname "bzImage")"
+                      linux_file_path="$(cd "$mount_folder_path" && find boot '(' -name 'bzImage' -or -name 'Image' ')' )"
                       initrd_file_path="$(cd "$mount_folder_path" && find boot -iname "initrd")"
                       iso_file_path="$url_iso_folder/$iso_file_name"
 
