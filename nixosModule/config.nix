@@ -352,7 +352,7 @@ in (
     systemd.services.systemd-networkd.environment = { SYSTEMD_LOG_LEVEL = "debug"; };
 
     services.pimd = lib.attrsets.optionalAttrs
-      ( lib.lists.any (interface: interface.multicast) allInterfaces )
+      ( lib.lists.any (interface: lib.hasAttr "multicast" interface && interface.multicast) allInterfaces )
       {
         enable = true;
         settings.interfaces = lib.lists.forEach
