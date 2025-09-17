@@ -6,11 +6,9 @@
     lib
     fetchurl
     stdenvNoCC
-    fetchFromGitHub
-    ubootRaspberryPi4_64bit
   ;
 
-  pkgsCross = import pkgs.path {
+  pkgs_cross_x86_64 = import pkgs.path {
     localSystem = {
       system = "x86_64-linux";
     };
@@ -19,13 +17,22 @@
     };
   };
 
+  pkgs_cross_aarch64 = import pkgs.path {
+    localSystem = {
+      system = "aarch64-linux";
+    };
+    crossSystem = {
+      system = "aarch64-linux";
+    };
+  };
+
   # Build the GRUB Legacy BIOS binary for PXE Boot on any architecture
   legacy_bios_grub_pxe = pkgs.runCommand "grub-legacy-pxe-boot" {
     buildInputs = [ pkgs.qemu ];
   } ''
     mkdir -p $out
-    ${pkgsCross.qemu}/bin/qemu-x86_64 -L ${pkgsCross.glibc} \
-      ${pkgsCross.grub2}/bin/grub-mkimage \
+    ${pkgs_cross_x86_64.qemu}/bin/qemu-x86_64 -L ${pkgs_cross_x86_64.glibc} \
+      ${pkgs_cross_x86_64.grub2}/bin/grub-mkimage \
         -O i386-pc-pxe \
         -o "$out/grub.pxe" \
         -p /grub \
@@ -84,14 +91,14 @@ in stdenvNoCC.mkDerivation rec {
 
     # Raspberry PI 4
     install --verbose --mode 0444 --target-directory "$out" \
-      "${pkgs.raspberrypifw}/share/raspberrypi/boot/start4.elf" \
-      "${pkgs.raspberrypifw}/share/raspberrypi/boot/fixup4.dat" \
-      "${pkgs.raspberrypifw}/share/raspberrypi/boot/bcm2711-rpi-4-b.dtb" \
+      "${pkgs_cross_aarch64.raspberrypifw}/share/raspberrypi/boot/start4.elf" \
+      "${pkgs_cross_aarch64.raspberrypifw}/share/raspberrypi/boot/fixup4.dat" \
+      "${pkgs_cross_aarch64.raspberrypifw}/share/raspberrypi/boot/bcm2711-rpi-4-b.dtb" \
       "${raspberrypi_4_config_txt}/config.txt" \
-      "${ubootRaspberryPi4_64bit}/u-boot.bin"
+      "${pkgs_cross_aarch64.ubootRaspberryPi4_64bit}/u-boot.bin"
     mkdir -p "$out/overlays"
     install --verbose --mode 0444 \
-      "${pkgs.raspberrypifw}/share/raspberrypi/boot/overlays/overlay_map.dtb" \
+      "${pkgs_cross_aarch64.raspberrypifw}/share/raspberrypi/boot/overlays/overlay_map.dtb" \
       "$out/overlays/overlay_map.dtb"
 
   '';
