@@ -281,7 +281,7 @@ in (
               only-if-required = true;
               test = "option[93].hex == 0x0007 and not option[175].exists";
 
-              # This is apparently need for Grub2 or it will not load `/grub/grub.cfg`
+              # This is apparently need for Grub2 or it will not load `/grub/grub.cfg` !!!
               next-server = gateway;
 
               option-data = [
@@ -296,13 +296,18 @@ in (
             { name = "BIOS Legacy (x86_64) Client-${builtins.toString dhcp_server.id}";
               # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
               only-if-required = true;
+
               test = "option[93].hex == 0x0000 and not option[175].exists";
+
+              # This is apparently need for Grub2 or it will not load `/grub/grub.cfg` !!!
+              next-server = gateway;
+
               option-data = [
                 { name = "tftp-server-name";
                   data = gateway;
                 }
                 { name = "boot-file-name";
-                  data = "grub.pxe";
+                  data = "/grub.pxe";
                 }
               ];
             }

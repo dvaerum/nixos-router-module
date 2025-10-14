@@ -36,7 +36,7 @@
         -O i386-pc-pxe \
         -o "$out/grub.pxe" \
         -p /grub \
-        pxe tftp http configfile normal linux
+        pxe tftp http configfile normal linux echo
   '';
 
   raspberrypi_4_config_txt = pkgs.writeTextDir "config.txt" ''
