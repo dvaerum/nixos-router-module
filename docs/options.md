@@ -1632,6 +1632,32 @@ value “memfile” (singular enum)
 
 
 
+## my\.router\.dns-server\.enable
+
+
+
+Enable DNS Server
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+` true `
+
+
+
+*Example:*
+` false `
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
 ## my\.router\.pxe-boot\.enable
 
 
