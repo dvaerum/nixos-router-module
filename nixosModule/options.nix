@@ -463,6 +463,15 @@ in {
       };
 
 
+      dns-server = {
+        enable = mkOption {
+          description = "Enable DNS Server";
+          type = bool;
+          default = true;
+          example = false;
+        };
+      };
+
       pxe-boot = {
         enable = mkOption {
           description = ''

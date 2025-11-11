@@ -371,6 +371,7 @@ in (
 
     services.resolved = {
       enable = true;
+    } // lib.mkIf cfg.dns-server.enable {
       extraConfig = ''
         DNSStubListenerExtra=0.0.0.0
         MulticastDNS=no
