@@ -132,7 +132,9 @@ rec {
             LinkLocalAddressing="no";
             IPv4Forwarding = interfaceConf.forwarding;
 
-            Address = "${cidr.address}/${builtins.toString cidr.prefix}";
+            Address = if cidr.address == null
+              then throw "There are no IP-Addr in the CIDR: ${dhcp.static.ip-address}"
+              else "${cidr.address}/${builtins.toString cidr.prefix}";
           } // lib.attrsets.optionalAttrs (lib.lists.length dhcp.static.dns-servers > 0) {
             DNS = dhcp.static.dns-servers;
           };

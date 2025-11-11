@@ -320,11 +320,9 @@ in (
 
         path = with pkgs; [darkhttpd];
         serviceConfig = {
-          RuntimeDirectory="pxe-boot";
           DynamicUser=true;
-  #         ExecStart=''${lib.getExe pkgs.darkhttpd} ${iso_folder_path} --port 1337'';
           ExecStart=''${lib.getExe pkgs.darkhttpd} /run/pxe-boot --port 1337'';
-  #         ExecStop=''/run/wrappers/bin/umount --recursive /run/pxe-boot'';
+          # ExecStop=''/run/wrappers/bin/umount --recursive /run/pxe-boot'';
         };
       };
 
@@ -338,8 +336,7 @@ in (
         serviceConfig = {
           DynamicUser=true;
           ExecStart=''${lib.getExe pkgs.darkhttpd} ${iso_folder_path} --port 1338'';
-  #         ExecStart=''${lib.getExe pkgs.darkhttpd} /run/pxe-boot --port 1337'';
-  #         ExecStop=''/run/wrappers/bin/umount --recursive /run/pxe-boot'';
+          # ExecStop=''/run/wrappers/bin/umount --recursive /run/pxe-boot'';
         };
       };
 
@@ -357,7 +354,7 @@ in (
               enable = true;
 
               description = "TFTP Server";
-              after = [ "network.target" ];
+              after = [ "network.target" "network-online.target" ];
               wantedBy = [ "multi-user.target" ];
               # runs as nobody
               script = ''
@@ -370,12 +367,22 @@ in (
                   | head -1
                 )"
 
+                if [[ -z "$ip_address" ]]; then
+                  echo "No IP Address was found on the interface - \$ip_address: $ip_address"
+                  exit 1
+                fi
+
                 exec ${pkgs.atftp}/sbin/atftpd \
                   --daemon \
                   --no-fork \
                   --bind-address "$ip_address" \
                   "${pxe_boot_folder}/${builtins.toString dhcp_interface_conf.dhcp.server.id}"
               '';
+
+              serviceConfig = {
+                Restart = "always";
+                RestartSec = "10s";
+              };
             };
           }
         )
