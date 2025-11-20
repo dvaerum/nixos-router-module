@@ -14,7 +14,7 @@
   };
 
 
-  outputs = { self, pimd, ... }:
+  outputs = { self, nixpkgs, utils, pimd }:
     {
       # To-do: Figure out how to make nested overlays
       overlays.default = pimd.overlays.default;
@@ -27,5 +27,28 @@
         options = {};
         config = {};
       };
-    };
+    } // utils.lib.eachDefaultSystem (system:
+      let
+        pkgs = import nixpkgs { inherit system; };
+
+        # Import all tests
+        tests = import ./tests { inherit pkgs; nixosModule = self; };
+      in
+      {
+        # Expose tests as checks (run with: nix flake check)
+        checks = {
+          basic-routing = tests.basic-routing;
+          dhcp-server = tests.dhcp-server;
+          pxe-boot = tests.pxe-boot;
+        };
+
+        # Also expose tests as packages for manual building
+        # (run with: nix build .#basic-routing-test)
+        packages = {
+          basic-routing-test = tests.basic-routing;
+          dhcp-server-test = tests.dhcp-server;
+          pxe-boot-test = tests.pxe-boot;
+        };
+      }
+    );
 }
