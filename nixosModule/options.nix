@@ -457,6 +457,16 @@ in {
         default = defaultInterfaceName;
       };
 
+      defaultRouteMetric = mkOption {
+        description = ''
+          Set the matric (priority) for the default route,
+          in case there are other services when also tries to config an default route.
+        '';
+        type = int;
+        default = 75;
+        example = 100;
+      };
+
       dhcp.server = {
         generalSettings = setGeneralSettings;
         leaseDatabase = setLeaseDatabase;

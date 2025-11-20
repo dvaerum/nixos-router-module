@@ -28,6 +28,7 @@ rec {
   cfgConfigInterface = cfg.configInterface;
   cfgConfigInterfacePath = "my.router.setInterface";
   cfgDefaultRouteInterface = cfg.defaultRouteInterface;
+  cfgDefaultRouteMetric = cfg.defaultRouteMetric;
 
   cfgNetworkd = config.systemd.network;
   cfgNetworkdLinkPath = "systemd.network";
@@ -156,6 +157,7 @@ rec {
           };
 
           dhcpV4Config = {
+            RouteMetric = if cfgDefaultRouteInterface == interfaceName then cfgDefaultRouteMetric else 0;
             UseRoutes = if cfgDefaultRouteInterface == interfaceName then true else false;
             ClientIdentifier = "mac";
           };
