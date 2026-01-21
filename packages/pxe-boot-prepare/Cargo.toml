@@ -1,0 +1,43 @@
+[package]
+name = "pxe-boot-prepare"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1.35", features = ["full"] }
+futures = "0.3"
+
+# CLI
+clap = { version = "4.4", features = ["derive"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Error handling
+thiserror = "2.0"
+anyhow = "1.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# File system
+walkdir = "2.4"
+tempfile = "3.8"
+
+# Templating
+handlebars = "5.1"
+
+# Async traits
+async-trait = "0.1"
+
+# Dynamic cloning for trait objects
+dyn-clone = "1.0"
+
+[dev-dependencies]
+tokio-test = "0.4"
+
+[features]
+default = []

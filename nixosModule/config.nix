@@ -195,6 +195,8 @@ in (
                   # To-do: Rename `require-client-classes` -> `evaluate-additional-classes` in v2.7.4+ of kea
                   require-client-classes = [
                     "iPXE-${builtins.toString dhcp_server.id}"
+                    "iPXE-BIOS-${builtins.toString dhcp_server.id}"
+                    "iPXE-UEFI-${builtins.toString dhcp_server.id}"
                     "UEFI (x86_64) Client-${builtins.toString dhcp_server.id}"
                     "BIOS Legacy (x86_64) Client-${builtins.toString dhcp_server.id}"
                     "UEFI (aarch64) Client-${builtins.toString dhcp_server.id}"
@@ -262,16 +264,32 @@ in (
             pxe-boot = dhcp_server.pxe-boot;
 
           in [
-            { name = "iPXE-${builtins.toString dhcp_server.id}";
+            { name = "iPXE-BIOS-${builtins.toString dhcp_server.id}";
               # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
               only-if-required = true;
-              test = "option[175].exists";
+              test = "option[175].exists and option[93].hex == 0x0000";
+              next-server = gateway;
               option-data = [
                 { name = "tftp-server-name";
                   data = gateway;
                 }
                 { name = "boot-file-name";
-                  data = "tftp://${gateway}/main.ipxe";
+                  data = "grub.pxe";
+                }
+              ];
+            }
+
+            { name = "iPXE-UEFI-${builtins.toString dhcp_server.id}";
+              # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
+              only-if-required = true;
+              test = "option[175].exists and option[93].hex == 0x0007";
+              next-server = gateway;
+              option-data = [
+                { name = "tftp-server-name";
+                  data = gateway;
+                }
+                { name = "boot-file-name";
+                  data = "grubx64.efi";
                 }
               ];
             }

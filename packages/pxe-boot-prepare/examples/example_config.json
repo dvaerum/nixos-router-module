@@ -1,0 +1,26 @@
+{
+  "iso_folder_path": "/data/iso",
+  "tftp_root": "/srv/pxeboot",
+  "runtime_root": "/run/pxe-boot",
+  "dhcp_interfaces": [
+    {
+      "id": 1024,
+      "name": "eth1",
+      "gateway": "192.168.1.1",
+      "default_iso": "rhel-9.6-x86_64-dvd.iso",
+      "default_script": "minimal-environment.kstart"
+    }
+  ],
+  "autoinstall": {
+    "rhel-9.6-x86_64-dvd.iso": [
+      {
+        "name": "minimal-environment.kstart",
+        "script_path": "/path/to/minimal.kstart"
+      }
+    ]
+  },
+  "http": {
+    "mount_port": 1337,
+    "iso_port": 1338
+  }
+}
