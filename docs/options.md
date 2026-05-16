@@ -56,6 +56,14 @@ For NixOS, the default value for this option includes at least this argument:
 *Type:*
 lazy attribute set of raw value
 
+
+
+*Default:*
+
+```nix
+{ }
+```
+
 *Declared by:*
  - [\<nixpkgs/lib/modules\.nix>](https://github.com/NixOS/nixpkgs/blob//lib/modules.nix)
 
@@ -75,12 +83,18 @@ boolean
 
 
 *Default:*
-` false `
+
+```nix
+false
+```
 
 
 
 *Example:*
-` true `
+
+```nix
+true
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -101,7 +115,10 @@ list of (submodule)
 
 
 *Default:*
-` [ ] `
+
+```nix
+[ ]
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -122,7 +139,10 @@ list of (submodule)
 
 
 *Default:*
-` [ ] `
+
+```nix
+[ ]
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -142,8 +162,19 @@ null or (Network Interface Name ())
 
 
 
+*Default:*
+
+```nix
+null
+```
+
+
+
 *Example:*
-` "br0" `
+
+```nix
+"br0"
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -160,12 +191,15 @@ It is also possible to just assign a static IP\.
 
 
 *Type:*
-null or attribute-tagged union
+null or attribute-tagged union with choices: client, server, static
 
 
 
 *Default:*
-` null `
+
+```nix
+null
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -186,7 +220,10 @@ boolean
 
 
 *Default:*
-` true `
+
+```nix
+true
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -207,7 +244,10 @@ submodule
 
 
 *Default:*
-` { } `
+
+```nix
+{ }
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -229,12 +269,18 @@ boolean
 
 
 *Default:*
-` false `
+
+```nix
+false
+```
 
 
 
 *Example:*
-` true `
+
+```nix
+true
+```
 
 
 
@@ -252,12 +298,18 @@ boolean
 
 
 *Default:*
-` true `
+
+```nix
+true
+```
 
 
 
 *Example:*
-` false `
+
+```nix
+false
+```
 
 
 
@@ -275,7 +327,10 @@ list of (FQDN (Fully Qualified Domain Name))
 
 
 *Default:*
-` [ ] `
+
+```nix
+[ ]
+```
 
 
 
@@ -295,7 +350,10 @@ signed integer
 
 
 *Default:*
-` 5 `
+
+```nix
+5
+```
 
 
 
@@ -313,7 +371,10 @@ CIDR (IP and Subnet\. Example: 192\.168\.1\.4/24)
 
 
 *Default:*
-` "" `
+
+```nix
+""
+```
 
 
 
@@ -331,7 +392,10 @@ integer between 1 and 4294967294 (both inclusive)
 
 
 *Default:*
-` 1024 `
+
+```nix
+1024
+```
 
 
 
@@ -349,12 +413,18 @@ boolean
 
 
 *Default:*
-` false `
+
+```nix
+false
+```
 
 
 
 *Example:*
-` true `
+
+```nix
+true
+```
 
 
 
@@ -372,12 +442,18 @@ string
 
 
 *Default:*
-` "" `
+
+```nix
+""
+```
 
 
 
 *Example:*
-` "rhel-9.6-x86_64-dvd.iso" `
+
+```nix
+"rhel-9.6-x86_64-dvd.iso"
+```
 
 
 
@@ -395,12 +471,18 @@ string
 
 
 *Default:*
-` "" `
+
+```nix
+""
+```
 
 
 
 *Example:*
-` "minimal-environment.kstart" `
+
+```nix
+"minimal-environment.kstart"
+```
 
 
 
@@ -420,13 +502,16 @@ attribute set of (submodule)
 
 
 *Default:*
-` { } `
+
+```nix
+{ }
+```
 
 
 
 *Example:*
 
-```
+```nix
 {
   "00:11:22:33:44:55" = {
     ip-address = "192.168.1.2";
@@ -450,7 +535,10 @@ null or (IP address)
 
 
 *Default:*
-` null `
+
+```nix
+null
+```
 
 
 
@@ -468,12 +556,18 @@ boolean
 
 
 *Default:*
-` false `
+
+```nix
+false
+```
 
 
 
 *Example:*
-` true `
+
+```nix
+true
+```
 
 
 
@@ -491,7 +585,10 @@ submodule
 
 
 *Default:*
-` { } `
+
+```nix
+{ }
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -512,13 +609,16 @@ list of (IP address)
 
 
 *Default:*
-` [ ] `
+
+```nix
+[ ]
+```
 
 
 
 *Example:*
 
-```
+```nix
 [
   "192.168.1.1"
   "1.1.1.1"
@@ -541,12 +641,18 @@ null or (IP address)
 
 
 *Default:*
-` null `
+
+```nix
+null
+```
 
 
 
 *Example:*
-` "192.168.1.1" `
+
+```nix
+"192.168.1.1"
+```
 
 
 
@@ -566,7 +672,10 @@ CIDR (IP and Subnet\. Example: 192\.168\.1\.4/24)
 
 
 *Example:*
-` "192.168.1.10/24" `
+
+```nix
+"192.168.1.10/24"
+```
 
 
 
@@ -584,7 +693,10 @@ boolean
 
 
 *Default:*
-` false `
+
+```nix
+false
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -605,7 +717,10 @@ boolean
 
 
 *Default:*
-` true `
+
+```nix
+true
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -630,7 +745,10 @@ boolean
 
 
 *Default:*
-` false `
+
+```nix
+false
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -649,6 +767,14 @@ Basically live copy-paste of the NixOS ` options ` for this systemd setting\.
 
 *Type:*
 attribute set
+
+
+
+*Default:*
+
+```nix
+{ }
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -672,6 +798,14 @@ the same network interface name (and want to be configured the same)
 *Type:*
 null or (list of (Mac Address (use \`:\` or \`-\` as separator))) or (Mac Address (use \`:\` or \`-\` as separator))
 
+
+
+*Default:*
+
+```nix
+null
+```
+
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
 
@@ -687,7 +821,10 @@ boolean
 
 
 *Default:*
-` false `
+
+```nix
+false
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -736,12 +873,18 @@ null or boolean
 
 
 *Default:*
-` null `
+
+```nix
+null
+```
 
 
 
 *Example:*
-` true `
+
+```nix
+true
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -765,13 +908,16 @@ list of (Subnet)
 
 
 *Default:*
-` [ ] `
+
+```nix
+[ ]
+```
 
 
 
 *Example:*
 
-```
+```nix
 [
   "172.20.90.0/24"
 ]
@@ -796,7 +942,10 @@ list of (submodule)
 
 
 *Default:*
-` [ ] `
+
+```nix
+[ ]
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -813,12 +962,15 @@ It is also possible to just assign a static IP\.
 
 
 *Type:*
-null or attribute-tagged union
+null or attribute-tagged union with choices: client, server, static
 
 
 
 *Default:*
-` null `
+
+```nix
+null
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -839,7 +991,10 @@ boolean
 
 
 *Default:*
-` true `
+
+```nix
+true
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -860,7 +1015,10 @@ submodule
 
 
 *Default:*
-` { } `
+
+```nix
+{ }
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -882,12 +1040,18 @@ boolean
 
 
 *Default:*
-` false `
+
+```nix
+false
+```
 
 
 
 *Example:*
-` true `
+
+```nix
+true
+```
 
 
 
@@ -905,12 +1069,18 @@ boolean
 
 
 *Default:*
-` true `
+
+```nix
+true
+```
 
 
 
 *Example:*
-` false `
+
+```nix
+false
+```
 
 
 
@@ -928,7 +1098,10 @@ list of (FQDN (Fully Qualified Domain Name))
 
 
 *Default:*
-` [ ] `
+
+```nix
+[ ]
+```
 
 
 
@@ -948,7 +1121,10 @@ signed integer
 
 
 *Default:*
-` 5 `
+
+```nix
+5
+```
 
 
 
@@ -966,7 +1142,10 @@ CIDR (IP and Subnet\. Example: 192\.168\.1\.4/24)
 
 
 *Default:*
-` "" `
+
+```nix
+""
+```
 
 
 
@@ -984,7 +1163,10 @@ integer between 1 and 4294967294 (both inclusive)
 
 
 *Default:*
-` 1024 `
+
+```nix
+1024
+```
 
 
 
@@ -1002,12 +1184,18 @@ boolean
 
 
 *Default:*
-` false `
+
+```nix
+false
+```
 
 
 
 *Example:*
-` true `
+
+```nix
+true
+```
 
 
 
@@ -1025,12 +1213,18 @@ string
 
 
 *Default:*
-` "" `
+
+```nix
+""
+```
 
 
 
 *Example:*
-` "rhel-9.6-x86_64-dvd.iso" `
+
+```nix
+"rhel-9.6-x86_64-dvd.iso"
+```
 
 
 
@@ -1048,12 +1242,18 @@ string
 
 
 *Default:*
-` "" `
+
+```nix
+""
+```
 
 
 
 *Example:*
-` "minimal-environment.kstart" `
+
+```nix
+"minimal-environment.kstart"
+```
 
 
 
@@ -1073,13 +1273,16 @@ attribute set of (submodule)
 
 
 *Default:*
-` { } `
+
+```nix
+{ }
+```
 
 
 
 *Example:*
 
-```
+```nix
 {
   "00:11:22:33:44:55" = {
     ip-address = "192.168.1.2";
@@ -1103,7 +1306,10 @@ null or (IP address)
 
 
 *Default:*
-` null `
+
+```nix
+null
+```
 
 
 
@@ -1121,12 +1327,18 @@ boolean
 
 
 *Default:*
-` false `
+
+```nix
+false
+```
 
 
 
 *Example:*
-` true `
+
+```nix
+true
+```
 
 
 
@@ -1144,7 +1356,10 @@ submodule
 
 
 *Default:*
-` { } `
+
+```nix
+{ }
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -1165,13 +1380,16 @@ list of (IP address)
 
 
 *Default:*
-` [ ] `
+
+```nix
+[ ]
+```
 
 
 
 *Example:*
 
-```
+```nix
 [
   "192.168.1.1"
   "1.1.1.1"
@@ -1194,12 +1412,18 @@ null or (IP address)
 
 
 *Default:*
-` null `
+
+```nix
+null
+```
 
 
 
 *Example:*
-` "192.168.1.1" `
+
+```nix
+"192.168.1.1"
+```
 
 
 
@@ -1219,7 +1443,10 @@ CIDR (IP and Subnet\. Example: 192\.168\.1\.4/24)
 
 
 *Example:*
-` "192.168.1.10/24" `
+
+```nix
+"192.168.1.10/24"
+```
 
 
 
@@ -1237,7 +1464,10 @@ boolean
 
 
 *Default:*
-` false `
+
+```nix
+false
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -1258,7 +1488,10 @@ boolean
 
 
 *Default:*
-` true `
+
+```nix
+true
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -1279,7 +1512,10 @@ integer between 1 and 4096 (both inclusive)
 
 
 *Default:*
-` 0 `
+
+```nix
+0
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -1304,7 +1540,10 @@ boolean
 
 
 *Default:*
-` false `
+
+```nix
+false
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -1321,7 +1560,10 @@ boolean
 
 
 *Default:*
-` false `
+
+```nix
+false
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -1343,7 +1585,10 @@ null or (Network Interface Name ())
 
 
 *Default:*
-` null `
+
+```nix
+null
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -1376,12 +1621,18 @@ null or boolean
 
 
 *Default:*
-` null `
+
+```nix
+null
+```
 
 
 
 *Example:*
-` true `
+
+```nix
+true
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -1405,13 +1656,16 @@ list of (Subnet)
 
 
 *Default:*
-` [ ] `
+
+```nix
+[ ]
+```
 
 
 
 *Example:*
 
-```
+```nix
 [
   "172.20.90.0/24"
 ]
@@ -1436,7 +1690,43 @@ Network Interface Name ()
 
 
 *Default:*
-` "builtin-ether" `
+
+```nix
+"builtin-ether"
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.defaultRouteMetric
+
+
+
+Set the matric (priority) for the default route,
+in case there are other services when also tries to config an default route\.
+
+
+
+*Type:*
+signed integer
+
+
+
+*Default:*
+
+```nix
+75
+```
+
+
+
+*Example:*
+
+```nix
+100
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -1457,7 +1747,10 @@ submodule
 
 
 *Default:*
-` { } `
+
+```nix
+{ }
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -1478,7 +1771,10 @@ list of (FQDN (Fully Qualified Domain Name))
 
 
 *Default:*
-` [ ] `
+
+```nix
+[ ]
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -1499,7 +1795,10 @@ signed integer
 
 
 *Default:*
-` 2000 `
+
+```nix
+2000
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -1520,7 +1819,10 @@ signed integer
 
 
 *Default:*
-` 1000 `
+
+```nix
+1000
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -1541,7 +1843,10 @@ signed integer
 
 
 *Default:*
-` 4000 `
+
+```nix
+4000
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -1562,7 +1867,10 @@ submodule
 
 
 *Default:*
-` { } `
+
+```nix
+{ }
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -1583,7 +1891,10 @@ absolute path
 
 
 *Default:*
-` /var/lib/kea/dhcp4.leases `
+
+```nix
+/var/lib/kea/dhcp4.leases
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -1604,7 +1915,10 @@ boolean
 
 
 *Default:*
-` true `
+
+```nix
+true
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -1625,7 +1939,10 @@ value “memfile” (singular enum)
 
 
 *Default:*
-` "memfile" `
+
+```nix
+"memfile"
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -1646,12 +1963,18 @@ boolean
 
 
 *Default:*
-` true `
+
+```nix
+true
+```
 
 
 
 *Example:*
-` false `
+
+```nix
+false
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -1675,12 +1998,18 @@ boolean
 
 
 *Default:*
-` false `
+
+```nix
+false
+```
 
 
 
 *Example:*
-` true `
+
+```nix
+true
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -1701,13 +2030,16 @@ attribute set of list of (submodule)
 
 
 *Default:*
-` { } `
+
+```nix
+{ }
+```
 
 
 
 *Example:*
 
-```
+```nix
 {
   "rhel-9.6-x86_64-dvd.iso" = {
     script = /home/runner/work/nixos-router-module/nixos-router-module/nixosModule/path/to/script.kstart;
@@ -1735,7 +2067,10 @@ absolute path or string
 
 
 *Example:*
-` /home/runner/work/nixos-router-module/nixos-router-module/nixosModule/path/to/script.kstart `
+
+```nix
+/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/path/to/script.kstart
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -1756,7 +2091,10 @@ string
 
 
 *Example:*
-` "minimal-environment.kstart" `
+
+```nix
+"minimal-environment.kstart"
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -1777,7 +2115,10 @@ absolute path
 
 
 *Example:*
-` "/data/iso" `
+
+```nix
+"/data/iso"
+```
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
