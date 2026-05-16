@@ -15,5 +15,5 @@ also wanted to have a deeper understanding for how everything.
 - VLANs
 - Multi-cast
 - DHCP server
-- PXE Boot (experimentel)
+- PXE Boot (beta)
 
