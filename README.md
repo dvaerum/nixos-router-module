@@ -7,11 +7,13 @@ I know that there (nixos-router)[https://github.com/chayleaf/nixos-router] exist
 but I wanted to use `systemd-network` and
 also wanted to have a deeper understanding for how everything.
 
+**Documentation for NixOS module:** [options](./docs/options.md)
+
+
 ## Current features:
 
 - VLANs
 - Multi-cast
 - DHCP server
 - PXE Boot (experimentel)
-
 

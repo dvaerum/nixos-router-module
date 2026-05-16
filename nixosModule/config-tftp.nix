@@ -6,25 +6,9 @@
 
   cfg = config.my.router;
 
-  iso_folder_path = cfg.ipxe-boot.isoFolderPath;
+  iso_folder_path = cfg.pxe-boot.isoFolderPath;
 
-  ipxe_boot_folder = "${config.services.atftpd.root}/ipxe-boot";
-
-  json_path = pkgs.writeText "boot-environments.json" (builtins.toJSON (
-    lib.attrsets.mapAttrs
-    ( name: value: {
-        inherit (value) isoName type;
-        kStartScriptPath = (
-          if builtins.isNull value.kStartScript
-          then ""
-          else if builtins.isString value.kStartScript
-          then "${pkgs.writeText "${value.type}-script.kstart" value.kStartScript}"
-          else "${value.kStartScript}"
-        );
-      }
-    )
-    cfg.ipxe-boot.environments
-  ));
+  pxe_boot_folder = "/srv/pxeboot";
 
   functions-general = import ./functions/general.nix { inherit pkgs lib config; };
   inherit (functions-general)
@@ -36,165 +20,224 @@
     fromCidrString
   ;
 
+  # Build the Rust pxe-boot-prepare binary
+  pxe-boot-prepare-pkg = pkgs.callPackage ./../packages/pxe-boot-prepare/package.nix {};
+
+  # Generate JSON configuration from NixOS options
+  pxe-config = pkgs.writeText "pxe-boot-config.json" (builtins.toJSON {
+    iso_folder_path = builtins.toString iso_folder_path;
+    tftp_root = pxe_boot_folder;
+    runtime_root = "/run/pxe-boot";
+
+    dhcp_interfaces = lib.forEach
+      (cfgSetDhcpServerInterfaceOnlyFilter (
+        dhcp_interface_conf: dhcp_interface_conf.dhcp.server.pxe-boot.enable
+      ))
+      (dhcp_interface_conf: let
+        dhcp_server = dhcp_interface_conf.dhcp.server;
+        gateway = (fromCidrString dhcp_server.gateway).address;
+      in {
+        id = dhcp_server.id;
+        name = dhcp_interface_conf.interfaceName;
+        gateway = gateway;
+        default_iso = if dhcp_server.pxe-boot.defaultIso != ""
+                      then dhcp_server.pxe-boot.defaultIso
+                      else null;
+        default_script = if dhcp_server.pxe-boot.defaultScriptName != ""
+                         then dhcp_server.pxe-boot.defaultScriptName
+                         else null;
+      });
+
+    autoinstall = lib.attrsets.mapAttrs
+      (isoName: scripts:
+        lib.forEach scripts (script: {
+          name = script.scriptName;
+          script_path =
+            if builtins.isString script.script
+            then "${pkgs.writeText script.scriptName script.script}"
+            else "${script.script}";
+        })
+      )
+      cfg.pxe-boot.autoinstall;
+
+    http = {
+      mount_port = 1337;
+      iso_port = 1338;
+    };
+  });
+
   main_ipxe_file_fn = (
     pxe_host: pkgs.writeText "main-ID.ipxe" ''
       #!ipxe
 
-      route
+      set tftp-server ${pxe_host}
 
-      set name RHEL9.6
-      set base_url http://${pxe_host}:1337
-      set repo ''${base_url}/iso-mountpoint/''${name}
-      set kstart ''${base_url}/unattented-install/''${name}/kickstart.cfg
+      goto ''${platform}
 
-      kernel ''${repo}/images/pxeboot/vmlinuz initrd=initrd.img inst.repo=''${repo} inst.ks=''${kstart}
-      initrd ''${repo}/images/pxeboot/initrd.img
-      boot
+
+      :pcbios
+      echo Booting Legacy Bios (platform: ''${platform})
+      chain tftp://''${tftp-server}/grub.pxe
+      goto exit
+
+
+      :efi
+      echo Booting UEFI (platform: ''${platform})
+      # chain tftp://''${tftp-server}/bootx64.efi
+      chain tftp://''${tftp-server}/grubx64.efi
+      goto exit
+
+
+      :exit
     ''
   );
 
+  signed-grub = import ./../packages/pxe-boot-grub-signed/package.nix { inherit pkgs; };
+
 in (
-  lib.mkIf cfg.ipxe-boot.enable {
+  lib.mkIf cfg.pxe-boot.enable {
 
-    systemd.services."ipxe-boot-main-script" = {
-      enable = true;
-      description = "iPXE Boot - Prepare";
-      after = [
-        "network.target"
-        "ipxe-boot-prepare.service"
-      ];
-      path = with pkgs; [rsync];
-      script = ''
-        set -eu
-        set -x
+    systemd.services = {
+      "pxe-boot-main-script" = {
+        enable = true;
+        description = "PXE Boot - Copy GRUB Binaries";
+        after = [
+          "network.target"
+          "pxe-boot-prepare.service"
+        ];
+        path = with pkgs; [rsync];
+        script = ''
+          set -eu
+          set -x
+        ''
+        +
+        lib.strings.concatMapStrings
+        ( dhcp_interface_conf: let
+            dhcp_server = dhcp_interface_conf.dhcp.server;
+            gateway = ( fromCidrString dhcp_server.gateway ).address;
 
-        IPXE_BOOT_FOLDER_PATH="${ipxe_boot_folder}"
-
-        mkdir -p "$IPXE_BOOT_FOLDER_PATH"
-      ''
-      +
-      lib.strings.concatMapStrings
-      ( dhcp_interface_conf: let
-
-          dhcp_server = dhcp_interface_conf.dhcp.server;
-          gateway = ( fromCidrString dhcp_server.gateway ).address;
-          ipxe-boot = dhcp_server.ipxe-boot;
-
-        in
-          ''
-            rsync "${main_ipxe_file_fn gateway}" "$IPXE_BOOT_FOLDER_PATH/main-${builtins.toString dhcp_server.id}.ipxe"
-          ''
-      )
-      ( cfgSetDhcpServerInterfaceOnlyFilter (
-          dhcp_interface_conf: dhcp_interface_conf.dhcp.server.ipxe-boot.enable
-      ))
-      ;
-      wantedBy = [ "multi-user.target" ];
-    };
-
-    systemd.services."ipxe-boot-prepare" = {
-      enable = true;
-      description = "iPXE Boot - Prepare";
-      after = [
-        "network.target"
-        "ipxe-boot-http-server.service"
-      ];
-      wantedBy = [ "multi-user.target" ];
-
-      path = with pkgs; [curl diffutils jq rsync util-linux gawk];
-      script = ''
-        PATH="$PATH:/run/wrappers/bin"
-        set -eu
-        set -x
-
-        ROOT_FOLDER_PATH=/run/ipxe-boot
-        ISO_MOUNT_FOLDER_PATH="$ROOT_FOLDER_PATH/iso-mountpoint"
-        ISO_UNATTENTED_INSTALL_FOLDER_PATH="$ROOT_FOLDER_PATH/unattented-install"
-
-        ISO_FOLDER_PATH="${iso_folder_path}"
-        JSON_PATH="${json_path}"
-        IPXE_BOOT_FOLDER_PATH="${ipxe_boot_folder}"
-
-
-        mkdir -p "$IPXE_BOOT_FOLDER_PATH"
-        (
-          mkdir -p "/tmp/ipxe-boot"
-          cd "/tmp/ipxe-boot"
-          ! [[ -f "ipxe.efi"     ]] && curl -SsOL "https://boot.ipxe.org/ipxe.efi"
-          ! [[ -f "undionly.kpxe" ]] && curl -SsOL "https://boot.ipxe.org/undionly.kpxe"
-          if ! cmp "ipxe.efi" "$IPXE_BOOT_FOLDER_PATH/ipxe.efi"; then
-            cp "ipxe.efi" "$IPXE_BOOT_FOLDER_PATH/ipxe.efi"
-          fi
-          if ! cmp "undionly.kpxe" "$IPXE_BOOT_FOLDER_PATH/undionly.kpxe"; then
-            cp "undionly.kpxe" "$IPXE_BOOT_FOLDER_PATH/undionly.kpxe"
-          fi
+          in
+            ''
+              IPXE_BOOT_FOLDER_PATH="${pxe_boot_folder}/${builtins.toString dhcp_server.id}"
+              mkdir -p "$IPXE_BOOT_FOLDER_PATH"
+              rsync "${main_ipxe_file_fn gateway}" "$IPXE_BOOT_FOLDER_PATH/main.ipxe" &
+              rsync -a --checksum "${signed-grub}/." "$IPXE_BOOT_FOLDER_PATH/." &
+            ''
         )
-
-        jq -r '. | keys | .[]' "$JSON_PATH" | while read -r name; do
-          iso_file_path="$ISO_FOLDER_PATH/$(jq -r ".[\"$name\"].isoName" "$JSON_PATH")"
-          k_start_script_path="$(jq -r ".[\"$name\"].kStartScriptPath" "$JSON_PATH")"
-          iso_unattented_install_folder_path="$ISO_UNATTENTED_INSTALL_FOLDER_PATH/$name"
-
-          mount_folder_path="$ISO_MOUNT_FOLDER_PATH/$name"
-          mount_folder_images_path="$mount_folder_path/images"
-
-          ipxe_boot_folder_path="$IPXE_BOOT_FOLDER_PATH/$name"
-          ipxe_boot_images_folder_path="$ipxe_boot_folder_path/images"
-
-          if ! [[ -d "$mount_folder_path" ]]; then
-            mkdir -p "$mount_folder_path"
-          fi
-          if mountpoint "$mount_folder_path"; then
-            if ! mount | awk '$3=="'"$mount_folder_path"'"' | grep "^$iso_file_path"; then
-              umount "$mount_folder_path"
-            fi
-          fi
-          if ! mountpoint "$mount_folder_path"; then
-            mount -t iso9660 "$iso_file_path" "$mount_folder_path" -o loop,ro
-          fi
-
-
-          if ! [[ -d "$iso_unattented_install_folder_path" ]]; then
-            mkdir -p "$iso_unattented_install_folder_path"
-          fi
-          rsync "$k_start_script_path" "$iso_unattented_install_folder_path/kickstart.cfg"
-        done
-      '';
-    };
-
-    systemd.services."ipxe-boot-http-server" = {
-      enable = true;
-      description = "iPXE Boot - HTTP Server";
-      after = [ "network.target" ];
-      wantedBy = [ "multi-user.target" ];
-
-      path = with pkgs; [darkhttpd];
-      serviceConfig = {
-        RuntimeDirectory="ipxe-boot";
-        DynamicUser=true;
-        ExecStart=''${lib.getExe pkgs.darkhttpd} /run/ipxe-boot --port 1337'';
-#         ExecStop=''/run/wrappers/bin/umount --recursive /run/ipxe-boot'';
-      };
-    };
-
-
-    systemd.tmpfiles.settings = {
-      "10-atftpd-root-folder"."${config.services.atftpd.root}".d = {
-        mode = "0755";
-        user = "nobody";
-        group = "nogroup";
+        ( cfgSetDhcpServerInterfaceOnlyFilter (
+            dhcp_interface_conf: dhcp_interface_conf.dhcp.server.pxe-boot.enable
+        ))
+        +
+        ''
+          wait
+        ''
+        ;
+        wantedBy = [ "multi-user.target" ];
       };
 
-      "10-atftpd-ipxe-boot-folder"."${ipxe_boot_folder}".d = {
-        mode = "0755";
-        user = "nobody";
-        group = "nogroup";
-      };
-    };
+      "pxe-boot-prepare" = {
+        enable = true;
+        description = "PXE Boot - Prepare";
+        after = [
+          "network.target"
+          "pxe-boot-http-server.service"
+        ];
+        wantedBy = [ "multi-user.target" ];
 
-    services.atftpd = {
-      enable = true;
-    };
+        # Add mount utilities to PATH
+        path = with pkgs; [ util-linux ];
+
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          ExecStart = "${pxe-boot-prepare-pkg}/bin/pxe-boot-prepare --config ${pxe-config} prepare";
+          ExecStop = "${pxe-boot-prepare-pkg}/bin/pxe-boot-prepare --config ${pxe-config} cleanup";
+
+          # Allow ISO mounting with loop devices
+          AmbientCapabilities = [ "CAP_SYS_ADMIN" ];
+          CapabilityBoundingSet = [ "CAP_SYS_ADMIN" ];
+
+          # Disable systemd security features that interfere with mounting
+          PrivateDevices = false;  # Allow access to /dev/loop*
+          ProtectKernelModules = false;  # Allow kernel module operations
+          NoNewPrivileges = false;  # Allow privilege escalation for mount
+        };
+      };
+
+      "pxe-boot-http-server" = {
+        enable = true;
+        description = "PXE Boot - HTTP Server";
+        after = [ "network.target" ];
+        wantedBy = [ "multi-user.target" ];
+
+        path = with pkgs; [darkhttpd];
+        serviceConfig = {
+          DynamicUser=true;
+          ExecStart=''${lib.getExe pkgs.darkhttpd} /run/pxe-boot --port 1337'';
+        };
+      };
+
+      "pxe-boot-http-server2" = {
+        enable = true;
+        description = "PXE Boot - HTTP Server2";
+        after = [ "network.target" ];
+        wantedBy = [ "multi-user.target" ];
+
+        path = with pkgs; [darkhttpd];
+        serviceConfig = {
+          DynamicUser=true;
+          ExecStart=''${lib.getExe pkgs.darkhttpd} ${iso_folder_path} --port 1338'';
+        };
+      };
+
+    }
+    //
+    (
+      builtins.listToAttrs (
+        lib.lists.forEach
+        ( cfgSetDhcpServerInterfaceOnlyFilter (
+          dhcp_interface_conf: dhcp_interface_conf.dhcp.server.pxe-boot.enable
+        ))
+        ( dhcp_interface_conf: {
+            name = "pxe-boot-tftp-server-for-interface-${dhcp_interface_conf.interfaceName}";
+            value = {
+              enable = true;
+
+              description = "TFTP Server";
+              after = [ "network.target" "network-online.target" ];
+              wants = [ "network-online.target" ];
+              wantedBy = [ "multi-user.target" ];
+              # runs as nobody
+              script = ''
+                set -eu
+                set -x
+
+                ip_address="$(
+                  ${pkgs.iproute2}/bin/ip --json addr show dev ${dhcp_interface_conf.interfaceName} \
+                  | ${pkgs.jq}/bin/jq -r '.[].addr_info.[] | select(.family == "inet") | .local' \
+                  | head -1
+                )"
+
+                if [[ -z "$ip_address" ]]; then
+                  echo "No IP Address was found on the interface - \$ip_address: $ip_address"
+                  exit 1
+                fi
+
+                exec ${pkgs.atftp}/sbin/atftpd \
+                  --daemon \
+                  --no-fork \
+                  --bind-address "$ip_address" \
+                  "${pxe_boot_folder}/${builtins.toString dhcp_interface_conf.dhcp.server.id}"
+              '';
+
+              serviceConfig = {
+                Restart = "always";
+                RestartSec = "10s";
+              };
+            };
+          }
+        )
+      )
+    );
   }
 )
-

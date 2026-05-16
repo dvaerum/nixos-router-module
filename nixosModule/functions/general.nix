@@ -28,6 +28,7 @@ rec {
   cfgConfigInterface = cfg.configInterface;
   cfgConfigInterfacePath = "my.router.setInterface";
   cfgDefaultRouteInterface = cfg.defaultRouteInterface;
+  cfgDefaultRouteMetric = cfg.defaultRouteMetric;
 
   cfgNetworkd = config.systemd.network;
   cfgNetworkdLinkPath = "systemd.network";
@@ -132,7 +133,9 @@ rec {
             LinkLocalAddressing="no";
             IPv4Forwarding = interfaceConf.forwarding;
 
-            Address = "${cidr.address}/${builtins.toString cidr.prefix}";
+            Address = if cidr.address == null
+              then throw "There are no IP-Addr in the CIDR: ${dhcp.static.ip-address}"
+              else "${cidr.address}/${builtins.toString cidr.prefix}";
           } // lib.attrsets.optionalAttrs (lib.lists.length dhcp.static.dns-servers > 0) {
             DNS = dhcp.static.dns-servers;
           };
@@ -154,6 +157,7 @@ rec {
           };
 
           dhcpV4Config = {
+            RouteMetric = if cfgDefaultRouteInterface == interfaceName then cfgDefaultRouteMetric else 0;
             UseRoutes = if cfgDefaultRouteInterface == interfaceName then true else false;
             ClientIdentifier = "mac";
           };

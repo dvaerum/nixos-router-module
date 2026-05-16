@@ -232,21 +232,30 @@ let
               example = { "00:11:22:33:44:55" = { ip-address = "192.168.1.2"; }; };
             };
 
-            ipxe-boot = {
+            pxe-boot = {
               enable = mkOption {
                 description = ''
-                  Enable iPXE Boot support for this network interface.
+                  Enable PXE Boot support for this network interface.
                 '';
                 type = bool;
                 default = false;
                 example = true;
               };
-              environment = mkOption {
+              defaultIso = mkOption {
                 description = ''
-                  Name of the boot environment.
+                  Select which ISO file should be selected by default.
                 '';
                 type = str;
-                example = "RHEL9.6";
+                default = "";
+                example = "rhel-9.6-x86_64-dvd.iso";
+              };
+              defaultScriptName = mkOption {
+                description = ''
+                  Select which autoinstall script should be selected by default.
+                '';
+                type = str;
+                default = "";
+                example = "minimal-environment.kstart";
               };
             };
 
@@ -284,7 +293,11 @@ let
     };
 
     ipMasquerade = mkOption {
-      description = '''';
+      description = ''
+        Enable ip masquerade (aka NAT) on the interface.
+
+	This is needed e.g. if the interface is the WAN interface.
+      '';
       type = bool;
       default = false;
     };
@@ -352,14 +365,24 @@ let
 
   setInterfaceOptions = {
     mac = mkOption {
-      description = "MAC address of the network interface";
-      type = nullOr networkTypes.macAddress;
+      description = ''
+        MAC address of the network interface.
+
+        It can be either a MAC-address or list of MAC-addresses.
+
+        **Example:** A list of MAC-addresses can make sense if you have multiple
+        USB adapter which are not connected at the same time, but you want to have
+        the same network interface name (and want to be configured the same)
+      '';
+      type = nullOr (either
+        (listOf networkTypes.macAddress)
+        networkTypes.macAddress
+      );
     };
 
     name = mkOption {
       description = "Set the name of the network interface";
       type = networkTypes.interfaceName;
-#       default = "${defaultInterfaceName}";
     };
 
     # Alias for `systemd.network.links.<name>.linkConfig`,
@@ -434,18 +457,37 @@ in {
         default = defaultInterfaceName;
       };
 
+      defaultRouteMetric = mkOption {
+        description = ''
+          Set the matric (priority) for the default route,
+          in case there are other services when also tries to config an default route.
+        '';
+        type = int;
+        default = 75;
+        example = 100;
+      };
+
       dhcp.server = {
         generalSettings = setGeneralSettings;
         leaseDatabase = setLeaseDatabase;
       };
 
 
-      ipxe-boot = {
+      dns-server = {
+        enable = mkOption {
+          description = "Enable DNS Server";
+          type = bool;
+          default = true;
+          example = false;
+        };
+      };
+
+      pxe-boot = {
         enable = mkOption {
           description = ''
-            Enable support for iPXE Boot.
+            Enable support for PXE Boot.
 
-            This will download iPXE boot binaries and
+            This will download PXE boot binaries and
             prepare supported Linux distrobutions for download.
           '';
           type = bool;
@@ -459,38 +501,30 @@ in {
           type = path;
           example = "/data/iso";
         };
-        environments = mkOption {
+        autoinstall = mkOption {
           description = ''
-            Configure distrobutions which can be iPXE Booted.
+            Configure autoinstall script for the different ISOs
           '';
           default = {};
-          example = {"RHEL9.6" = {isoName = "rhel-9.6-x86_64-dvd.iso"; type = "RHEL";};};
-          type = attrsOf (submodule { options = {
-            isoName = mkOption {
+          example = { "rhel-9.6-x86_64-dvd.iso" = {
+            scriptName = "minimal-environment.kstart"; script = ./path/to/script.kstart;
+          };};
+          type = attrsOf (listOf (submodule {options = {
+            scriptName = mkOption {
               description = ''
-                Name of the ISO file which should be booted.
+                Name of the script in the GRUB Menu.
               '';
               type = str;
-              example = "rhel-9.6-x86_64-dvd.iso";
+              example = "minimal-environment.kstart";
             };
-            type = mkOption {
+            script = mkOption {
               description = ''
-                Select the provider of the ISO file.
+                Provide the content of the script or the path to the script
               '';
-              type = enum ["RHEL"];
-              example = "RHEL";
-            };
-            kStartScript = mkOption {
-              description = ''
-                If a kstart-script is provided
-                it will be used to create an unattented install
-                of the new OS.
-              '';
-              type = nullOr (either path str);
-              default = null;
+              type = either path str;
               example = ./path/to/script.kstart;
             };
-          };});
+          };}));
         };
       };
     };
