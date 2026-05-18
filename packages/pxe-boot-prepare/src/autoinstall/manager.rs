@@ -26,6 +26,18 @@ impl AutoinstallManager {
                     script.script_path.display(),
                     dest.display()
                 );
+                // tokio::fs::copy preserves the source mode. The source is a
+                // /nix/store file (0444), so a prior run's destination is also
+                // 0444 — which the next overwrite cannot open for writing
+                // because this service runs without CAP_DAC_OVERRIDE. Remove
+                // the destination first so the copy is a fresh create.
+                // Removing a file is checked against the parent directory's
+                // permissions (which is writable), not the file's mode bits.
+                match tokio::fs::remove_file(&dest).await {
+                    Ok(()) => {}
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(e) => return Err(e.into()),
+                }
                 tokio::fs::copy(&script.script_path, dest).await?;
             }
         }
