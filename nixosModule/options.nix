@@ -1,15 +1,15 @@
-{ lib
-, pkgs
-, options
-, ...
+{
+  lib,
+  pkgs,
+  options,
+  ...
 }:
 
 let
   inherit (lib)
     mkOption
     mkOptionType
-  ;
-
+    ;
 
   inherit (lib.types)
     bool
@@ -28,8 +28,7 @@ let
     either
 
     submodule
-  ;
-
+    ;
 
   ipv4_fn = import ./functions/ipv4.nix { inherit lib pkgs; };
 
@@ -70,59 +69,67 @@ let
       name = "FQDN";
       description = "FQDN (Fully Qualified Domain Name)";
       # To-do: This regex for matching FQDN my not be perfect and have bugs
-      check = (domain: builtins.match ("^((xn--)?[a-z0-9][a-z0-9-]{0,61}[a-z0-9]{0,1}[.](xn--)?([a-z0-9-]{1,61}|[a-z0-9-]{1,30}[.][a-z]){2,})$") domain != null);
+      check = (
+        domain:
+        builtins.match ("^((xn--)?[a-z0-9][a-z0-9-]{0,61}[a-z0-9]{0,1}[.](xn--)?([a-z0-9-]{1,61}|[a-z0-9-]{1,30}[.][a-z]){2,})$") domain
+        != null
+      );
     };
   };
 
   domainName = mkOption {
     description = "Provide list of Domain Name(s)";
     type = listOf networkTypes.FQDN;
-    default = [];
+    default = [ ];
   };
 
   setLeaseDatabase = mkOption {
     description = "Specify the type of lease database";
-    type = submodule { options = {
-      name = mkOption {
-        description = "Set location for database lease file";
-        type = path;
-        default = /var/lib/kea/dhcp4.leases;
+    type = submodule {
+      options = {
+        name = mkOption {
+          description = "Set location for database lease file";
+          type = path;
+          default = /var/lib/kea/dhcp4.leases;
+        };
+        persist = mkOption {
+          description = "Should the leases stored in the lease-file be persistent";
+          type = bool;
+          default = true;
+        };
+        type = mkOption {
+          description = "Only the `memfile` option is available";
+          type = enum [ "memfile" ];
+          default = "memfile";
+        };
       };
-      persist = mkOption {
-        description = "Should the leases stored in the lease-file be persistent";
-        type = bool;
-        default = true;
-      };
-      type = mkOption {
-        description = "Only the `memfile` option is available";
-        type = enum ["memfile"];
-        default = "memfile";
-      };
-    };};
-    default = {};
+    };
+    default = { };
   };
 
   setGeneralSettings = mkOption {
     description = "Config";
-    type = submodule { options = {
-      rebindTimer = mkOption {
-        description = "Set rebind time (seconds)";
-        type = int;
-        default = 2000;
+    type = submodule {
+      options = {
+        rebindTimer = mkOption {
+          description = "Set rebind time (seconds)";
+          type = int;
+          default = 2000;
+        };
+        renewTimer = mkOption {
+          description = "Set renew time (seconds)";
+          type = int;
+          default = 1000;
+        };
+        validLifetime = mkOption {
+          description = "Set valid lifetime (seconds)";
+          type = int;
+          default = 4000;
+        };
+        domainName = domainName;
       };
-      renewTimer = mkOption {
-        description = "Set renew time (seconds)";
-        type = int;
-        default = 1000;
-      };
-      validLifetime = mkOption {
-        description = "Set valid lifetime (seconds)";
-        type = int;
-        default = 4000;
-      };
-      domainName = domainName;
-    };};
-    default = {};
+    };
+    default = { };
   };
 
   setDhcpOptions = mkOption {
@@ -131,11 +138,11 @@ let
       It is also possible to just assign a static IP.
     '';
     default = null;
-    type = nullOr (
-      attrTag {
-        static = mkOption {
-          description = "To-do: make description (Note static IP is put here, but there may be a better location in the structure)";
-          type = submodule { options = {
+    type = nullOr (attrTag {
+      static = mkOption {
+        description = "To-do: make description (Note static IP is put here, but there may be a better location in the structure)";
+        type = submodule {
+          options = {
             ip-address = mkOption {
               description = "
                 Set the ip and subnet in the CIDR format.
@@ -152,20 +159,25 @@ let
             dns-servers = mkOption {
               description = "Set the IP address(es) of the dns-server(s)";
               type = listOf networkTypes.ipAddress;
-              example = ["192.168.1.1" "1.1.1.1"];
-              default = [];
+              example = [
+                "192.168.1.1"
+                "1.1.1.1"
+              ];
+              default = [ ];
             };
-          };};
-          default = {};
+          };
         };
-        client = mkOption {
-          description = "To-do: make description";
-          type = bool;
-          default = true;
-        };
-        server = mkOption {
-          description = "To-do: make description";
-          type = submodule { options = {
+        default = { };
+      };
+      client = mkOption {
+        description = "To-do: make description";
+        type = bool;
+        default = true;
+      };
+      server = mkOption {
+        description = "To-do: make description";
+        type = submodule {
+          options = {
             id = mkOption {
               description = "Subnet IDs must be greater than zero and less than 4294967295";
               type = ints.between 1 4294967294;
@@ -187,7 +199,7 @@ let
                 Set the first IP address provides by the DHCP Server.
                 Example: `10` for subnet `192.168.1.0/24`
                           will be calculated to `192.168.1.10`.
-                '';
+              '';
               type = int;
               default = 5;
             };
@@ -228,8 +240,12 @@ let
                   };
                 };
               });
-              default = {};
-              example = { "00:11:22:33:44:55" = { ip-address = "192.168.1.2"; }; };
+              default = { };
+              example = {
+                "00:11:22:33:44:55" = {
+                  ip-address = "192.168.1.2";
+                };
+              };
             };
 
             pxe-boot = {
@@ -260,11 +276,11 @@ let
             };
 
             domainName = domainName;
-          };};
-          default = {};
+          };
         };
-      }
-    );
+        default = { };
+      };
+    });
   };
 
   interfaceSharedOptions = {
@@ -287,16 +303,16 @@ let
     };
 
     multicast = mkOption {
-      description = '''';
+      description = "";
       type = bool;
       default = false;
     };
 
     ipMasquerade = mkOption {
       description = ''
-        Enable ip masquerade (aka NAT) on the interface.
+                Enable ip masquerade (aka NAT) on the interface.
 
-	This is needed e.g. if the interface is the WAN interface.
+        	This is needed e.g. if the interface is the WAN interface.
       '';
       type = bool;
       default = false;
@@ -310,7 +326,7 @@ let
         if the route should be configured as the default use `0.0.0.0/0`.
       '';
       type = listOf networkTypes.subnet;
-      default = [];
+      default = [ ];
       example = [ "172.20.90.0/24" ];
     };
 
@@ -361,7 +377,8 @@ let
       type = nullOr networkTypes.interfaceName;
       default = null;
     };
-  } // interfaceSharedOptions;
+  }
+  // interfaceSharedOptions;
 
   setInterfaceOptions = {
     mac = mkOption {
@@ -374,10 +391,7 @@ let
         USB adapter which are not connected at the same time, but you want to have
         the same network interface name (and want to be configured the same)
       '';
-      type = nullOr (either
-        (listOf networkTypes.macAddress)
-        networkTypes.macAddress
-      );
+      type = nullOr (either (listOf networkTypes.macAddress) networkTypes.macAddress);
     };
 
     name = mkOption {
@@ -387,55 +401,60 @@ let
 
     # Alias for `systemd.network.links.<name>.linkConfig`,
     # but with the description updated to share this info.
-    linkConfig = let
-      description = ''
-        Alias for `systemd.network.links.<name>.linkConfig`.
+    linkConfig =
+      let
+        description = ''
+          Alias for `systemd.network.links.<name>.linkConfig`.
 
-        Basically live copy-paste of the NixOS `options` for this systemd setting.
-      '';
-    in (
-      # To-do: This if-else statement "hack" is done, because otherwise
-      #        I would have to provide `pkgs.nixosOptionsDoc` with part of
-      #        `systemd` module from NixOS otherwise `pkgs.nixosOptionsDoc`
-      #        would fail.
-      #        I hope to find a better way to handle this alias.
-      if builtins.hasAttr "systemd" options
-      then (
-        ( builtins.elemAt
-          ( builtins.elemAt
-            options.systemd.network.links.type.getSubModules
-            0
-          ).imports
-          0
-        ).options.linkConfig // { inherit description; }
-      )
-      else (
-        mkOption {
-          description = description;
-          type = attrs;
-        }
-      )
-    );
+          Basically live copy-paste of the NixOS `options` for this systemd setting.
+        '';
+      in
+      (
+        # To-do: This if-else statement "hack" is done, because otherwise
+        #        I would have to provide `pkgs.nixosOptionsDoc` with part of
+        #        `systemd` module from NixOS otherwise `pkgs.nixosOptionsDoc`
+        #        would fail.
+        #        I hope to find a better way to handle this alias.
+        if builtins.hasAttr "systemd" options then
+          (
+            (builtins.elemAt (builtins.elemAt options.systemd.network.links.type.getSubModules 0).imports 0)
+            .options.linkConfig
+            // {
+              inherit description;
+            }
+          )
+        else
+          (mkOption {
+            description = description;
+            type = attrs;
+          })
+      );
 
     vlans = mkOption {
       description = ''
         Create a interface to handle VLAN tagged packages recieved on this interface.
       '';
-      default = [];
-      type = listOf (submodule {options = setVlanOptions;});
+      default = [ ];
+      type = listOf (submodule {
+        options = setVlanOptions;
+      });
     };
 
     bridges = mkOption {
       description = ''
         Creating a bridge interface with and include this interface in the bridge.
       '';
-      default = [];
-      type = listOf (submodule {options = setBridgeOptions;});
+      default = [ ];
+      type = listOf (submodule {
+        options = setBridgeOptions;
+      });
     };
-  } // interfaceSharedOptions;
+  }
+  // interfaceSharedOptions;
 
-in {
-  imports = [];
+in
+{
+  imports = [ ];
   options = {
     my.router = {
       enable = mkOption {
@@ -447,8 +466,10 @@ in {
 
       configInterface = mkOption {
         description = "List of configured network interfaces";
-        type = listOf (submodule {options = setInterfaceOptions;});
-        default = [];
+        type = listOf (submodule {
+          options = setInterfaceOptions;
+        });
+        default = [ ];
       };
 
       defaultRouteInterface = mkOption {
@@ -471,7 +492,6 @@ in {
         generalSettings = setGeneralSettings;
         leaseDatabase = setLeaseDatabase;
       };
-
 
       dns-server = {
         enable = mkOption {
@@ -505,29 +525,36 @@ in {
           description = ''
             Configure autoinstall script for the different ISOs
           '';
-          default = {};
-          example = { "rhel-9.6-x86_64-dvd.iso" = {
-            scriptName = "minimal-environment.kstart"; script = ./path/to/script.kstart;
-          };};
-          type = attrsOf (listOf (submodule {options = {
-            scriptName = mkOption {
-              description = ''
-                Name of the script in the GRUB Menu.
-              '';
-              type = str;
-              example = "minimal-environment.kstart";
+          default = { };
+          example = {
+            "rhel-9.6-x86_64-dvd.iso" = {
+              scriptName = "minimal-environment.kstart";
+              script = ./path/to/script.kstart;
             };
-            script = mkOption {
-              description = ''
-                Provide the content of the script or the path to the script
-              '';
-              type = either path str;
-              example = ./path/to/script.kstart;
-            };
-          };}));
+          };
+          type = attrsOf (
+            listOf (submodule {
+              options = {
+                scriptName = mkOption {
+                  description = ''
+                    Name of the script in the GRUB Menu.
+                  '';
+                  type = str;
+                  example = "minimal-environment.kstart";
+                };
+                script = mkOption {
+                  description = ''
+                    Provide the content of the script or the path to the script
+                  '';
+                  type = either path str;
+                  example = ./path/to/script.kstart;
+                };
+              };
+            })
+          );
         };
       };
     };
   };
-  config = {};
+  config = { };
 }

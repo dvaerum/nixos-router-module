@@ -1,8 +1,10 @@
-{ pkgs
-, config
-, lib
-,  ...
-}: let
+{
+  pkgs,
+  config,
+  lib,
+  ...
+}:
+let
 
   functions-general = import ./functions/general.nix { inherit pkgs lib config; };
   inherit (functions-general)
@@ -24,122 +26,131 @@
 
     allInterfaces
     systemdNetworkDHCP
-  ;
-
+    ;
 
   ipv4_fn = import ./functions/ipv4.nix { inherit lib pkgs; };
 
-in (
-  lib.mkIf cfg.enable {
-    systemd.network = /*lib.debug.traceValSeq*/ ( recursiveMerge (
-      lib.lists.forEach
-      cfgConfigInterface
-      ( interface_conf: {
-        links = lib.attrsets.optionalAttrs (! builtins.isNull interface_conf.mac) {
-          "${interfaceFilename interface_conf.name}" = {
-            matchConfig.PermanentMACAddress = interface_conf.mac;
-            linkConfig = interface_conf.linkConfig // {
-              Name = interface_conf.name;
-            };
-          };
-        };
-
-        networks = {
-          "${interfaceFilename interface_conf.name}" = {
-            enable = true;
-            matchConfig.Name = interface_conf.name;
-            vlan = lib.lists.forEach interface_conf.vlans (vlan_conf: vlanName vlan_conf);
-            bridge = lib.lists.forEach interface_conf.bridges (bridge_conf: bridge_conf.name);
-          } // systemdNetworkDHCP {
-            interfaceName = interface_conf.name;
-            interfaceConf = interface_conf;
-          };
-        } // builtins.listToAttrs (lib.lists.forEach interface_conf.vlans (vlan_conf: {
-          name = vlanFilename vlan_conf;
-          value = {
-            enable = true;
-            matchConfig.Name = vlanName vlan_conf;
-          } // systemdNetworkDHCP {
-            interfaceName = vlanName vlan_conf;
-            interfaceConf = vlan_conf;
-          };
-        })) // builtins.listToAttrs (lib.lists.forEach interface_conf.bridges (bridge_conf: {
-          name = bridgeFilename bridge_conf;
-          value = {
-            enable = true;
-            matchConfig.Name = bridge_conf.name;
-            linkConfig = {
-              RequiredForOnline =
-                if interface_conf.requiredForOnline == null
-                then lib.mkDefault false
-                else interface_conf.requiredForOnline
-              ;
-            };
-            networkConfig = {
-              LinkLocalAddressing = lib.mkDefault "no";
-            };
-          };
-        }))
-        ;
-
-        netdevs = (
-          builtins.listToAttrs (lib.lists.forEach interface_conf.vlans (vlan_conf: {
-            name = vlanFilename vlan_conf;
-            value = {
-              enable = true;
-              netdevConfig = {
-                Kind = "vlan";
-                Name = vlanName vlan_conf;
-              };
-
-              vlanConfig = { Id = vlan_conf.id; };
-            };
-          }))
-        )
-        //
-        (
-          builtins.listToAttrs (lib.lists.forEach interface_conf.bridges (bridge_conf: {
-            name = bridgeFilename bridge_conf;
-            value = {
-              enable = true;
-              netdevConfig = {
-                Kind = "bridge";
-                Name = bridge_conf.name;
+in
+(lib.mkIf cfg.enable {
+  systemd.network = # lib.debug.traceValSeq
+    (
+      recursiveMerge (
+        lib.lists.forEach cfgConfigInterface (interface_conf: {
+          links = lib.attrsets.optionalAttrs (!builtins.isNull interface_conf.mac) {
+            "${interfaceFilename interface_conf.name}" = {
+              matchConfig.PermanentMACAddress = interface_conf.mac;
+              linkConfig = interface_conf.linkConfig // {
+                Name = interface_conf.name;
               };
             };
-          }))
-        )
-        ;
+          };
 
-        wait-online.ignoredInterfaces =
-          lib.optionals
-          ( interface_conf.dhcp == null )
-          [ interface_conf.name ];
-      })
-    ));
+          networks = {
+            "${interfaceFilename interface_conf.name}" = {
+              enable = true;
+              matchConfig.Name = interface_conf.name;
+              vlan = lib.lists.forEach interface_conf.vlans (vlan_conf: vlanName vlan_conf);
+              bridge = lib.lists.forEach interface_conf.bridges (bridge_conf: bridge_conf.name);
+            }
+            // systemdNetworkDHCP {
+              interfaceName = interface_conf.name;
+              interfaceConf = interface_conf;
+            };
+          }
+          // builtins.listToAttrs (
+            lib.lists.forEach interface_conf.vlans (vlan_conf: {
+              name = vlanFilename vlan_conf;
+              value = {
+                enable = true;
+                matchConfig.Name = vlanName vlan_conf;
+              }
+              // systemdNetworkDHCP {
+                interfaceName = vlanName vlan_conf;
+                interfaceConf = vlan_conf;
+              };
+            })
+          )
+          // builtins.listToAttrs (
+            lib.lists.forEach interface_conf.bridges (bridge_conf: {
+              name = bridgeFilename bridge_conf;
+              value = {
+                enable = true;
+                matchConfig.Name = bridge_conf.name;
+                linkConfig = {
+                  RequiredForOnline =
+                    if interface_conf.requiredForOnline == null then
+                      lib.mkDefault false
+                    else
+                      interface_conf.requiredForOnline;
+                };
+                networkConfig = {
+                  LinkLocalAddressing = lib.mkDefault "no";
+                };
+              };
+            })
+          );
 
-    systemd.services.kea-dhcp4-server = {
-      serviceConfig = {
-        Restart = lib.mkForce "always";
-        RestartSec = "10s";
-      };
+          netdevs =
+            (builtins.listToAttrs (
+              lib.lists.forEach interface_conf.vlans (vlan_conf: {
+                name = vlanFilename vlan_conf;
+                value = {
+                  enable = true;
+                  netdevConfig = {
+                    Kind = "vlan";
+                    Name = vlanName vlan_conf;
+                  };
+
+                  vlanConfig = {
+                    Id = vlan_conf.id;
+                  };
+                };
+              })
+            ))
+            // (builtins.listToAttrs (
+              lib.lists.forEach interface_conf.bridges (bridge_conf: {
+                name = bridgeFilename bridge_conf;
+                value = {
+                  enable = true;
+                  netdevConfig = {
+                    Kind = "bridge";
+                    Name = bridge_conf.name;
+                  };
+                };
+              })
+            ));
+
+          wait-online.ignoredInterfaces = lib.optionals (interface_conf.dhcp == null) [ interface_conf.name ];
+        })
+      )
+    );
+
+  systemd.services.kea-dhcp4-server = {
+    serviceConfig = {
+      Restart = lib.mkForce "always";
+      RestartSec = "10s";
     };
-    services.kea.dhcp4 = let
+  };
+  services.kea.dhcp4 =
+    let
 
       dhcp_server_interface_pxeboot_enabled = cfgSetDhcpServerInterfaceOnlyFilter (
         dhcp_interface_conf: dhcp_interface_conf.dhcp.server.pxe-boot.enable
       );
 
-    in lib.attrsets.optionalAttrs (lib.length cfgSetDhcpServerInterfaceOnly > 0) {
+    in
+    lib.attrsets.optionalAttrs (lib.length cfgSetDhcpServerInterfaceOnly > 0) {
       enable = true;
       settings = {
         control-socket = {
-            socket-type = "unix";
-            socket-name = "/run/kea/kea4-ctrl-socket";
+          socket-type = "unix";
+          socket-name = "/run/kea/kea4-ctrl-socket";
         };
 
         interfaces-config = {
-          interfaces = lib.forEach cfgSetDhcpServerInterfaceOnly (dhcp_interface_conf: dhcp_interface_conf.interfaceName);
+          interfaces = lib.forEach cfgSetDhcpServerInterfaceOnly (
+            dhcp_interface_conf: dhcp_interface_conf.interfaceName
+          );
 
           # Handles network interfaces not being ready (because they are down)
           # Will retry every 5secs for 1 hour and
@@ -158,40 +169,56 @@ in (
         renew-timer = cfg.dhcp.server.generalSettings.renewTimer;
         valid-lifetime = cfg.dhcp.server.generalSettings.validLifetime;
 
-        loggers = [{
-          name = "kea-dhcp4";
-          output-options = [
-            { output = "stdout";
-              pattern = "%-5p [%c/T-%t] %m\n"; }
-          ];
-          severity = "DEBU";
-        }];
+        loggers = [
+          {
+            name = "kea-dhcp4";
+            output-options = [
+              {
+                output = "stdout";
+                pattern = "%-5p [%c/T-%t] %m\n";
+              }
+            ];
+            severity = "DEBU";
+          }
+        ];
 
-        subnet4 = lib.forEach cfgSetDhcpServerInterfaceOnly (dhcp_interface_conf: let
+        subnet4 = lib.forEach cfgSetDhcpServerInterfaceOnly (
+          dhcp_interface_conf:
+          let
             dhcp_server = dhcp_interface_conf.dhcp.server;
 
             cidr = ipv4_fn.fromCidrString dhcp_server.gateway;
 
             subnet = "${cidr.network}/${builtins.toString cidr.prefix}";
 
-            dhcpFirstIP = if dhcp_server.firstIP == null
-              then ipv4_fn.increase {
-                ip = cidr.network; by = 5; subnet = subnet;}
-              else ipv4_fn.increase {
-                ip = cidr.network;
-                by = dhcp_server.firstIP;
-                subnet = subnet;};
+            dhcpFirstIP =
+              if dhcp_server.firstIP == null then
+                ipv4_fn.increase {
+                  ip = cidr.network;
+                  by = 5;
+                  subnet = subnet;
+                }
+              else
+                ipv4_fn.increase {
+                  ip = cidr.network;
+                  by = dhcp_server.firstIP;
+                  subnet = subnet;
+                };
 
-            domainNames = dhcp_server.domainName
-              ++ cfg.dhcp.server.generalSettings.domainName;
+            domainNames = dhcp_server.domainName ++ cfg.dhcp.server.generalSettings.domainName;
 
-          in {
+          in
+          {
             id = dhcp_server.id;
             pools = [
-              ( { pool = "${dhcpFirstIP} - ${cidr.maxAddr}";
-                } // lib.attrsets.optionalAttrs dhcp_server.reservations-only {
+              (
+                {
+                  pool = "${dhcpFirstIP} - ${cidr.maxAddr}";
+                }
+                // lib.attrsets.optionalAttrs dhcp_server.reservations-only {
                   client-class = "KNOWN";
-                } // lib.attrsets.optionalAttrs dhcp_server.pxe-boot.enable {
+                }
+                // lib.attrsets.optionalAttrs dhcp_server.pxe-boot.enable {
                   # To-do: Rename `require-client-classes` -> `evaluate-additional-classes` in v2.7.4+ of kea
                   require-client-classes = [
                     "iPXE-${builtins.toString dhcp_server.id}"
@@ -209,259 +236,279 @@ in (
             interface = dhcp_interface_conf.interfaceName;
 
             option-data = [
-              { # code = 6;
+              {
+                # code = 6;
                 name = "domain-name-servers";
                 csv-format = true;
                 data = cidr.minAddr;
               }
-            ] ++ lib.lists.optional (dhcp_server.default-route) { # code = 3;
+            ]
+            ++ lib.lists.optional (dhcp_server.default-route) {
+              # code = 3;
               name = "routers";
               data = cidr.address;
-            } ++ lib.lists.optional (dhcp_server.classless-static-route) {
+            }
+            ++ lib.lists.optional (dhcp_server.classless-static-route) {
               # source (example): https://github.com/isc-projects/kea/blob/60222843a6b2c4e7a6c7d4e63f88d0dcfa0d5b97/doc/examples/kea4/all-options.json#L1322-L1328
               name = "classless-static-route";
               data =
-                lib.strings.concatImapStringsSep
-                ", "
-                ( _pos: dhcp_server_interface_conf: let
-                    tmp_cidr = ipv4_fn.fromCidrString dhcp_server_interface_conf.dhcp.server.gateway;
-                    tmp_subnet = "${tmp_cidr.network}/${builtins.toString tmp_cidr.prefix}";
-                  in
+                lib.strings.concatImapStringsSep ", "
+                  (
+                    _pos: dhcp_server_interface_conf:
+                    let
+                      tmp_cidr = ipv4_fn.fromCidrString dhcp_server_interface_conf.dhcp.server.gateway;
+                      tmp_subnet = "${tmp_cidr.network}/${builtins.toString tmp_cidr.prefix}";
+                    in
                     "${tmp_subnet} - ${cidr.address}"
-                )
-                ( lib.lists.filter
-                  ( dhcp_server_interface_conf:
-                    dhcp_server_interface_conf.dhcp.server.gateway != dhcp_interface_conf.dhcp.server.gateway
                   )
-                  cfgSetDhcpServerInterfaceOnly
-                )
-              ;
+                  (
+                    lib.lists.filter (
+                      dhcp_server_interface_conf:
+                      dhcp_server_interface_conf.dhcp.server.gateway != dhcp_interface_conf.dhcp.server.gateway
+                    ) cfgSetDhcpServerInterfaceOnly
+                  );
 
-            } ++ lib.lists.optional (lib.length domainNames > 0) {
+            }
+            ++ lib.lists.optional (lib.length domainNames > 0) {
               name = "domain-name";
               csv-format = true;
-              data = lib.strings.concatMapStringsSep ", "
-              (domain: lib.toLower domain)
-              domainNames;
+              data = lib.strings.concatMapStringsSep ", " (domain: lib.toLower domain) domainNames;
             };
 
-            reservations = lib.mapAttrsToList ( mac: value:
-              { hw-address =
-                  if ( ipv4_fn.fnValidMacAddress mac )
-                  then mac
-                  else throw ''The attribute key "${mac}", for DHCP reservations, is not a valid MAC address'';
-              } // lib.attrsets.optionalAttrs ( value.ip-address != null ) {
+            reservations = lib.mapAttrsToList (
+              mac: value:
+              {
+                hw-address =
+                  if (ipv4_fn.fnValidMacAddress mac) then
+                    mac
+                  else
+                    throw ''The attribute key "${mac}", for DHCP reservations, is not a valid MAC address'';
+              }
+              // lib.attrsets.optionalAttrs (value.ip-address != null) {
                 ip-address = value.ip-address;
               }
             ) dhcp_interface_conf.dhcp.server.reservations;
-        });
-      } // (lib.attrsets.optionalAttrs (lib.lists.length dhcp_server_interface_pxeboot_enabled > 0) {
-        client-classes = ( lib.lists.concatMap
-          ( dhcp_interface_conf: let
+          }
+        );
+      }
+      // (lib.attrsets.optionalAttrs (lib.lists.length dhcp_server_interface_pxeboot_enabled > 0) {
+        client-classes = (
+          lib.lists.concatMap (
+            dhcp_interface_conf:
+            let
 
-            dhcp_server = dhcp_interface_conf.dhcp.server;
-            gateway = ( ipv4_fn.fromCidrString dhcp_server.gateway ).address;
-            pxe-boot = dhcp_server.pxe-boot;
+              dhcp_server = dhcp_interface_conf.dhcp.server;
+              gateway = (ipv4_fn.fromCidrString dhcp_server.gateway).address;
+              pxe-boot = dhcp_server.pxe-boot;
 
-          in [
-            { name = "iPXE-BIOS-${builtins.toString dhcp_server.id}";
-              # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
-              only-if-required = true;
-              test = "option[175].exists and option[93].hex == 0x0000";
-              next-server = gateway;
-              option-data = [
-                { name = "tftp-server-name";
-                  data = gateway;
-                }
-                { name = "boot-file-name";
-                  data = "grub.pxe";
-                }
-              ];
-            }
+            in
+            [
+              {
+                name = "iPXE-BIOS-${builtins.toString dhcp_server.id}";
+                # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
+                only-if-required = true;
+                test = "option[175].exists and option[93].hex == 0x0000";
+                next-server = gateway;
+                option-data = [
+                  {
+                    name = "tftp-server-name";
+                    data = gateway;
+                  }
+                  {
+                    name = "boot-file-name";
+                    data = "grub.pxe";
+                  }
+                ];
+              }
 
-            { name = "iPXE-UEFI-${builtins.toString dhcp_server.id}";
-              # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
-              only-if-required = true;
-              test = "option[175].exists and option[93].hex == 0x0007";
-              next-server = gateway;
-              option-data = [
-                { name = "tftp-server-name";
-                  data = gateway;
-                }
-                { name = "boot-file-name";
-                  data = "grubx64.efi";
-                }
-              ];
-            }
+              {
+                name = "iPXE-UEFI-${builtins.toString dhcp_server.id}";
+                # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
+                only-if-required = true;
+                test = "option[175].exists and option[93].hex == 0x0007";
+                next-server = gateway;
+                option-data = [
+                  {
+                    name = "tftp-server-name";
+                    data = gateway;
+                  }
+                  {
+                    name = "boot-file-name";
+                    data = "grubx64.efi";
+                  }
+                ];
+              }
 
-            { name = "UEFI (x86_64) Client-${builtins.toString dhcp_server.id}";
-              # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
-              only-if-required = true;
-              test = "option[93].hex == 0x0007 and not option[175].exists";
+              {
+                name = "UEFI (x86_64) Client-${builtins.toString dhcp_server.id}";
+                # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
+                only-if-required = true;
+                test = "option[93].hex == 0x0007 and not option[175].exists";
 
-              # This is apparently need for Grub2 or it will not load `/grub/grub.cfg` !!!
-              next-server = gateway;
+                # This is apparently need for Grub2 or it will not load `/grub/grub.cfg` !!!
+                next-server = gateway;
 
-              option-data = [
-                { name = "tftp-server-name";
-                  data = gateway;
-                }
-                { name = "boot-file-name";
-                  data = "grubx64.efi";
-                }
-              ];
-            }
-            { name = "BIOS Legacy (x86_64) Client-${builtins.toString dhcp_server.id}";
-              # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
-              only-if-required = true;
+                option-data = [
+                  {
+                    name = "tftp-server-name";
+                    data = gateway;
+                  }
+                  {
+                    name = "boot-file-name";
+                    data = "grubx64.efi";
+                  }
+                ];
+              }
+              {
+                name = "BIOS Legacy (x86_64) Client-${builtins.toString dhcp_server.id}";
+                # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
+                only-if-required = true;
 
-              test = "option[93].hex == 0x0000 and not option[175].exists";
+                test = "option[93].hex == 0x0000 and not option[175].exists";
 
-              # This is apparently need for Grub2 or it will not load `/grub/grub.cfg` !!!
-              next-server = gateway;
+                # This is apparently need for Grub2 or it will not load `/grub/grub.cfg` !!!
+                next-server = gateway;
 
-              option-data = [
-                { name = "tftp-server-name";
-                  data = gateway;
-                }
-                { name = "boot-file-name";
-                  data = "/grub.pxe";
-                }
-              ];
-            }
+                option-data = [
+                  {
+                    name = "tftp-server-name";
+                    data = gateway;
+                  }
+                  {
+                    name = "boot-file-name";
+                    data = "/grub.pxe";
+                  }
+                ];
+              }
 
-            { name = "UEFI (aarch64) Client-${builtins.toString dhcp_server.id}";
-              # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
-              only-if-required = true;
-              test = "option[93].hex == 0x000b and not option[175].exists";
+              {
+                name = "UEFI (aarch64) Client-${builtins.toString dhcp_server.id}";
+                # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
+                only-if-required = true;
+                test = "option[93].hex == 0x000b and not option[175].exists";
 
-              # This is apparently need for Grub2 or it will not load `/grub/grub.cfg`
-              next-server = gateway;
+                # This is apparently need for Grub2 or it will not load `/grub/grub.cfg`
+                next-server = gateway;
 
-              option-data = [
-                { name = "tftp-server-name";
-                  data = gateway;
-                }
-                { name = "boot-file-name";
-                  data = "grubaa64.efi";
-                  always-send = true;
-                }
-              ];
-            }
-          ])
-          dhcp_server_interface_pxeboot_enabled
+                option-data = [
+                  {
+                    name = "tftp-server-name";
+                    data = gateway;
+                  }
+                  {
+                    name = "boot-file-name";
+                    data = "grubaa64.efi";
+                    always-send = true;
+                  }
+                ];
+              }
+            ]
+          ) dhcp_server_interface_pxeboot_enabled
         );
       });
     };
 
+  services.ntp = lib.attrsets.optionalAttrs (lib.length cfgSetDhcpServerInterfaceOnly > 0) {
+    enable = true;
 
-    services.ntp = lib.attrsets.optionalAttrs (lib.length cfgSetDhcpServerInterfaceOnly > 0) {
-      enable = true;
+    extraConfig = lib.strings.concatMapStringsSep "\n" (
+      dhcp_interface_conf:
+      let
+        cidr = ipv4_fn.fromCidrString dhcp_interface_conf.dhcp.server.gateway;
+      in
+      "restrict ${cidr.network} mask ${cidr.netmask} nomodify notrap nopeer"
+    ) cfgSetDhcpServerInterfaceOnly;
+  };
 
-      extraConfig = lib.strings.concatMapStringsSep "\n"
-        (dhcp_interface_conf: let
-            cidr = ipv4_fn.fromCidrString dhcp_interface_conf.dhcp.server.gateway;
-          in
-            "restrict ${cidr.network} mask ${cidr.netmask} nomodify notrap nopeer"
-        )
-        cfgSetDhcpServerInterfaceOnly;
-    };
+  #     notnft = {
+  #     };
 
-#     notnft = {
-#     };
+  environment.systemPackages = [ pkgs.nftables ];
 
-    environment.systemPackages = [ pkgs.nftables ];
+  systemd.services.systemd-networkd.environment = {
+    SYSTEMD_LOG_LEVEL = "debug";
+  };
 
-    systemd.services.systemd-networkd.environment = { SYSTEMD_LOG_LEVEL = "debug"; };
-
-    services.pimd = lib.attrsets.optionalAttrs
-      ( lib.lists.any (interface: lib.hasAttr "multicast" interface && interface.multicast) allInterfaces )
+  services.pimd =
+    lib.attrsets.optionalAttrs
+      (lib.lists.any (interface: lib.hasAttr "multicast" interface && interface.multicast) allInterfaces)
       {
         enable = true;
-        settings.interfaces = lib.lists.forEach
-          ( lib.lists.filter
-            ( interface: lib.hasAttr "multicast" interface && interface.multicast )
-            allInterfaces
-          )
-          ( interface: interface.name )
-        ;
+        settings.interfaces = lib.lists.forEach (lib.lists.filter (
+          interface: lib.hasAttr "multicast" interface && interface.multicast
+        ) allInterfaces) (interface: interface.name);
       };
 
-    services.resolved = {
-      enable = true;
-    } // lib.mkIf cfg.dns-server.enable {
-      extraConfig = ''
-        DNSStubListenerExtra=0.0.0.0
-        MulticastDNS=no
-      '';
-    };
+  services.resolved = {
+    enable = true;
+  }
+  // lib.mkIf cfg.dns-server.enable {
+    extraConfig = ''
+      DNSStubListenerExtra=0.0.0.0
+      MulticastDNS=no
+    '';
+  };
 
-    networking = lib.optionalAttrs (lib.length cfgConfigInterface > 0) {
-      useDHCP = lib.mkDefault false;
+  networking = lib.optionalAttrs (lib.length cfgConfigInterface > 0) {
+    useDHCP = lib.mkDefault false;
 
-      useNetworkd = true;
+    useNetworkd = true;
 
-      networkmanager.enable = lib.mkDefault false;
-      networkmanager.unmanaged = ( lib.lists.flatten
-        ( lib.lists.forEach
-          cfgConfigInterface
-          ( interface_conf:
-            ( lib.lists.optional
-              ( interface_conf.excludeFromNetworkManager || interface_conf.dhcp != null )
-              interface_conf.name
-            )
-            ++
-            lib.lists.forEach interface_conf.vlans (vlan_conf: vlanName vlan_conf)
-          )
+    networkmanager.enable = lib.mkDefault false;
+    networkmanager.unmanaged = (
+      lib.lists.flatten (
+        lib.lists.forEach cfgConfigInterface (
+          interface_conf:
+          (lib.lists.optional (
+            interface_conf.excludeFromNetworkManager || interface_conf.dhcp != null
+          ) interface_conf.name)
+          ++ lib.lists.forEach interface_conf.vlans (vlan_conf: vlanName vlan_conf)
         )
-      );
+      )
+    );
 
-      firewall.enable = lib.mkForce false;
+    firewall.enable = lib.mkForce false;
 
-      nftables = {
-        enable = true;
-      } // (
-        if (lib.pathExists ./netfilter.ruleset)
-        then { rulesetFile = ./netfilter.ruleset; }
-        else {
+    nftables = {
+      enable = true;
+    }
+    // (
+      if (lib.pathExists ./netfilter.ruleset) then
+        { rulesetFile = ./netfilter.ruleset; }
+      else
+        {
           # checkRuleset = false;
           tables."masquerade-ip-address" = {
             enable = true;
             family = "ip";
-            content = let
+            content =
+              let
 
-              ip_masquerade_interfaces =
-                lib.lists.filter
-                ( interface_conf:
-                  interface_conf.name == cfgDefaultRouteInterface ||
-                  ( lib.hasAttr "ipMasquerade" interface_conf && interface_conf.ipMasquerade == true )
-                )
-                allInterfaces
-              ;
+                ip_masquerade_interfaces = lib.lists.filter (
+                  interface_conf:
+                  interface_conf.name == cfgDefaultRouteInterface
+                  || (lib.hasAttr "ipMasquerade" interface_conf && interface_conf.ipMasquerade == true)
+                ) allInterfaces;
 
-            in /*lib.debug.traceValSeq*/ (
-              lib.strings.concatMapStringsSep
-              "\n"
-              (x : if x == "" then "" else "  ${x}")
-              (
-                [ ""
+              in
+              # lib.debug.traceValSeq
+              (lib.strings.concatMapStringsSep "\n" (x: if x == "" then "" else "  ${x}") (
+                [
+                  ""
                   "# Define the postrouting"
                   "chain postrouting {"
                   "  type nat hook postrouting priority 100; policy accept;"
                   "  # Masquerade rule: Replace with the IP of your default routing interface"
-                ] ++
-                ( lib.lists.forEach
-                  ip_masquerade_interfaces
-                  ( interface_conf: "  oifname ${interface_conf.name} masquerade" )
-                ) ++
-                [
+                ]
+                ++ (lib.lists.forEach ip_masquerade_interfaces (
+                  interface_conf: "  oifname ${interface_conf.name} masquerade"
+                ))
+                ++ [
                   "}"
                 ]
-              )
-            );
+              ));
           };
         }
-      );
-    };
-  }
-)
+    );
+  };
+})
