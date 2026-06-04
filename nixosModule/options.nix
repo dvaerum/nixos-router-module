@@ -9,6 +9,7 @@ let
   inherit (lib)
     mkOption
     mkOptionType
+    types
     ;
 
   inherit (lib.types)
@@ -16,8 +17,6 @@ let
     int
     ints
     str
-    path
-    package
     enum
     attrs
 
@@ -71,7 +70,7 @@ let
       # To-do: This regex for matching FQDN my not be perfect and have bugs
       check = (
         domain:
-        builtins.match ("^((xn--)?[a-z0-9][a-z0-9-]{0,61}[a-z0-9]{0,1}[.](xn--)?([a-z0-9-]{1,61}|[a-z0-9-]{1,30}[.][a-z]){2,})$") domain
+        builtins.match "^((xn--)?[a-z0-9][a-z0-9-]{0,61}[a-z0-9]{0,1}[.](xn--)?([a-z0-9-]{1,61}|[a-z0-9-]{1,30}[.][a-z]){2,})$" domain
         != null
       );
     };
@@ -89,7 +88,7 @@ let
       options = {
         name = mkOption {
           description = "Set location for database lease file";
-          type = path;
+          type = types.path;
           default = /var/lib/kea/dhcp4.leases;
         };
         persist = mkOption {
@@ -518,7 +517,7 @@ in
           description = ''
             Path to the folder which contains the iso files.
           '';
-          type = path;
+          type = types.path;
           example = "/data/iso";
         };
         autoinstall = mkOption {
@@ -546,7 +545,7 @@ in
                   description = ''
                     Provide the content of the script or the path to the script
                   '';
-                  type = either path str;
+                  type = either types.path str;
                   example = ./path/to/script.kstart;
                 };
               };
