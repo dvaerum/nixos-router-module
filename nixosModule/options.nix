@@ -282,7 +282,14 @@ let
     });
   };
 
-  interfaceSharedOptions = {
+  networkInferfaceNameOptions = {
+    name = mkOption {
+      description = "Set the name of the network interface";
+      type = networkTypes.interfaceName;
+    };
+  };
+
+  interfaceSharedOptionsWithoutBridge = {
     dhcp = setDhcpOptions;
 
     forwarding = mkOption {
@@ -309,9 +316,9 @@ let
 
     ipMasquerade = mkOption {
       description = ''
-                Enable ip masquerade (aka NAT) on the interface.
+        Enable ip masquerade (aka NAT) on the interface.
 
-        	This is needed e.g. if the interface is the WAN interface.
+        This is needed e.g. if the interface is the WAN interface.
       '';
       type = bool;
       default = false;
@@ -351,6 +358,18 @@ let
     };
   };
 
+  interfaceSharedOptions = interfaceSharedOptionsWithoutBridge // {
+    bridges = mkOption {
+      description = ''
+        Creating a bridge interface with and include this interface in the bridge.
+      '';
+      default = [ ];
+      type = listOf (submodule {
+        options = setBridgeOptions;
+      });
+    };
+  };
+
   setBridgeOptions = {
     name = mkOption {
       description = ''
@@ -365,7 +384,7 @@ let
     id = mkOption {
       description = "Set VLan ID of the network interface";
       type = ints.between 1 4096;
-      default = 0;
+      example = 1337;
     };
 
     name = mkOption {
@@ -391,11 +410,6 @@ let
         the same network interface name (and want to be configured the same)
       '';
       type = nullOr (either (listOf networkTypes.macAddress) networkTypes.macAddress);
-    };
-
-    name = mkOption {
-      description = "Set the name of the network interface";
-      type = networkTypes.interfaceName;
     };
 
     # Alias for `systemd.network.links.<name>.linkConfig`,
@@ -438,17 +452,8 @@ let
         options = setVlanOptions;
       });
     };
-
-    bridges = mkOption {
-      description = ''
-        Creating a bridge interface with and include this interface in the bridge.
-      '';
-      default = [ ];
-      type = listOf (submodule {
-        options = setBridgeOptions;
-      });
-    };
   }
+  // networkInferfaceNameOptions
   // interfaceSharedOptions;
 
 in
@@ -485,6 +490,25 @@ in
         type = int;
         default = 75;
         example = 100;
+      };
+
+      bridgeInterfaces = mkOption {
+        description = "Config all bridge interfaces";
+        type = attrsOf (
+          submodule (
+            { name, ... }:
+            {
+              options = interfaceSharedOptionsWithoutBridge // networkInferfaceNameOptions;
+              config.name = lib.mkDefault name;
+            }
+          )
+        );
+        default = { };
+        example = {
+          br0 = {
+            dhcp.client = true;
+          };
+        };
       };
 
       dhcp.server = {

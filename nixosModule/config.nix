@@ -35,7 +35,7 @@ in
   systemd.network = # lib.debug.traceValSeq
     (
       recursiveMerge (
-        lib.lists.forEach cfgConfigInterface (interface_conf: {
+        (lib.lists.forEach cfgConfigInterface (interface_conf: {
           links = lib.attrsets.optionalAttrs (!builtins.isNull interface_conf.mac) {
             "${interfaceFilename interface_conf.name}" = {
               matchConfig.PermanentMACAddress = interface_conf.mac;
@@ -63,65 +63,72 @@ in
               value = {
                 enable = true;
                 matchConfig.Name = vlanName vlan_conf;
+                bridge = lib.lists.forEach vlan_conf.bridges (bridge_conf: bridge_conf.name);
               }
               // systemdNetworkDHCP {
                 interfaceName = vlanName vlan_conf;
                 interfaceConf = vlan_conf;
               };
             })
-          )
-          // builtins.listToAttrs (
-            lib.lists.forEach interface_conf.bridges (bridge_conf: {
-              name = bridgeFilename bridge_conf;
-              value = {
-                enable = true;
-                matchConfig.Name = bridge_conf.name;
-                linkConfig = {
-                  RequiredForOnline =
-                    if interface_conf.requiredForOnline == null then
-                      lib.mkDefault false
-                    else
-                      interface_conf.requiredForOnline;
-                };
-                networkConfig = {
-                  LinkLocalAddressing = lib.mkDefault "no";
-                };
-              };
-            })
           );
 
-          netdevs =
-            (builtins.listToAttrs (
-              lib.lists.forEach interface_conf.vlans (vlan_conf: {
-                name = vlanFilename vlan_conf;
-                value = {
-                  enable = true;
-                  netdevConfig = {
-                    Kind = "vlan";
-                    Name = vlanName vlan_conf;
-                  };
+          netdevs = (
+            builtins.listToAttrs (
+              lib.concatLists (
+                lib.lists.forEach interface_conf.vlans (vlan_conf: [
+                  {
+                    name = vlanFilename vlan_conf;
+                    value = {
+                      enable = true;
+                      netdevConfig = {
+                        Kind = "vlan";
+                        Name = vlanName vlan_conf;
+                      };
 
-                  vlanConfig = {
-                    Id = vlan_conf.id;
-                  };
-                };
-              })
-            ))
-            // (builtins.listToAttrs (
-              lib.lists.forEach interface_conf.bridges (bridge_conf: {
-                name = bridgeFilename bridge_conf;
-                value = {
-                  enable = true;
-                  netdevConfig = {
-                    Kind = "bridge";
-                    Name = bridge_conf.name;
-                  };
-                };
-              })
-            ));
+                      vlanConfig = {
+                        Id = vlan_conf.id;
+                      };
+                    };
+                  }
+                ])
+              )
+            )
+          );
 
           wait-online.ignoredInterfaces = lib.optionals (interface_conf.dhcp == null) [ interface_conf.name ];
-        })
+        }))
+        ++ (lib.lists.forEach (lib.attrsets.attrValues cfg.bridgeInterfaces) (bridge_conf: {
+          netdevs = {
+            "${bridgeFilename bridge_conf}" = {
+              enable = true;
+              netdevConfig = {
+                Kind = "bridge";
+                Name = bridge_conf.name;
+              };
+              # When multicast routing (pimd) is enabled on the bridge, make the
+              # bridge itself act as an IGMP querier. IGMP snooping is on by default,
+              # but without a querier on the segment the bridge's mdb entries time out
+              # and it silently stops forwarding multicast to its ports.
+              bridgeConfig = lib.attrsets.optionalAttrs bridge_conf.multicast {
+                MulticastSnooping = true;
+                MulticastQuerier = true;
+              };
+            };
+          };
+
+          networks = {
+            "${bridgeFilename bridge_conf}" = {
+              enable = true;
+              matchConfig.Name = bridge_conf.name;
+            }
+            // systemdNetworkDHCP {
+              interfaceName = bridge_conf.name;
+              interfaceConf = bridge_conf;
+            };
+          };
+
+          wait-online.ignoredInterfaces = lib.optionals (bridge_conf.dhcp == null) [ bridge_conf.name ];
+        }))
       )
     );
 
@@ -438,6 +445,16 @@ in
           interface: lib.hasAttr "multicast" interface && interface.multicast
         ) allInterfaces) (interface: interface.name);
       };
+
+  # pimd binds its multicast VIFs to the interfaces present when it starts and does
+  # not reliably rebind when systemd-networkd recreates them (e.g. a bridge rebuilt
+  # on a `nixos-rebuild switch`), which silently breaks multicast routing. Tie pimd's
+  # lifecycle to systemd-networkd so it starts after networkd and is restarted together
+  # with it, rebuilding its VIFs against the live interfaces.
+  systemd.services.pimd = lib.mkIf config.services.pimd.enable {
+    after = [ "systemd-networkd.service" ];
+    partOf = [ "systemd-networkd.service" ];
+  };
 
   services.resolved = {
     enable = true;
