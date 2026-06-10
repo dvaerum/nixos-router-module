@@ -121,7 +121,12 @@ in (
               IPXE_BOOT_FOLDER_PATH="${pxe_boot_folder}/${builtins.toString dhcp_server.id}"
               mkdir -p "$IPXE_BOOT_FOLDER_PATH"
               rsync "${main_ipxe_file_fn gateway}" "$IPXE_BOOT_FOLDER_PATH/main.ipxe" &
-              rsync -a --checksum "${signed-grub}/." "$IPXE_BOOT_FOLDER_PATH/." &
+              # `--chmod=Du+w` keeps the destination directories owner-writable.
+              # Without it, `rsync -a` mirrors the read-only nix-store mode onto
+              # "$IPXE_BOOT_FOLDER_PATH", and pxe-boot-prepare (which runs with a
+              # CapabilityBoundingSet of only CAP_SYS_ADMIN, i.e. no CAP_DAC_OVERRIDE)
+              # can then no longer create the "grub/" subdirectory for grub.cfg.
+              rsync -a --chmod=Du+w --checksum "${signed-grub}/." "$IPXE_BOOT_FOLDER_PATH/." &
             ''
         )
         ( cfgSetDhcpServerInterfaceOnlyFilter (
