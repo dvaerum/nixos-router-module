@@ -3,8 +3,15 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum PxeBootError {
-    #[error("ISO discovery failed: {0}")]
-    IsoDiscovery(#[from] std::io::Error),
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+
+    #[error("Failed to write GRUB menu to {path}: {source}")]
+    GrubWrite {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
 
     #[error("Failed to mount ISO {path}: {reason}")]
     MountFailed { path: PathBuf, reason: String },

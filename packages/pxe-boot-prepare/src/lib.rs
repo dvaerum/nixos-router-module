@@ -8,7 +8,7 @@ pub mod iso;
 use autoinstall::AutoinstallManager;
 use config::{BootInfo, DhcpInterface, DistroType, IsoInfo, PxeBootConfig};
 use distro::{DetectorRegistry, DistroDetector};
-use error::Result;
+use error::{PxeBootError, Result};
 use grub::{GrubMenuBuilder, MenuEntryFactory};
 use iso::{IsoDiscovery, IsoMounter};
 
@@ -232,8 +232,20 @@ impl PxeBootService {
             .join(interface.id.to_string())
             .join("grub");
 
-        tokio::fs::create_dir_all(&grub_dir).await?;
-        tokio::fs::write(grub_dir.join("grub.cfg"), grub_cfg).await?;
+        tokio::fs::create_dir_all(&grub_dir)
+            .await
+            .map_err(|source| PxeBootError::GrubWrite {
+                path: grub_dir.clone(),
+                source,
+            })?;
+
+        let grub_cfg_path = grub_dir.join("grub.cfg");
+        tokio::fs::write(&grub_cfg_path, grub_cfg)
+            .await
+            .map_err(|source| PxeBootError::GrubWrite {
+                path: grub_cfg_path,
+                source,
+            })?;
 
         tracing::info!(
             "Generated GRUB menu for interface {} (ID: {}) with {} entries",
