@@ -442,12 +442,24 @@ in
   services.resolved = {
     enable = true;
   }
-  // lib.mkIf cfg.dns-server.enable {
-    extraConfig = ''
-      DNSStubListenerExtra=0.0.0.0
-      MulticastDNS=no
-    '';
-  };
+  // lib.mkIf cfg.dns-server.enable (
+    if (lib.versionAtLeast lib.version "26.05") then
+      {
+        settings.Resolve = {
+          DNSStubListenerExtra = [
+            "0.0.0.0"
+          ];
+          MulticastDNS = "no";
+        };
+      }
+    else
+      {
+        extraConfig = ''
+          DNSStubListenerExtra=0.0.0.0
+          MulticastDNS=no
+        '';
+      }
+  );
 
   networking = lib.optionalAttrs (lib.length cfgConfigInterface > 0) {
     useDHCP = lib.mkDefault false;
