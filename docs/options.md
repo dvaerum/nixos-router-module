@@ -101,6 +101,778 @@ true
 
 
 
+## my\.router\.bridgeInterfaces
+
+
+
+Config all bridge interfaces
+
+
+
+*Type:*
+attribute set of (submodule)
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+
+
+*Example:*
+
+```nix
+{
+  br0 = {
+    dhcp = {
+      client = true;
+    };
+  };
+}
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp
+
+
+
+Select if this network interface should be configured for DHCP Server or Client\.
+It is also possible to just assign a static IP\.
+
+
+
+*Type:*
+null or attribute-tagged union with choices: client, server, static
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.client
+
+
+
+To-do: make description
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.server
+
+
+
+To-do: make description
+
+
+
+*Type:*
+submodule
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.server\.classless-static-route
+
+
+
+Expose all other subnets, declared as a ` dhcp.server.gateway `,
+as a classless static route (Option: 121)\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+
+
+*Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.server\.default-route
+
+
+
+Provide DHCP clients with a default route
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+
+
+*Example:*
+
+```nix
+false
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.server\.domainName
+
+
+
+Provide list of Domain Name(s)
+
+
+
+*Type:*
+list of (FQDN (Fully Qualified Domain Name))
+
+
+
+*Default:*
+
+```nix
+[ ]
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.server\.firstIP
+
+
+
+Set the first IP address provides by the DHCP Server\.
+Example: ` 10 ` for subnet ` 192.168.1.0/24 `
+will be calculated to ` 192.168.1.10 `\.
+
+
+
+*Type:*
+signed integer
+
+
+
+*Default:*
+
+```nix
+5
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.server\.gateway
+
+
+
+Set the gateway for the subnet
+
+
+
+*Type:*
+CIDR (IP and Subnet\. Example: 192\.168\.1\.4/24)
+
+
+
+*Default:*
+
+```nix
+""
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.server\.id
+
+
+
+Subnet IDs must be greater than zero and less than 4294967295
+
+
+
+*Type:*
+integer between 1 and 4294967294 (both inclusive)
+
+
+
+*Default:*
+
+```nix
+1024
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.server\.pxe-boot\.enable
+
+
+
+Enable PXE Boot support for this network interface\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+
+
+*Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.server\.pxe-boot\.defaultIso
+
+
+
+Select which ISO file should be selected by default\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+
+```nix
+""
+```
+
+
+
+*Example:*
+
+```nix
+"rhel-9.6-x86_64-dvd.iso"
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.server\.pxe-boot\.defaultScriptName
+
+
+
+Select which autoinstall script should be selected by default\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+
+```nix
+""
+```
+
+
+
+*Example:*
+
+```nix
+"minimal-environment.kstart"
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.server\.reservations
+
+
+
+Make reservations (MAC address specific configurations)\.
+Example: Make it so that one IP address is always provided to
+the selected MAC address\.
+
+
+
+*Type:*
+attribute set of (submodule)
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+
+
+*Example:*
+
+```nix
+{
+  "00:11:22:33:44:55" = {
+    ip-address = "192.168.1.2";
+  };
+}
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.server\.reservations\.\<name>\.ip-address
+
+
+
+Bind the IP address the MAC address (attribute key)
+
+
+
+*Type:*
+null or (IP address)
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.server\.reservations-only
+
+
+
+Only reply to the client which matches the information in ` dhcp.server.reservations `\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+
+
+*Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.static
+
+
+
+To-do: make description (Note static IP is put here, but there may be a better location in the structure)
+
+
+
+*Type:*
+submodule
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.static\.dns-servers
+
+
+
+Set the IP address(es) of the dns-server(s)
+
+
+
+*Type:*
+list of (IP address)
+
+
+
+*Default:*
+
+```nix
+[ ]
+```
+
+
+
+*Example:*
+
+```nix
+[
+  "192.168.1.1"
+  "1.1.1.1"
+]
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.static\.gateway
+
+
+
+Set the IP address of the gateway
+
+
+
+*Type:*
+null or (IP address)
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+"192.168.1.1"
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.static\.ip-address
+
+
+
+```
+            Set the ip and subnet in the CIDR format.
+```
+
+
+
+*Type:*
+CIDR (IP and Subnet\. Example: 192\.168\.1\.4/24)
+
+
+
+*Example:*
+
+```nix
+"192.168.1.10/24"
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.excludeFromNetworkManager
+
+
+
+Ensure that the interface is excluded from NetworkManager
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.forwarding
+
+
+
+IPv4 forwarding\. It is turn on by default\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.ipMasquerade
+
+
+
+Enable ip masquerade (aka NAT) on the interface\.
+
+This is needed e\.g\. if the interface is the WAN interface\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.multicast
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.name
+
+
+
+Set the name of the network interface
+
+
+
+*Type:*
+Network Interface Name ()
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.requiredForOnline
+
+
+
+When configured to ` null ` (which is the default)\.
+
+ - requiredForOnline will be set to ` true `
+   if the interface is configured as ` dhcp.server `\.
+
+ - requiredForOnline will be set to ` false `
+   if the interface is configured as ` dhcp.client ` or ` dhcp.static `\.
+
+This behavior can be overwritten by configuring this option to ` true ` and
+the ` systemd-networkd-wait-online.service ` will
+wait for this interface to be configured (until timeout)\.
+Or set the option to ` false ` for the ` systemd-networkd-wait-online.service `
+to ignore this interface\.
+
+
+
+*Type:*
+null or boolean
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.staticRoutes
+
+
+
+Added static routes for the interface\.
+
+In the case of ` dhcp.static `,
+if the route should be configured as the default use ` 0.0.0.0/0 `\.
+
+
+
+*Type:*
+list of (Subnet)
+
+
+
+*Default:*
+
+```nix
+[ ]
+```
+
+
+
+*Example:*
+
+```nix
+[
+  "172.20.90.0/24"
+]
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
 ## my\.router\.configInterface
 
 
@@ -282,6 +1054,9 @@ false
 true
 ```
 
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
 
 
 ## my\.router\.configInterface\.\*\.dhcp\.server\.default-route
@@ -311,6 +1086,9 @@ true
 false
 ```
 
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
 
 
 ## my\.router\.configInterface\.\*\.dhcp\.server\.domainName
@@ -331,6 +1109,9 @@ list of (FQDN (Fully Qualified Domain Name))
 ```nix
 [ ]
 ```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -355,6 +1136,9 @@ signed integer
 5
 ```
 
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
 
 
 ## my\.router\.configInterface\.\*\.dhcp\.server\.gateway
@@ -376,6 +1160,9 @@ CIDR (IP and Subnet\. Example: 192\.168\.1\.4/24)
 ""
 ```
 
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
 
 
 ## my\.router\.configInterface\.\*\.dhcp\.server\.id
@@ -396,6 +1183,9 @@ integer between 1 and 4294967294 (both inclusive)
 ```nix
 1024
 ```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -426,6 +1216,9 @@ false
 true
 ```
 
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
 
 
 ## my\.router\.configInterface\.\*\.dhcp\.server\.pxe-boot\.defaultIso
@@ -455,6 +1248,9 @@ string
 "rhel-9.6-x86_64-dvd.iso"
 ```
 
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
 
 
 ## my\.router\.configInterface\.\*\.dhcp\.server\.pxe-boot\.defaultScriptName
@@ -483,6 +1279,9 @@ string
 ```nix
 "minimal-environment.kstart"
 ```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -519,6 +1318,9 @@ attribute set of (submodule)
 }
 ```
 
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
 
 
 ## my\.router\.configInterface\.\*\.dhcp\.server\.reservations\.\<name>\.ip-address
@@ -539,6 +1341,9 @@ null or (IP address)
 ```nix
 null
 ```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -568,6 +1373,9 @@ false
 ```nix
 true
 ```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -625,6 +1433,9 @@ list of (IP address)
 ]
 ```
 
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
 
 
 ## my\.router\.configInterface\.\*\.dhcp\.static\.gateway
@@ -654,6 +1465,9 @@ null
 "192.168.1.1"
 ```
 
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
 
 
 ## my\.router\.configInterface\.\*\.dhcp\.static\.ip-address
@@ -676,6 +1490,9 @@ CIDR (IP and Subnet\. Example: 192\.168\.1\.4/24)
 ```nix
 "192.168.1.10/24"
 ```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -731,11 +1548,9 @@ true
 
 
 
-```
-    Enable ip masquerade (aka NAT) on the interface.
+Enable ip masquerade (aka NAT) on the interface\.
 
-This is needed e.g. if the interface is the WAN interface.
-```
+This is needed e\.g\. if the interface is the WAN interface\.
 
 
 
@@ -952,6 +1767,62 @@ list of (submodule)
 
 
 
+## my\.router\.configInterface\.\*\.vlans\.\*\.bridges
+
+
+
+Creating a bridge interface with and include this interface in the bridge\.
+
+
+
+*Type:*
+list of (submodule)
+
+
+
+*Default:*
+
+```nix
+[ ]
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.configInterface\.\*\.vlans\.\*\.bridges\.\*\.name
+
+
+
+Select the name of the bridge interface
+
+
+
+*Type:*
+null or (Network Interface Name ())
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+"br0"
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
 ## my\.router\.configInterface\.\*\.vlans\.\*\.dhcp
 
 
@@ -1053,6 +1924,9 @@ false
 true
 ```
 
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
 
 
 ## my\.router\.configInterface\.\*\.vlans\.\*\.dhcp\.server\.default-route
@@ -1082,6 +1956,9 @@ true
 false
 ```
 
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
 
 
 ## my\.router\.configInterface\.\*\.vlans\.\*\.dhcp\.server\.domainName
@@ -1102,6 +1979,9 @@ list of (FQDN (Fully Qualified Domain Name))
 ```nix
 [ ]
 ```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1126,6 +2006,9 @@ signed integer
 5
 ```
 
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
 
 
 ## my\.router\.configInterface\.\*\.vlans\.\*\.dhcp\.server\.gateway
@@ -1147,6 +2030,9 @@ CIDR (IP and Subnet\. Example: 192\.168\.1\.4/24)
 ""
 ```
 
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
 
 
 ## my\.router\.configInterface\.\*\.vlans\.\*\.dhcp\.server\.id
@@ -1167,6 +2053,9 @@ integer between 1 and 4294967294 (both inclusive)
 ```nix
 1024
 ```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1197,6 +2086,9 @@ false
 true
 ```
 
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
 
 
 ## my\.router\.configInterface\.\*\.vlans\.\*\.dhcp\.server\.pxe-boot\.defaultIso
@@ -1226,6 +2118,9 @@ string
 "rhel-9.6-x86_64-dvd.iso"
 ```
 
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
 
 
 ## my\.router\.configInterface\.\*\.vlans\.\*\.dhcp\.server\.pxe-boot\.defaultScriptName
@@ -1254,6 +2149,9 @@ string
 ```nix
 "minimal-environment.kstart"
 ```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1290,6 +2188,9 @@ attribute set of (submodule)
 }
 ```
 
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
 
 
 ## my\.router\.configInterface\.\*\.vlans\.\*\.dhcp\.server\.reservations\.\<name>\.ip-address
@@ -1310,6 +2211,9 @@ null or (IP address)
 ```nix
 null
 ```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1339,6 +2243,9 @@ false
 ```nix
 true
 ```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1396,6 +2303,9 @@ list of (IP address)
 ]
 ```
 
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
 
 
 ## my\.router\.configInterface\.\*\.vlans\.\*\.dhcp\.static\.gateway
@@ -1425,6 +2335,9 @@ null
 "192.168.1.1"
 ```
 
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
 
 
 ## my\.router\.configInterface\.\*\.vlans\.\*\.dhcp\.static\.ip-address
@@ -1447,6 +2360,9 @@ CIDR (IP and Subnet\. Example: 192\.168\.1\.4/24)
 ```nix
 "192.168.1.10/24"
 ```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1511,10 +2427,10 @@ integer between 1 and 4096 (both inclusive)
 
 
 
-*Default:*
+*Example:*
 
 ```nix
-0
+1337
 ```
 
 *Declared by:*
@@ -1526,11 +2442,9 @@ integer between 1 and 4096 (both inclusive)
 
 
 
-```
-    Enable ip masquerade (aka NAT) on the interface.
+Enable ip masquerade (aka NAT) on the interface\.
 
-This is needed e.g. if the interface is the WAN interface.
-```
+This is needed e\.g\. if the interface is the WAN interface\.
 
 
 
@@ -1950,8 +2864,6 @@ value “memfile” (singular enum)
 
 
 ## my\.router\.dns-server\.enable
-
-
 
 Enable DNS Server
 
