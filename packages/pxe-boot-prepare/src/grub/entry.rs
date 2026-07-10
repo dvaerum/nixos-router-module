@@ -61,16 +61,25 @@ impl MenuEntryFactory {
         let mut kernel_params =
             detector.generate_boot_params(&iso_url, &mounted_url, autoinstall);
 
-        // Replace autoinstall URL placeholder if present
+        // Replace autoinstall URL placeholders if present.
+        // - `{autoinstall_url}`     → the seed *file* (e.g. RHEL `inst.ks=`).
+        // - `{autoinstall_dir_url}` → the seed *directory* ending in `/`
+        //   (e.g. Ubuntu NoCloud `s=`); each script's seed lives in its own
+        //   `.../{iso}/{script.name}/` dir written by AutoinstallManager.
         if let Some(script) = autoinstall {
             let autoinstall_url = format!(
                 "http://{}:{}/unattented-install/{}/{}",
                 self.gateway, self.http_mount_port, iso_info.file_name, script.name
             );
+            let autoinstall_dir_url = format!("{}/", autoinstall_url);
 
             kernel_params = kernel_params
                 .iter()
-                .map(|param| param.replace("{autoinstall_url}", &autoinstall_url))
+                .map(|param| {
+                    param
+                        .replace("{autoinstall_dir_url}", &autoinstall_dir_url)
+                        .replace("{autoinstall_url}", &autoinstall_url)
+                })
                 .collect();
         }
 

@@ -91,6 +91,25 @@ module automatically generates the JSON configuration from declarative options.
 
 See `nixosModule/config-tftp.nix` for the integration.
 
+## TODO
+
+### NFS boot for Ubuntu (lower install-time RAM)
+
+Ubuntu boots via `url=<iso>`, loading the whole ISO into RAM. With cloud-init
+26.04's ~5.5 GB footprint (a cloud-init bug, not our seed) the install peaks
+around ~10 GB — so give Ubuntu VMs **≥12 GB** for now. The autoinstall itself is
+correct; only the boot RAM is the issue.
+
+Fix: serve the ISO tree over NFS and boot `netboot=nfs`, keeping the squashfs on
+the server instead of in RAM (HTTP `fetch=` doesn't work — casper needs the whole
+`/casper` as one medium):
+
+- Export `/run/pxe-boot/iso-mountpoint` read-only via NFS.
+- In `src/distro/ubuntu.rs`, replace `url=<iso>` with
+  `boot=casper netboot=nfs nfsroot=<gw>:/run/pxe-boot/iso-mountpoint/<iso>` +
+  `layerfs-path=<deepest casper/*.squashfs>`.
+- Keep the working `autoinstall ds=nocloud;s=<dir>/` seed.
+
 ## Development
 
 Build with Cargo:

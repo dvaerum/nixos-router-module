@@ -142,8 +142,16 @@ impl PxeBootService {
             tracing::info!("Detected {} distributions", iso_infos.len());
         }
 
-        // 4. Process autoinstall scripts
-        self.autoinstall_manager.prepare(&self.config).await?;
+        // 4. Process autoinstall scripts. Pass the already-detected distro per ISO
+        //    so the manager can lay out each seed the way that installer expects
+        //    (e.g. Ubuntu NoCloud user-data/meta-data vs RHEL kickstart).
+        let distro_by_iso: std::collections::HashMap<String, DistroType> = iso_infos
+            .iter()
+            .map(|(iso_info, _, _)| (iso_info.file_name.clone(), iso_info.distro_type.clone()))
+            .collect();
+        self.autoinstall_manager
+            .prepare(&self.config, &distro_by_iso)
+            .await?;
 
         // 5. Generate GRUB menus for each DHCP interface
         for interface in &self.config.dhcp_interfaces {
