@@ -460,7 +460,7 @@ in
     enable = true;
   }
   // lib.mkIf cfg.dns-server.enable (
-    if (lib.versionAtLeast lib.version "26.05") then
+    if (lib.versionAtLeast lib.trivial.release "26.05") then
       {
         settings.Resolve = {
           DNSStubListenerExtra = [
