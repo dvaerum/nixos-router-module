@@ -49,6 +49,14 @@ let
   testIsoName = "nixos-pxe-test-x86_64.iso";
   pxeMacBIOS = "52:54:00:12:01:02";
   pxeMacUEFI = "52:54:00:12:01:03";
+  # Regression: a reservation with an IP OUTSIDE the DHCP pool (.10-.254).
+  # Reserved-IP clients do not draw from the pool, so PXE boot classes that are
+  # only required at the POOL level never fire for them -> their DHCP offer
+  # carries no next-server/boot-file-name -> UEFI/OVMF fails with
+  # "PXE-E16: No valid offer received". The pxe classes must therefore be
+  # required at the SUBNET level. See the "reserved-IP client" subtest below.
+  reservedPxeMac = "52:54:00:12:01:09";
+  reservedPxeIp = "192.168.75.5"; # < firstIP (.10) => outside the pool
 
   ###########################################################################
   # Test ISO: custom NixOS that sends a beacon HTTP request after booting
@@ -233,6 +241,13 @@ pkgs.testers.nixosTest {
                   id = 200;
                   gateway = "${routerIp}/24";
                   firstIP = 10;
+                  # Regression fixture: a reservation OUTSIDE the pool (.5 < firstIP
+                  # .10). Exercises that PXE options reach reserved-IP clients.
+                  reservations = {
+                    "${reservedPxeMac}" = {
+                      ip-address = reservedPxeIp;
+                    };
+                  };
                   pxe-boot = {
                     enable = true;
                     defaultIso = testIsoName;
@@ -427,6 +442,43 @@ pkgs.testers.nixosTest {
                   f"No client class containing '{keyword}' in: {class_names}"
           assert any("UEFI" in n and "x86_64" in n for n in class_names), \
               f"No UEFI x86_64 class in: {class_names}"
+
+      with subtest("PXE options reach reserved-IP clients (regression: PXE-E16)"):
+          # A reserved IP outside the pool does NOT draw from the pool, so the
+          # PXE boot classes must be required at the SUBNET level (not only the
+          # pool) for them to fire. If they are only required on the pool, a
+          # reserved client's DHCP offer has no next-server/boot-file-name and
+          # UEFI/OVMF rejects it ("PXE-E16: No valid offer received").
+          service_info = router.succeed("systemctl cat kea-dhcp4-server.service")
+          config_match = re.search(r'-c\s+([^\s]+)', service_info)
+          config_path = config_match.group(1) if config_match else "/etc/kea/kea-dhcp4.conf"
+          kea_json = json.loads(router.succeed(f"cat {config_path}"))
+
+          subnets = kea_json["Dhcp4"]["subnet4"]
+          subnet = next(s for s in subnets if s.get("id") == 200)
+
+          # The reservation must be present and outside the pool.
+          resv_ips = [r.get("ip-address") for r in subnet.get("reservations", [])]
+          assert "${reservedPxeIp}" in resv_ips, \
+              f"reserved IP ${reservedPxeIp} missing from subnet reservations: {resv_ips}"
+          pool_str = subnet["pools"][0]["pool"]  # e.g. "192.168.75.10 - 192.168.75.254"
+          pool_first = int(pool_str.split("-")[0].strip().split(".")[-1])
+          assert int("${reservedPxeIp}".split(".")[-1]) < pool_first, \
+              f"fixture broken: ${reservedPxeIp} should be below pool start {pool_str}"
+
+          # The fix: require-client-classes for PXE must exist at the SUBNET level
+          # so it applies to reserved clients too. (Pool-level alone is the bug.)
+          subnet_req = subnet.get("require-client-classes", [])
+          pxe_markers = ["UEFI (x86_64)", "BIOS Legacy", "iPXE"]
+          have = [m for m in pxe_markers if any(m in c for c in subnet_req)]
+          assert have, (
+              "PXE boot classes are NOT required at the subnet level "
+              f"(subnet require-client-classes={subnet_req}); reserved-IP clients "
+              "will get no boot-file-name -> UEFI PXE-E16. Move "
+              "`require-client-classes` from the pool to the subnet in "
+              "nixosModule/config.nix."
+          )
+          router.log(f"  subnet-level PXE classes required: {subnet_req}")
 
       with subtest("Autoinstall scripts are deployed"):
           ubuntu_ks = router.succeed(

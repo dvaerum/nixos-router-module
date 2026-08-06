@@ -225,17 +225,6 @@ in
                 // lib.attrsets.optionalAttrs dhcp_server.reservations-only {
                   client-class = "KNOWN";
                 }
-                // lib.attrsets.optionalAttrs dhcp_server.pxe-boot.enable {
-                  # To-do: Rename `require-client-classes` -> `evaluate-additional-classes` in v2.7.4+ of kea
-                  require-client-classes = [
-                    "iPXE-${builtins.toString dhcp_server.id}"
-                    "iPXE-BIOS-${builtins.toString dhcp_server.id}"
-                    "iPXE-UEFI-${builtins.toString dhcp_server.id}"
-                    "UEFI (x86_64) Client-${builtins.toString dhcp_server.id}"
-                    "BIOS Legacy (x86_64) Client-${builtins.toString dhcp_server.id}"
-                    "UEFI (aarch64) Client-${builtins.toString dhcp_server.id}"
-                  ];
-                }
               )
             ];
 
@@ -295,6 +284,24 @@ in
                 ip-address = value.ip-address;
               }
             ) dhcp_interface_conf.dhcp.server.reservations;
+          }
+          // lib.attrsets.optionalAttrs dhcp_server.pxe-boot.enable {
+            # PXE boot classes are required at the SUBNET level (not the pool):
+            # a DHCP reservation with an IP outside the pool range does not draw
+            # from the pool, so a pool-level `require-client-classes` never fires
+            # for reserved clients -> their offer carries no next-server /
+            # boot-file-name -> UEFI/OVMF fails with "PXE-E16: No valid offer
+            # received". At the subnet level it applies to pooled AND reserved
+            # clients alike. Regression-tested in tests/pxe-boot.
+            # To-do: Rename `require-client-classes` -> `evaluate-additional-classes` in v2.7.4+ of kea
+            require-client-classes = [
+              "iPXE-${builtins.toString dhcp_server.id}"
+              "iPXE-BIOS-${builtins.toString dhcp_server.id}"
+              "iPXE-UEFI-${builtins.toString dhcp_server.id}"
+              "UEFI (x86_64) Client-${builtins.toString dhcp_server.id}"
+              "BIOS Legacy (x86_64) Client-${builtins.toString dhcp_server.id}"
+              "UEFI (aarch64) Client-${builtins.toString dhcp_server.id}"
+            ];
           }
         );
       }
