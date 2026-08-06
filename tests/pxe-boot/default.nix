@@ -480,6 +480,18 @@ pkgs.testers.nixosTest {
           )
           router.log(f"  subnet-level PXE classes required: {subnet_req}")
 
+          # match-client-id must be false on the PXE subnet so reservations are
+          # keyed on MAC only. UEFI firmware / installer / installed OS use
+          # different DUID-derived client-ids for the same MAC; with the kea
+          # default (true) a stale firmware lease blocks the installed OS from
+          # its reserved IP.
+          assert subnet.get("match-client-id") is False, (
+              "PXE subnet match-client-id must be false so a reserved IP is keyed "
+              "on MAC only (else a stale firmware-phase DUID lease blocks the "
+              f"installed OS). Got: {subnet.get('match-client-id')!r}"
+          )
+          router.log("  subnet match-client-id = false (MAC-only reservations)")
+
       with subtest("Autoinstall scripts are deployed"):
           ubuntu_ks = router.succeed(
               "cat /run/pxe-boot/unattented-install/ubuntu-24.04-live-server-amd64.iso/minimal.ks"

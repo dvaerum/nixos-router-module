@@ -286,6 +286,18 @@ in
             ) dhcp_interface_conf.dhcp.server.reservations;
           }
           // lib.attrsets.optionalAttrs dhcp_server.pxe-boot.enable {
+            # Match PXE clients by MAC only (ignore the DHCP client-id) on this
+            # subnet. UEFI PXE firmware, the OS installer and the installed OS
+            # present DIFFERENT DUID-derived client-ids for the SAME MAC across
+            # boot phases. With kea's default (match-client-id = true) a still-
+            # valid lease taken during PXE/install (firmware client-id) BLOCKS the
+            # installed OS (different client-id, same MAC) from getting its
+            # RESERVED IP -> the OS falls back to a pool address, needing a manual
+            # "kea dance" to recover. Scoping match-client-id = false to the
+            # pxe-boot subnet keys leases/reservations on MAC only, so a fixed
+            # reservation survives firmware -> installer -> installed OS.
+            match-client-id = false;
+
             # PXE boot classes are required at the SUBNET level (not the pool):
             # a DHCP reservation with an IP outside the pool range does not draw
             # from the pool, so a pool-level `require-client-classes` never fires
