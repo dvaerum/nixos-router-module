@@ -381,6 +381,26 @@ integer between 1 and 4294967294 (both inclusive)
 
 Enable PXE Boot support for this network interface\.
 
+Side effect — DHCP client matching becomes MAC-only on this
+subnet: enabling PXE boot sets kea’s ` match-client-id = false `
+for the whole subnet, so ALL clients on it (pool and reserved)
+are identified by MAC address only, and the DHCP client-id /
+DUID is ignored\.
+
+Why: UEFI PXE firmware, the OS installer and the installed OS
+present DIFFERENT DUID-derived client-ids for the SAME MAC\. With
+kea’s default (client-id matching) a stale lease taken during
+PXE/install blocks the installed OS from reclaiming its RESERVED
+IP (it falls back to a pool address and needs a manual lease
+drop)\. MAC-only matching makes a fixed reservation survive
+firmware -> installer -> installed OS\.
+
+Trade-off: because it is subnet-wide, non-PXE hosts on this
+subnet also lose client-id features (a NIC swap yields a new
+identity/lease; a single MAC cannot host multiple logical DHCP
+clients)\. Use a dedicated subnet for PXE provisioning if that
+matters\.
+
 
 
 *Type:*
@@ -1194,6 +1214,26 @@ integer between 1 and 4294967294 (both inclusive)
 
 
 Enable PXE Boot support for this network interface\.
+
+Side effect — DHCP client matching becomes MAC-only on this
+subnet: enabling PXE boot sets kea’s ` match-client-id = false `
+for the whole subnet, so ALL clients on it (pool and reserved)
+are identified by MAC address only, and the DHCP client-id /
+DUID is ignored\.
+
+Why: UEFI PXE firmware, the OS installer and the installed OS
+present DIFFERENT DUID-derived client-ids for the SAME MAC\. With
+kea’s default (client-id matching) a stale lease taken during
+PXE/install blocks the installed OS from reclaiming its RESERVED
+IP (it falls back to a pool address and needs a manual lease
+drop)\. MAC-only matching makes a fixed reservation survive
+firmware -> installer -> installed OS\.
+
+Trade-off: because it is subnet-wide, non-PXE hosts on this
+subnet also lose client-id features (a NIC swap yields a new
+identity/lease; a single MAC cannot host multiple logical DHCP
+clients)\. Use a dedicated subnet for PXE provisioning if that
+matters\.
 
 
 
@@ -2064,6 +2104,26 @@ integer between 1 and 4294967294 (both inclusive)
 
 
 Enable PXE Boot support for this network interface\.
+
+Side effect — DHCP client matching becomes MAC-only on this
+subnet: enabling PXE boot sets kea’s ` match-client-id = false `
+for the whole subnet, so ALL clients on it (pool and reserved)
+are identified by MAC address only, and the DHCP client-id /
+DUID is ignored\.
+
+Why: UEFI PXE firmware, the OS installer and the installed OS
+present DIFFERENT DUID-derived client-ids for the SAME MAC\. With
+kea’s default (client-id matching) a stale lease taken during
+PXE/install blocks the installed OS from reclaiming its RESERVED
+IP (it falls back to a pool address and needs a manual lease
+drop)\. MAC-only matching makes a fixed reservation survive
+firmware -> installer -> installed OS\.
+
+Trade-off: because it is subnet-wide, non-PXE hosts on this
+subnet also lose client-id features (a NIC swap yields a new
+identity/lease; a single MAC cannot host multiple logical DHCP
+clients)\. Use a dedicated subnet for PXE provisioning if that
+matters\.
 
 
 
