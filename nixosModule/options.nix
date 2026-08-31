@@ -2,6 +2,7 @@
   lib,
   pkgs,
   options,
+  netLib,
   ...
 }:
 
@@ -29,7 +30,7 @@ let
     submodule
     ;
 
-  ipv4_fn = import ./functions/ipv4.nix { inherit lib pkgs; };
+  ipv4_fn = import ./functions/ipv4.nix { inherit lib netLib; };
 
   defaultInterfaceName = "builtin-ether";
 

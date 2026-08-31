@@ -2,11 +2,12 @@
   pkgs,
   config,
   lib,
+  netLib,
   ...
 }:
 let
 
-  functions-general = import ./functions/general.nix { inherit pkgs lib config; };
+  functions-general = import ./functions/general.nix { inherit pkgs lib config netLib; };
   inherit (functions-general)
     # To-do: Re-visit the use of this function,
     #        now that I know more there may be a better way of doing this
@@ -28,7 +29,7 @@ let
     systemdNetworkDHCP
     ;
 
-  ipv4_fn = import ./functions/ipv4.nix { inherit lib pkgs; };
+  ipv4_fn = import ./functions/ipv4.nix { inherit lib netLib; };
 
 in
 (lib.mkIf cfg.enable {
@@ -200,17 +201,9 @@ in
 
             dhcpFirstIP =
               if dhcp_server.firstIP == null then
-                ipv4_fn.increase {
-                  ip = cidr.network;
-                  by = 5;
-                  subnet = subnet;
-                }
+                ipv4_fn.nthAddress subnet 5
               else
-                ipv4_fn.increase {
-                  ip = cidr.network;
-                  by = dhcp_server.firstIP;
-                  subnet = subnet;
-                };
+                ipv4_fn.nthAddress subnet dhcp_server.firstIP;
 
             domainNames = dhcp_server.domainName ++ cfg.dhcp.server.generalSettings.domainName;
 

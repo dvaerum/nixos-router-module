@@ -2,6 +2,7 @@
   config,
   pkgs,
   lib,
+  netLib,
   ...
 }:
 
@@ -29,7 +30,7 @@ rec {
       f [ ] attrList
     );
 
-  ipv4_fn = import ./ipv4.nix { inherit pkgs lib; };
+  ipv4_fn = import ./ipv4.nix { inherit lib netLib; };
 
   cfg = config.my.router;
   cfgConfigInterface = cfg.configInterface;

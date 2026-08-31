@@ -1,7 +1,9 @@
-{ pkgs ? import <nixpkgs> {} }:
+{ pkgs ? import <nixpkgs> { }
+, netLib
+}:
 let
   inherit (pkgs) lib;
-  ipv4_fn = import ./ipv4.nix {inherit lib pkgs;};
+  ipv4_fn = import ./ipv4.nix { inherit lib netLib; };
 in
   lib.runTests {
     test_fromCidrString_010 = {
@@ -9,14 +11,13 @@ in
 
       expected = {
         address = "192.168.1.8";
-        addresses = "126";
-        addrSpace = "Private Use";
+        addresses = 126;
         broadcast = "192.168.1.127";
         maxAddr = "192.168.1.126";
         minAddr = "192.168.1.1";
         netmask = "255.255.255.128";
         network = "192.168.1.0";
-        prefix = "25";
+        prefix = 25;
       };
     };
 
@@ -25,54 +26,46 @@ in
 
       expected = {
         address = "192.168.1.2";
-        addresses = "254";
-        addrSpace = "Private Use";
+        addresses = 254;
         broadcast = "192.168.1.255";
         maxAddr = "192.168.1.254";
         minAddr = "192.168.1.1";
         netmask = "255.255.255.0";
         network = "192.168.1.0";
-        prefix = "24";
+        prefix = 24;
       };
     };
 
-    test_increase_010_no_subnet_verify = {
-      expr = ipv4_fn.increase {ip = "192.168.1.0"; by = 24;};
-      expected = "192.168.1.24";
+    # A bare network address must report `address = null` — the `subnet`
+    # validator relies on this to reject host CIDRs.
+    test_fromCidrString_030_network_addr_is_null = {
+      expr = (ipv4_fn.fromCidrString "10.0.0.0/8").address;
+      expected = null;
     };
 
-    test_increase_011_no_subnet_verify = {
-      expr = ipv4_fn.increase {ip = "192.168.1.0"; by = 424;};
-      expected = "192.168.2.168";
+    test_subnetValid_010_network = {
+      expr = ipv4_fn.subnetValid "172.20.90.0/24";
+      expected = true;
     };
 
-    test_increase_020_subnet_verify = {
-      expr = ipv4_fn.increase {ip = "192.168.1.0"; by = 24;
-                               subnet = "192.168.1.0/24";};
-      expected = "192.168.1.24";
-    };
-
-    test_increase_021_subnet_verify = {
-      expr = ipv4_fn.increase {ip = "192.168.0.0"; by = 424;
-                               subnet = "192.168.0.0/23";};
-      expected = "192.168.1.168";
-    };
-
-    test_increase_030_subnet_verify_failed = {
-      expr = (builtins.tryEval (ipv4_fn.increase {
-        ip = "192.168.1.255"; by = 1;
-        subnet = "192.168.1.0/24";
-      })).success;
-
+    test_subnetValid_020_host_rejected = {
+      expr = ipv4_fn.subnetValid "172.20.90.5/24";
       expected = false;
     };
 
-    test_increase_031_subnet_verify_failed = {
-      expr = (builtins.tryEval(ipv4_fn.increase {
-        ip = "192.168.1.0"; by = -1;
-        subnet = "192.168.1.0/24";
-      })).success;
+    test_nthAddress_010 = {
+      expr = ipv4_fn.nthAddress "192.168.1.0/24" 5;
+      expected = "192.168.1.5";
+    };
 
+    test_nthAddress_020_crosses_octet = {
+      expr = ipv4_fn.nthAddress "192.168.0.0/23" 424;
+      expected = "192.168.1.168";
+    };
+
+    # An index beyond the network's size must throw.
+    test_nthAddress_030_out_of_range = {
+      expr = (builtins.tryEval (ipv4_fn.nthAddress "192.168.1.0/24" 300)).success;
       expected = false;
     };
 

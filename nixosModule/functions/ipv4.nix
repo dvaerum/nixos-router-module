@@ -1,7 +1,11 @@
 { lib
-, pkgs
+, netLib
 , ...
 }:
+
+# `netLib` is the pure-Nix IP library (github:0xCCF4/nix-net-lib), threaded in via
+# the flake's `_module.args`. It replaces the previous `ipcalc`/`python3`
+# import-from-derivation helpers, so IP math now happens purely at eval time.
 
 rec {
   _regex_validate_ip_address_numbers =
@@ -11,89 +15,40 @@ rec {
   _regex_validate_cidr =
     "(${_regex_validate_ip_address}/([1-9]|[1-2][0-9]|3[0-2]))";
 
+  # Strip the trailing `/prefix` that netLib's assignAddress returns.
+  _stripMask = s: builtins.head (lib.strings.splitString "/" s);
+
+  # The `index`-th address of a network (in CIDR notation), without the trailing
+  # `/prefix`. Thin wrapper over netLib.assignAddress; throws when `index` is out
+  # of range for the network's mask.
+  nthAddress = network: index: _stripMask (netLib.assignAddress network index);
+
+  # Parse a CIDR string into the ipcalc-shaped attrset the module expects.
+  # Kept field-for-field compatible with the old `ipcalc --json` version:
+  #   address : the host address, or `null` for a bare network address
+  #             (the `subnet` validator relies on this to reject host CIDRs)
+  #   network : network address (no mask)
+  #   netmask : dotted netmask
+  #   prefix  : prefix length as an int (compared with `> 30` downstream)
+  #   addresses, minAddr, maxAddr, broadcast : usable-host count + range
   fromCidrString = cidr: (
     let
-      result = builtins.fromJSON (
-        lib.readFile "${
-          pkgs.runCommand
-          "fromCidrString"
-          {
-            buildInputs = [ pkgs.ipcalc ];
-            env.cidr = cidr;
-          }
-          ''ipcalc --json "$cidr" > $out''
-        }"
-      );
+      d = netLib.ip4.decompose cidr;
+      mask = d.mask;
+      total = netLib.pow 2 (32 - mask);
+      nth = nthAddress d.network;
     in
-      {
-        address = if builtins.hasAttr "ADDRESS" result
-                  then result.ADDRESS
-                  else null;
-        addresses = lib.strings.toInt result.ADDRESSES;
-        addrSpace = result.ADDRSPACE;
-        broadcast = result.BROADCAST;
-        maxAddr = result.MAXADDR;
-        minAddr = result.MINADDR;
-        netmask = result.NETMASK;
-        network = result.NETWORK;
-        prefix = lib.strings.toInt result.PREFIX;
-      }
+    {
+      address = if d.addressParts == d.networkParts then null else d.addressNoMask;
+      network = d.networkNoMask;
+      netmask = d.networkMaskNoMask;
+      prefix = mask;
+      addresses = total - 2;
+      minAddr = nth 1;
+      maxAddr = nth (total - 2);
+      broadcast = nth (total - 1);
+    }
   );
-
-  increase = {ip, by, subnet ? ""}: (
-    let
-    result = builtins.fromJSON (lib.readFile "${
-      pkgs.runCommand
-      "increase"
-      {
-        buildInputs = [ pkgs.python3 ];
-        env.ip = ip;
-        env.increase_size_by = by;
-        env.verify_subnet = subnet;
-        env._python_code = ''
-          from sys import argv
-          from ipaddress import ip_address, ip_network
-          from json import dumps
-
-          def err(msg):
-            print(dumps({"err": True, "msg": msg}))
-            exit(0)
-
-          def ok(data):
-            print(dumps({"err": False, "data": data}))
-            exit(0)
-
-          try:
-            ip_tmp = argv[1].split("/")[0]
-            ip = ip_address(ip_tmp)
-          except:
-            err(f"Invalid IPv4 address (arg: ip): {argv[1]}")
-
-          try:
-            increase_size_by = int(argv[2])
-          except:
-            err(f"Invalid number (arg: by): {argv[2]}")
-
-          try:
-            verify_subnet = ip_network(argv[3]) if argv[3] else None
-          except:
-            err(f"Invalid subnet (arg: subnet): {argv[3]}")
-
-          new_ip = ip + increase_size_by
-          if verify_subnet and new_ip not in verify_subnet:
-            err(f"The ip address {new_ip} is not in the subnet {verify_subnet}")
-          ok(f"{new_ip}")
-        '';
-      }
-      ''python3 -c "$_python_code" "$ip" "$increase_size_by" "$verify_subnet" > $out''
-    }");
-  in
-    if result.err
-    then throw result.msg
-    else result.data
-  );
-
-  decrease = {ip, by, subnet ? ""}: increase {inherit ip subnet; by = -1 * by;};
 
   cidrValid = (cidr: (builtins.match "^${_regex_validate_cidr}$" "${cidr}") != null);
 
@@ -105,7 +60,7 @@ rec {
       else if cidr_attr.prefix > 30
       then throw "The prefix length must be 30 or less for a valid subnet"
       else if cidr_attr.address != null
-      then throw "`${cidr_str}` is an IP-address for the subnet `${cidr_attr.network}/${cidr_attr.prefix}`"
+      then throw "`${cidr_str}` is an IP-address for the subnet `${cidr_attr.network}/${builtins.toString cidr_attr.prefix}`"
       else cidr_str
   ;
 

@@ -1,5 +1,25 @@
 {
   "nodes": {
+    "nix-net-lib": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1769341404,
+        "narHash": "sha256-DRe4hoL880v6SSprIQIXeXjAUvpSqPmxFkEVWU0zdGE=",
+        "owner": "0xCCF4",
+        "repo": "nix-net-lib",
+        "rev": "f7a02760eb2864e525da462f3e366ad6e8b5f7f0",
+        "type": "github"
+      },
+      "original": {
+        "owner": "0xCCF4",
+        "repo": "nix-net-lib",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1751498133,
@@ -41,6 +61,7 @@
     },
     "root": {
       "inputs": {
+        "nix-net-lib": "nix-net-lib",
         "nixpkgs": "nixpkgs",
         "pimd": "pimd",
         "utils": "utils"

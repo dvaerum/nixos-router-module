@@ -11,10 +11,16 @@
         utils.follows = "utils";
       };
     };
+
+    # Pure-Nix IPv4/IPv6 CIDR library (replaces the ipcalc/python IFD helpers)
+    nix-net-lib = {
+      url = "github:0xCCF4/nix-net-lib";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
 
-  outputs = { self, nixpkgs, utils, pimd }:
+  outputs = { self, nixpkgs, utils, pimd, nix-net-lib }:
     let
       # Helper function to build ISO images
       mkIso = system: config: (import nixpkgs { inherit system; }).nixos config;
@@ -30,7 +36,8 @@
             ./nixosModule
           ];
           options = {};
-          config = {};
+          # Expose the pure-Nix IP library to the module's helper files.
+          config._module.args.netLib = nix-net-lib.lib;
         };
 
         # ISO builder module for creating PXE-bootable ISOs
@@ -55,6 +62,20 @@
           basic-routing = tests.basic-routing;
           dhcp-server = tests.dhcp-server;
           pxe-boot = tests.pxe-boot;
+
+          # Pure `lib.runTests` for the IPv4 helpers (returns [] when all pass).
+          ipv4-lib =
+            let
+              failures = import ./nixosModule/functions/ipv4_tests.nix {
+                inherit pkgs;
+                netLib = nix-net-lib.lib;
+              };
+            in
+            pkgs.runCommand "ipv4-lib-tests" { } (
+              if failures == [ ]
+              then "touch $out"
+              else throw "ipv4 lib tests failed:\n${builtins.toJSON failures}"
+            );
         };
 
         # Expose packages for building

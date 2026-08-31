@@ -1,6 +1,7 @@
 { lib
 , pkgs
 , config
+, netLib
 , ...
 }: let
 
@@ -10,12 +11,12 @@
 
   pxe_boot_folder = "/srv/pxeboot";
 
-  functions-general = import ./functions/general.nix { inherit pkgs lib config; };
+  functions-general = import ./functions/general.nix { inherit pkgs lib config netLib; };
   inherit (functions-general)
     cfgSetDhcpServerInterfaceOnlyFilter
   ;
 
-  ipv4_fn = import ./functions/ipv4.nix { inherit lib pkgs; };
+  ipv4_fn = import ./functions/ipv4.nix { inherit lib netLib; };
   inherit (ipv4_fn)
     fromCidrString
   ;
