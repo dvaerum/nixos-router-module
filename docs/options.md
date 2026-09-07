@@ -212,11 +212,37 @@ submodule
 
 
 
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.server\.address
+
+
+
+The router’s own IP address on this subnet, in CIDR notation\.
+Sets the interface’s ` Address= ` and defines the subnet the DHCP
+server hands out\. (Formerly ` gateway `\.)
+
+
+
+*Type:*
+CIDR (IP and Subnet\. Example: 192\.168\.1\.4/24)
+
+
+
+*Example:*
+
+```nix
+"192.168.1.1/24"
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
 ## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.server\.classless-static-route
 
 
 
-Expose all other subnets, declared as a ` dhcp.server.gateway `,
+Expose all other subnets, declared as a ` dhcp.server.address `,
 as a classless static route (Option: 121)\.
 
 
@@ -270,6 +296,46 @@ true
 
 ```nix
 false
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.server\.dns-servers
+
+
+
+The DNS server(s) advertised to DHCP clients (kea
+` domain-name-servers `):
+
+ - ` null ` (the default): advertise this router’s own ` address `\.
+ - ` [ ] `: advertise no DNS server at all\.
+ - a non-empty list: advertise exactly those servers\.
+
+
+
+*Type:*
+null or (list of (IP address))
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+[
+  "192.168.1.1"
+  "1.1.1.1"
+]
 ```
 
 *Declared by:*
@@ -331,19 +397,30 @@ signed integer
 
 
 
-Set the gateway for the subnet
+The default-route next-hop advertised to DHCP clients (kea
+` routers `)\. ` null ` (the default) advertises this router’s own
+` address `; set an IP to point clients at a different gateway\.
+Only used when ` default-route ` is true\.
 
 
 
 *Type:*
-CIDR (IP and Subnet\. Example: 192\.168\.1\.4/24)
+null or (IP address)
 
 
 
 *Default:*
 
 ```nix
-""
+null
+```
+
+
+
+*Example:*
+
+```nix
+"192.168.1.254"
 ```
 
 *Declared by:*
@@ -1046,11 +1123,37 @@ submodule
 
 
 
+## my\.router\.configInterface\.\*\.dhcp\.server\.address
+
+
+
+The router’s own IP address on this subnet, in CIDR notation\.
+Sets the interface’s ` Address= ` and defines the subnet the DHCP
+server hands out\. (Formerly ` gateway `\.)
+
+
+
+*Type:*
+CIDR (IP and Subnet\. Example: 192\.168\.1\.4/24)
+
+
+
+*Example:*
+
+```nix
+"192.168.1.1/24"
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
 ## my\.router\.configInterface\.\*\.dhcp\.server\.classless-static-route
 
 
 
-Expose all other subnets, declared as a ` dhcp.server.gateway `,
+Expose all other subnets, declared as a ` dhcp.server.address `,
 as a classless static route (Option: 121)\.
 
 
@@ -1104,6 +1207,46 @@ true
 
 ```nix
 false
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.configInterface\.\*\.dhcp\.server\.dns-servers
+
+
+
+The DNS server(s) advertised to DHCP clients (kea
+` domain-name-servers `):
+
+ - ` null ` (the default): advertise this router’s own ` address `\.
+ - ` [ ] `: advertise no DNS server at all\.
+ - a non-empty list: advertise exactly those servers\.
+
+
+
+*Type:*
+null or (list of (IP address))
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+[
+  "192.168.1.1"
+  "1.1.1.1"
+]
 ```
 
 *Declared by:*
@@ -1165,19 +1308,30 @@ signed integer
 
 
 
-Set the gateway for the subnet
+The default-route next-hop advertised to DHCP clients (kea
+` routers `)\. ` null ` (the default) advertises this router’s own
+` address `; set an IP to point clients at a different gateway\.
+Only used when ` default-route ` is true\.
 
 
 
 *Type:*
-CIDR (IP and Subnet\. Example: 192\.168\.1\.4/24)
+null or (IP address)
 
 
 
 *Default:*
 
 ```nix
-""
+null
+```
+
+
+
+*Example:*
+
+```nix
+"192.168.1.254"
 ```
 
 *Declared by:*
@@ -1936,11 +2090,37 @@ submodule
 
 
 
+## my\.router\.configInterface\.\*\.vlans\.\*\.dhcp\.server\.address
+
+
+
+The router’s own IP address on this subnet, in CIDR notation\.
+Sets the interface’s ` Address= ` and defines the subnet the DHCP
+server hands out\. (Formerly ` gateway `\.)
+
+
+
+*Type:*
+CIDR (IP and Subnet\. Example: 192\.168\.1\.4/24)
+
+
+
+*Example:*
+
+```nix
+"192.168.1.1/24"
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
 ## my\.router\.configInterface\.\*\.vlans\.\*\.dhcp\.server\.classless-static-route
 
 
 
-Expose all other subnets, declared as a ` dhcp.server.gateway `,
+Expose all other subnets, declared as a ` dhcp.server.address `,
 as a classless static route (Option: 121)\.
 
 
@@ -1994,6 +2174,46 @@ true
 
 ```nix
 false
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.configInterface\.\*\.vlans\.\*\.dhcp\.server\.dns-servers
+
+
+
+The DNS server(s) advertised to DHCP clients (kea
+` domain-name-servers `):
+
+ - ` null ` (the default): advertise this router’s own ` address `\.
+ - ` [ ] `: advertise no DNS server at all\.
+ - a non-empty list: advertise exactly those servers\.
+
+
+
+*Type:*
+null or (list of (IP address))
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+[
+  "192.168.1.1"
+  "1.1.1.1"
+]
 ```
 
 *Declared by:*
@@ -2055,19 +2275,30 @@ signed integer
 
 
 
-Set the gateway for the subnet
+The default-route next-hop advertised to DHCP clients (kea
+` routers `)\. ` null ` (the default) advertises this router’s own
+` address `; set an IP to point clients at a different gateway\.
+Only used when ` default-route ` is true\.
 
 
 
 *Type:*
-CIDR (IP and Subnet\. Example: 192\.168\.1\.4/24)
+null or (IP address)
 
 
 
 *Default:*
 
 ```nix
-""
+null
+```
+
+
+
+*Example:*
+
+```nix
+"192.168.1.254"
 ```
 
 *Declared by:*
@@ -2781,8 +3012,6 @@ signed integer
 
 ## my\.router\.dhcp\.server\.generalSettings\.renewTimer
 
-
-
 Set renew time (seconds)
 
 
@@ -2924,6 +3153,8 @@ value “memfile” (singular enum)
 
 
 ## my\.router\.dns-server\.enable
+
+
 
 Enable DNS Server
 
