@@ -4,33 +4,31 @@
   options,
   netLib,
   ...
-}:
-
-let
-  inherit (lib)
+}: let
+  inherit
+    (lib)
     mkOption
     mkOptionType
     types
     ;
 
-  inherit (lib.types)
+  inherit
+    (lib.types)
     bool
     int
     ints
     str
     enum
     attrs
-
     nullOr
     listOf
     attrsOf
     attrTag
     either
-
     submodule
     ;
 
-  ipv4_fn = import ./functions/ipv4.nix { inherit lib netLib; };
+  ipv4_fn = import ./functions/ipv4.nix {inherit lib netLib;};
 
   defaultInterfaceName = "builtin-ether";
 
@@ -63,7 +61,7 @@ let
     interfaceName = mkOptionType {
       name = "interfaceName";
       description = "Network Interface Name ()";
-      check = (name: builtins.match "^([A-Za-z0-9._-]{1,15})$" name != null);
+      check = name: builtins.match "^([A-Za-z0-9._-]{1,15})$" name != null;
     };
     FQDN = mkOptionType {
       name = "FQDN";
@@ -71,8 +69,8 @@ let
       # To-do: This regex for matching FQDN my not be perfect and have bugs
       check = (
         domain:
-        builtins.match "^((xn--)?[a-z0-9][a-z0-9-]{0,61}[a-z0-9]{0,1}[.](xn--)?([a-z0-9-]{1,61}|[a-z0-9-]{1,30}[.][a-z]){2,})$" domain
-        != null
+          builtins.match "^((xn--)?[a-z0-9][a-z0-9-]{0,61}[a-z0-9]{0,1}[.](xn--)?([a-z0-9-]{1,61}|[a-z0-9-]{1,30}[.][a-z]){2,})$" domain
+          != null
       );
     };
   };
@@ -80,7 +78,7 @@ let
   domainName = mkOption {
     description = "Provide list of Domain Name(s)";
     type = listOf networkTypes.FQDN;
-    default = [ ];
+    default = [];
   };
 
   setLeaseDatabase = mkOption {
@@ -99,12 +97,12 @@ let
         };
         type = mkOption {
           description = "Only the `memfile` option is available";
-          type = enum [ "memfile" ];
+          type = enum ["memfile"];
           default = "memfile";
         };
       };
     };
-    default = { };
+    default = {};
   };
 
   setGeneralSettings = mkOption {
@@ -129,7 +127,7 @@ let
         domainName = domainName;
       };
     };
-    default = { };
+    default = {};
   };
 
   setDhcpOptions = mkOption {
@@ -163,11 +161,11 @@ let
                 "192.168.1.1"
                 "1.1.1.1"
               ];
-              default = [ ];
+              default = [];
             };
           };
         };
-        default = { };
+        default = {};
       };
       client = mkOption {
         description = "To-do: make description";
@@ -183,10 +181,40 @@ let
               type = ints.between 1 4294967294;
               default = 1024;
             };
-            gateway = mkOption {
-              description = "Set the gateway for the subnet";
+            address = mkOption {
+              description = ''
+                The router's own IP address on this subnet, in CIDR notation.
+                Sets the interface's `Address=` and defines the subnet the DHCP
+                server hands out. (Formerly `gateway`.)
+              '';
               type = networkTypes.CIDR;
-              default = "";
+              example = "192.168.1.1/24";
+            };
+            gateway = mkOption {
+              description = ''
+                The default-route next-hop advertised to DHCP clients (kea
+                `routers`). `null` (the default) advertises this router's own
+                `address`; set an IP to point clients at a different gateway.
+                Only used when `default-route` is true.
+              '';
+              type = nullOr networkTypes.ipAddress;
+              default = null;
+              example = "192.168.1.254";
+            };
+            dns-servers = mkOption {
+              description = ''
+                The DNS server(s) advertised to DHCP clients (kea
+                `domain-name-servers`):
+                - `null` (the default): advertise this router's own `address`.
+                - `[ ]`: advertise no DNS server at all.
+                - a non-empty list: advertise exactly those servers.
+              '';
+              type = nullOr (listOf networkTypes.ipAddress);
+              default = null;
+              example = [
+                "192.168.1.1"
+                "1.1.1.1"
+              ];
             };
             default-route = mkOption {
               description = "Provide DHCP clients with a default route";
@@ -206,7 +234,7 @@ let
 
             classless-static-route = mkOption {
               description = ''
-                Expose all other subnets, declared as a `dhcp.server.gateway`,
+                Expose all other subnets, declared as a `dhcp.server.address`,
                 as a classless static route (Option: 121).
               '';
               type = bool;
@@ -240,7 +268,7 @@ let
                   };
                 };
               });
-              default = { };
+              default = {};
               example = {
                 "00:11:22:33:44:55" = {
                   ip-address = "192.168.1.2";
@@ -248,35 +276,35 @@ let
               };
             };
 
-             pxe-boot = {
-               enable = mkOption {
-                 description = ''
-                   Enable PXE Boot support for this network interface.
+            pxe-boot = {
+              enable = mkOption {
+                description = ''
+                  Enable PXE Boot support for this network interface.
 
-                   Side effect — DHCP client matching becomes MAC-only on this
-                   subnet: enabling PXE boot sets kea's `match-client-id = false`
-                   for the whole subnet, so ALL clients on it (pool and reserved)
-                   are identified by MAC address only, and the DHCP client-id /
-                   DUID is ignored.
+                  Side effect — DHCP client matching becomes MAC-only on this
+                  subnet: enabling PXE boot sets kea's `match-client-id = false`
+                  for the whole subnet, so ALL clients on it (pool and reserved)
+                  are identified by MAC address only, and the DHCP client-id /
+                  DUID is ignored.
 
-                   Why: UEFI PXE firmware, the OS installer and the installed OS
-                   present DIFFERENT DUID-derived client-ids for the SAME MAC. With
-                   kea's default (client-id matching) a stale lease taken during
-                   PXE/install blocks the installed OS from reclaiming its RESERVED
-                   IP (it falls back to a pool address and needs a manual lease
-                   drop). MAC-only matching makes a fixed reservation survive
-                   firmware -> installer -> installed OS.
+                  Why: UEFI PXE firmware, the OS installer and the installed OS
+                  present DIFFERENT DUID-derived client-ids for the SAME MAC. With
+                  kea's default (client-id matching) a stale lease taken during
+                  PXE/install blocks the installed OS from reclaiming its RESERVED
+                  IP (it falls back to a pool address and needs a manual lease
+                  drop). MAC-only matching makes a fixed reservation survive
+                  firmware -> installer -> installed OS.
 
-                   Trade-off: because it is subnet-wide, non-PXE hosts on this
-                   subnet also lose client-id features (a NIC swap yields a new
-                   identity/lease; a single MAC cannot host multiple logical DHCP
-                   clients). Use a dedicated subnet for PXE provisioning if that
-                   matters.
-                 '';
-                 type = bool;
-                 default = false;
-                 example = true;
-               };
+                  Trade-off: because it is subnet-wide, non-PXE hosts on this
+                  subnet also lose client-id features (a NIC swap yields a new
+                  identity/lease; a single MAC cannot host multiple logical DHCP
+                  clients). Use a dedicated subnet for PXE provisioning if that
+                  matters.
+                '';
+                type = bool;
+                default = false;
+                example = true;
+              };
               defaultIso = mkOption {
                 description = ''
                   Select which ISO file should be selected by default.
@@ -298,7 +326,7 @@ let
             domainName = domainName;
           };
         };
-        default = { };
+        default = {};
       };
     });
   };
@@ -353,8 +381,8 @@ let
         if the route should be configured as the default use `0.0.0.0/0`.
       '';
       type = listOf networkTypes.subnet;
-      default = [ ];
-      example = [ "172.20.90.0/24" ];
+      default = [];
+      example = ["172.20.90.0/24"];
     };
 
     requiredForOnline = mkOption {
@@ -379,17 +407,19 @@ let
     };
   };
 
-  interfaceSharedOptions = interfaceSharedOptionsWithoutBridge // {
-    bridges = mkOption {
-      description = ''
-        Creating a bridge interface with and include this interface in the bridge.
-      '';
-      default = [ ];
-      type = listOf (submodule {
-        options = setBridgeOptions;
-      });
+  interfaceSharedOptions =
+    interfaceSharedOptionsWithoutBridge
+    // {
+      bridges = mkOption {
+        description = ''
+          Creating a bridge interface with and include this interface in the bridge.
+        '';
+        default = [];
+        type = listOf (submodule {
+          options = setBridgeOptions;
+        });
+      };
     };
-  };
 
   setBridgeOptions = {
     name = mkOption {
@@ -401,55 +431,56 @@ let
     };
   };
 
-  setVlanOptions = {
-    id = mkOption {
-      description = "Set VLan ID of the network interface";
-      type = ints.between 1 4096;
-      example = 1337;
-    };
+  setVlanOptions =
+    {
+      id = mkOption {
+        description = "Set VLan ID of the network interface";
+        type = ints.between 1 4096;
+        example = 1337;
+      };
 
-    name = mkOption {
-      description = ''
-        Option for setting the name of the VLAN
-        Otherwise it will get the default name: vlan-<ID>
-      '';
-      type = nullOr networkTypes.interfaceName;
-      default = null;
-    };
-  }
-  // interfaceSharedOptions;
+      name = mkOption {
+        description = ''
+          Option for setting the name of the VLAN
+          Otherwise it will get the default name: vlan-<ID>
+        '';
+        type = nullOr networkTypes.interfaceName;
+        default = null;
+      };
+    }
+    // interfaceSharedOptions;
 
-  setInterfaceOptions = {
-    mac = mkOption {
-      description = ''
-        MAC address of the network interface.
+  setInterfaceOptions =
+    {
+      mac = mkOption {
+        description = ''
+          MAC address of the network interface.
 
-        It can be either a MAC-address or list of MAC-addresses.
+          It can be either a MAC-address or list of MAC-addresses.
 
-        **Example:** A list of MAC-addresses can make sense if you have multiple
-        USB adapter which are not connected at the same time, but you want to have
-        the same network interface name (and want to be configured the same)
-      '';
-      type = nullOr (either (listOf networkTypes.macAddress) networkTypes.macAddress);
-    };
+          **Example:** A list of MAC-addresses can make sense if you have multiple
+          USB adapter which are not connected at the same time, but you want to have
+          the same network interface name (and want to be configured the same)
+        '';
+        type = nullOr (either (listOf networkTypes.macAddress) networkTypes.macAddress);
+      };
 
-    # Alias for `systemd.network.links.<name>.linkConfig`,
-    # but with the description updated to share this info.
-    linkConfig =
-      let
+      # Alias for `systemd.network.links.<name>.linkConfig`,
+      # but with the description updated to share this info.
+      linkConfig = let
         description = ''
           Alias for `systemd.network.links.<name>.linkConfig`.
 
           Basically live copy-paste of the NixOS `options` for this systemd setting.
         '';
-      in
-      (
+      in (
         # To-do: This if-else statement "hack" is done, because otherwise
         #        I would have to provide `pkgs.nixosOptionsDoc` with part of
         #        `systemd` module from NixOS otherwise `pkgs.nixosOptionsDoc`
         #        would fail.
         #        I hope to find a better way to handle this alias.
-        if builtins.hasAttr "systemd" options then
+        if builtins.hasAttr "systemd" options
+        then
           (
             (builtins.elemAt (builtins.elemAt options.systemd.network.links.type.getSubModules 0).imports 0)
             .options.linkConfig
@@ -464,22 +495,20 @@ let
           })
       );
 
-    vlans = mkOption {
-      description = ''
-        Create a interface to handle VLAN tagged packages recieved on this interface.
-      '';
-      default = [ ];
-      type = listOf (submodule {
-        options = setVlanOptions;
-      });
-    };
-  }
-  // networkInferfaceNameOptions
-  // interfaceSharedOptions;
-
-in
-{
-  imports = [ ];
+      vlans = mkOption {
+        description = ''
+          Create a interface to handle VLAN tagged packages recieved on this interface.
+        '';
+        default = [];
+        type = listOf (submodule {
+          options = setVlanOptions;
+        });
+      };
+    }
+    // networkInferfaceNameOptions
+    // interfaceSharedOptions;
+in {
+  imports = [];
   options = {
     my.router = {
       enable = mkOption {
@@ -494,7 +523,7 @@ in
         type = listOf (submodule {
           options = setInterfaceOptions;
         });
-        default = [ ];
+        default = [];
       };
 
       defaultRouteInterface = mkOption {
@@ -517,14 +546,13 @@ in
         description = "Config all bridge interfaces";
         type = attrsOf (
           submodule (
-            { name, ... }:
-            {
+            {name, ...}: {
               options = interfaceSharedOptionsWithoutBridge // networkInferfaceNameOptions;
               config.name = lib.mkDefault name;
             }
           )
         );
-        default = { };
+        default = {};
         example = {
           br0 = {
             dhcp.client = true;
@@ -569,7 +597,7 @@ in
           description = ''
             Configure autoinstall script for the different ISOs
           '';
-          default = { };
+          default = {};
           example = {
             "rhel-9.6-x86_64-dvd.iso" = {
               scriptName = "minimal-environment.kstart";
@@ -600,5 +628,5 @@ in
       };
     };
   };
-  config = { };
+  config = {};
 }

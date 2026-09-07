@@ -1,13 +1,12 @@
-{ config
-, pkgs
-, lib
-, stdenv
-, pimd
-, options
-, ...
-}:
-
 {
+  config,
+  pkgs,
+  lib,
+  stdenv,
+  pimd,
+  options,
+  ...
+}: {
   imports = [
     ./options.nix
 
