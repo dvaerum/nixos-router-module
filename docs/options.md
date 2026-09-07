@@ -216,9 +216,10 @@ submodule
 
 
 
-The router’s own IP address on this subnet, in CIDR notation\.
-Sets the interface’s ` Address= ` and defines the subnet the DHCP
-server hands out\. (Formerly ` gateway `\.)
+The router’s own host IP on this subnet, in CIDR notation
+(e\.g\. ` 192.168.1.1/24 `, not ` 192.168.1.0/24 `)\. Sets the
+interface’s IP and the DHCP subnet, and is the value ` gateway `
+and ` dns-servers ` fall back to when left unset\.
 
 
 
@@ -275,7 +276,8 @@ true
 
 
 
-Provide DHCP clients with a default route
+Whether to advertise a default route\. ` false ` sends no
+` gateway `, so clients get no default route\.
 
 
 
@@ -397,10 +399,11 @@ signed integer
 
 
 
-The default-route next-hop advertised to DHCP clients (kea
-` routers `)\. ` null ` (the default) advertises this router’s own
-` address `; set an IP to point clients at a different gateway\.
-Only used when ` default-route ` is true\.
+Default route advertised to clients (kea ` routers `):
+
+ - ` null ` (the default): this router’s own ` address `\.
+ - an IP: advertise that address instead of this router\.
+   Only sent when ` default-route ` is true\.
 
 
 
@@ -1127,9 +1130,10 @@ submodule
 
 
 
-The router’s own IP address on this subnet, in CIDR notation\.
-Sets the interface’s ` Address= ` and defines the subnet the DHCP
-server hands out\. (Formerly ` gateway `\.)
+The router’s own host IP on this subnet, in CIDR notation
+(e\.g\. ` 192.168.1.1/24 `, not ` 192.168.1.0/24 `)\. Sets the
+interface’s IP and the DHCP subnet, and is the value ` gateway `
+and ` dns-servers ` fall back to when left unset\.
 
 
 
@@ -1186,7 +1190,8 @@ true
 
 
 
-Provide DHCP clients with a default route
+Whether to advertise a default route\. ` false ` sends no
+` gateway `, so clients get no default route\.
 
 
 
@@ -1308,10 +1313,11 @@ signed integer
 
 
 
-The default-route next-hop advertised to DHCP clients (kea
-` routers `)\. ` null ` (the default) advertises this router’s own
-` address `; set an IP to point clients at a different gateway\.
-Only used when ` default-route ` is true\.
+Default route advertised to clients (kea ` routers `):
+
+ - ` null ` (the default): this router’s own ` address `\.
+ - an IP: advertise that address instead of this router\.
+   Only sent when ` default-route ` is true\.
 
 
 
@@ -2094,9 +2100,10 @@ submodule
 
 
 
-The router’s own IP address on this subnet, in CIDR notation\.
-Sets the interface’s ` Address= ` and defines the subnet the DHCP
-server hands out\. (Formerly ` gateway `\.)
+The router’s own host IP on this subnet, in CIDR notation
+(e\.g\. ` 192.168.1.1/24 `, not ` 192.168.1.0/24 `)\. Sets the
+interface’s IP and the DHCP subnet, and is the value ` gateway `
+and ` dns-servers ` fall back to when left unset\.
 
 
 
@@ -2153,7 +2160,8 @@ true
 
 
 
-Provide DHCP clients with a default route
+Whether to advertise a default route\. ` false ` sends no
+` gateway `, so clients get no default route\.
 
 
 
@@ -2275,10 +2283,11 @@ signed integer
 
 
 
-The default-route next-hop advertised to DHCP clients (kea
-` routers `)\. ` null ` (the default) advertises this router’s own
-` address `; set an IP to point clients at a different gateway\.
-Only used when ` default-route ` is true\.
+Default route advertised to clients (kea ` routers `):
+
+ - ` null ` (the default): this router’s own ` address `\.
+ - an IP: advertise that address instead of this router\.
+   Only sent when ` default-route ` is true\.
 
 
 
