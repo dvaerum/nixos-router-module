@@ -13,6 +13,7 @@ also wanted to have a deeper understanding for how everything.
 ## Current features:
 
 - VLANs
+- VXLAN (unicast, point-to-point)
 - Multi-cast
 - DHCP server
 - PXE Boot (beta)

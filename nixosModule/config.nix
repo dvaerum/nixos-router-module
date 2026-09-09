@@ -19,6 +19,7 @@
     vlanName
     vlanFilename
     bridgeFilename
+    vxlanFilename
     interfaceFilename
     allInterfaces
     systemdNetworkDHCP
@@ -129,6 +130,45 @@ in (lib.mkIf cfg.enable {
           };
 
           wait-online.ignoredInterfaces = lib.optionals (bridge_conf.dhcp == null) [bridge_conf.name];
+        }))
+        ++ (lib.lists.forEach (lib.attrsets.attrValues cfg.vxlanInterfaces) (vxlan_conf: {
+          netdevs = {
+            "${vxlanFilename vxlan_conf}" = {
+              enable = true;
+              netdevConfig = {
+                Kind = "vxlan";
+                Name = vxlan_conf.name;
+              };
+              vxlanConfig =
+                {
+                  # Required: no `.network` binds this tunnel to an
+                  # underlying link via `VXLAN=`, so without this the
+                  # device waits forever for a link that never comes.
+                  Independent = true;
+                  VNI = vxlan_conf.vni;
+                  Remote = vxlan_conf.remote;
+                  DestinationPort = vxlan_conf.destinationPort;
+                }
+                // lib.attrsets.optionalAttrs (vxlan_conf.local != null) {
+                  Local = vxlan_conf.local;
+                };
+            };
+          };
+
+          networks = {
+            "${vxlanFilename vxlan_conf}" =
+              {
+                enable = true;
+                matchConfig.Name = vxlan_conf.name;
+                bridge = lib.lists.forEach vxlan_conf.bridges (bridge_conf: bridge_conf.name);
+              }
+              // systemdNetworkDHCP {
+                interfaceName = vxlan_conf.name;
+                interfaceConf = vxlan_conf;
+              };
+          };
+
+          wait-online.ignoredInterfaces = lib.optionals (vxlan_conf.dhcp == null) [vxlan_conf.name];
         }))
       )
     );

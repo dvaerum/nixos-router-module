@@ -27,6 +27,7 @@
   cfg = config.my.router;
   cfgConfigInterface = cfg.configInterface;
   cfgBridgeInterface = cfg.bridgeInterfaces;
+  cfgVxlanInterface = cfg.vxlanInterfaces;
   cfgConfigInterfacePath = "my.router.setInterface";
   cfgDefaultRouteInterface = cfg.defaultRouteInterface;
   cfgDefaultRouteMetric = cfg.defaultRouteMetric;
@@ -35,7 +36,7 @@
   cfgNetworkdLinkPath = "systemd.network";
 
   # Moves all interfaces and vlans interfaces into one flatte list
-  allInterfacesFn = interfaces: bridgeInterfaces:
+  allInterfacesFn = interfaces: bridgeInterfaces: vxlanInterfaces:
     lib.lists.flatten (
       (lib.lists.forEach interfaces (
         interface_conf:
@@ -46,8 +47,9 @@
           ++ (lib.lists.forEach interface_conf.bridges (bridge_conf: bridge_conf))
       ))
       ++ (builtins.attrValues bridgeInterfaces)
+      ++ (builtins.attrValues vxlanInterfaces)
     );
-  allInterfaces = allInterfacesFn cfgConfigInterface cfgBridgeInterface;
+  allInterfaces = allInterfacesFn cfgConfigInterface cfgBridgeInterface cfgVxlanInterface;
 
   cfgSetDhcpServerInterfaceOnly =
     # lib.debug.traceValSeq
@@ -57,12 +59,27 @@
         # lib.debug.traceValSeq
         allInterfaces
         (
-          interface_conf: (lib.optionals (interface_conf.dhcp != null && lib.hasAttr "server" interface_conf.dhcp) [
-            {
-              interfaceName = interface_conf.name;
-              dhcp = interface_conf.dhcp;
-            }
-          ])
+          # `allInterfaces` also contains the bare `{ name = ...; }` bridge-
+          # membership entries an interface's own `bridges` list declares
+          # (see `allInterfacesFn` above); these carry none of the real
+          # per-interface options, so guard with `hasAttr` the same way
+          # every other `allInterfaces` consumer already does (the
+          # multicast/pimd filter and the masquerade-interface filter in
+          # config.nix), instead of assuming every entry has `.dhcp`.
+          interface_conf: (
+            lib.optionals
+            (
+              lib.hasAttr "dhcp" interface_conf
+              && interface_conf.dhcp != null
+              && lib.hasAttr "server" interface_conf.dhcp
+            )
+            [
+              {
+                interfaceName = interface_conf.name;
+                dhcp = interface_conf.dhcp;
+              }
+            ]
+          )
         )
       )
     );
@@ -230,4 +247,5 @@
   );
   vlanFilename = vlan_conf: "20-${vlanName (vlan_conf // {name = null;})}";
   bridgeFilename = bridge_conf: "30-${bridge_conf.name}";
+  vxlanFilename = vxlan_conf: "40-${vxlan_conf.name}";
 }

@@ -435,6 +435,55 @@
     };
   };
 
+  # Unicast (point-to-point) only; multicast `Group=`/BUM-flood mode would
+  # touch the `pimd` wiring below, not needed for a two-router tunnel. Uses
+  # the full `interfaceSharedOptions` (unlike bridges) so a VXLAN interface
+  # can join a bridge OR carry its own `dhcp.static/client/server`.
+  setVxlanOptions =
+    {
+      vni = mkOption {
+        description = "VXLAN Network Identifier (VNI), 0-16777215.";
+        type = ints.between 0 16777215;
+        example = 1000;
+      };
+
+      local = mkOption {
+        description = ''
+          Source IP to bind/send from. `null` (the default) lets the kernel
+          pick whatever address the routing table would use to reach
+          `remote`.
+        '';
+        type = nullOr networkTypes.ipAddress;
+        default = null;
+      };
+
+      remote = mkOption {
+        description = ''
+          The other tunnel endpoint's IP address (unicast point-to-point
+          only, no multicast/BUM-flood mode in this module yet). Must be
+          a static, currently-correct, routable IP: NOT a hostname, and NOT
+          usable directly across NAT or a dynamic WAN IP on either end.
+          This assumes both ends already sit on stable, mutually-routable
+          infrastructure.
+        '';
+        type = networkTypes.ipAddress;
+        example = "172.20.1.1";
+      };
+
+      destinationPort = mkOption {
+        description = ''
+          UDP port used for the encapsulated traffic. Defaults to the
+          IANA-assigned standard (4789) rather than the Linux kernel's own
+          historical non-standard default (8472), for interop with
+          non-Linux VXLAN peers.
+        '';
+        type = types.port;
+        default = 4789;
+      };
+    }
+    // interfaceSharedOptions
+    // networkInferfaceNameOptions;
+
   setVlanOptions =
     {
       id = mkOption {
@@ -560,6 +609,26 @@ in {
         example = {
           br0 = {
             dhcp.client = true;
+          };
+        };
+      };
+
+      vxlanInterfaces = mkOption {
+        description = "Config all VXLAN (unicast point-to-point) interfaces";
+        type = attrsOf (
+          submodule (
+            {name, ...}: {
+              options = setVxlanOptions;
+              config.name = lib.mkDefault name;
+            }
+          )
+        );
+        default = {};
+        example = {
+          vxlan1000 = {
+            vni = 1000;
+            remote = "172.20.1.1";
+            dhcp.static.ip-address = "10.100.0.2/30";
           };
         };
       };

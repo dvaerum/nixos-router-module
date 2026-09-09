@@ -69,6 +69,7 @@
           basic-routing = tests.basic-routing;
           dhcp-server = tests.dhcp-server;
           pxe-boot = tests.pxe-boot;
+          vxlan = tests.vxlan;
 
           # Pure `lib.runTests` for the IPv4 helpers (returns [] when all pass).
           ipv4-lib = let
@@ -91,6 +92,7 @@
             basic-routing-test = tests.basic-routing;
             dhcp-server-test = tests.dhcp-server;
             pxe-boot-test = tests.pxe-boot;
+            vxlan-test = tests.vxlan;
           }
           // pkgs.lib.optionalAttrs isLinux (
             let
