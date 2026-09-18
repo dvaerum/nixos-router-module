@@ -544,6 +544,20 @@ in
           ) interface_conf.name)
           ++ lib.lists.forEach interface_conf.vlans (vlan_conf: vlanName vlan_conf)
         )
+        # `excludeFromNetworkManager` is part of `interfaceSharedOptions`
+        # (options.nix), so bridgeInterfaces/vxlanInterfaces entries already
+        # carry it -- this was previously read only from `cfgConfigInterface`,
+        # silently ignoring the same option on these two.
+        ++ lib.lists.forEach (lib.attrsets.attrValues cfg.bridgeInterfaces) (
+          bridge_conf:
+          lib.lists.optional (
+            bridge_conf.excludeFromNetworkManager || bridge_conf.dhcp != null
+          ) bridge_conf.name
+        )
+        ++ lib.lists.forEach (lib.attrsets.attrValues cfg.vxlanInterfaces) (
+          vxlan_conf:
+          lib.lists.optional (vxlan_conf.excludeFromNetworkManager || vxlan_conf.dhcp != null) vxlan_conf.name
+        )
       )
     );
 
