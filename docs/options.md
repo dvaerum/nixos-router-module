@@ -977,19 +977,35 @@ list of (Subnet)
 
 
 
-List of configured network interfaces
+Config all physical/plain network interfaces
 
 
 
 *Type:*
-list of (submodule)
+attribute set of (submodule)
 
 
 
 *Default:*
 
 ```nix
-[ ]
+{ }
+```
+
+
+
+*Example:*
+
+```nix
+{
+  eth1 = {
+    dhcp = {
+      static = {
+        ip-address = "10.0.1.2/24";
+      };
+    };
+  };
+}
 ```
 
 *Declared by:*
@@ -997,7 +1013,7 @@ list of (submodule)
 
 
 
-## my\.router\.configInterface\.\*\.bridges
+## my\.router\.configInterface\.\<name>\.bridges
 
 
 
@@ -1021,7 +1037,7 @@ list of (submodule)
 
 
 
-## my\.router\.configInterface\.\*\.bridges\.\*\.name
+## my\.router\.configInterface\.\<name>\.bridges\.\*\.name
 
 
 
@@ -1053,7 +1069,7 @@ null
 
 
 
-## my\.router\.configInterface\.\*\.dhcp
+## my\.router\.configInterface\.\<name>\.dhcp
 
 
 
@@ -1078,7 +1094,7 @@ null
 
 
 
-## my\.router\.configInterface\.\*\.dhcp\.client
+## my\.router\.configInterface\.\<name>\.dhcp\.client
 
 
 
@@ -1102,7 +1118,7 @@ true
 
 
 
-## my\.router\.configInterface\.\*\.dhcp\.server
+## my\.router\.configInterface\.\<name>\.dhcp\.server
 
 
 
@@ -1126,7 +1142,7 @@ submodule
 
 
 
-## my\.router\.configInterface\.\*\.dhcp\.server\.address
+## my\.router\.configInterface\.\<name>\.dhcp\.server\.address
 
 
 
@@ -1153,7 +1169,7 @@ CIDR (IP and Subnet\. Example: 192\.168\.1\.4/24)
 
 
 
-## my\.router\.configInterface\.\*\.dhcp\.server\.classless-static-route
+## my\.router\.configInterface\.\<name>\.dhcp\.server\.classless-static-route
 
 
 
@@ -1186,7 +1202,7 @@ true
 
 
 
-## my\.router\.configInterface\.\*\.dhcp\.server\.default-route
+## my\.router\.configInterface\.\<name>\.dhcp\.server\.default-route
 
 
 
@@ -1219,7 +1235,7 @@ false
 
 
 
-## my\.router\.configInterface\.\*\.dhcp\.server\.dns-servers
+## my\.router\.configInterface\.\<name>\.dhcp\.server\.dns-servers
 
 
 
@@ -1259,7 +1275,7 @@ null
 
 
 
-## my\.router\.configInterface\.\*\.dhcp\.server\.domainName
+## my\.router\.configInterface\.\<name>\.dhcp\.server\.domainName
 
 
 
@@ -1283,7 +1299,7 @@ list of (FQDN (Fully Qualified Domain Name))
 
 
 
-## my\.router\.configInterface\.\*\.dhcp\.server\.firstIP
+## my\.router\.configInterface\.\<name>\.dhcp\.server\.firstIP
 
 
 
@@ -1309,7 +1325,7 @@ signed integer
 
 
 
-## my\.router\.configInterface\.\*\.dhcp\.server\.gateway
+## my\.router\.configInterface\.\<name>\.dhcp\.server\.gateway
 
 
 
@@ -1345,7 +1361,7 @@ null
 
 
 
-## my\.router\.configInterface\.\*\.dhcp\.server\.id
+## my\.router\.configInterface\.\<name>\.dhcp\.server\.id
 
 
 
@@ -1369,7 +1385,7 @@ integer between 1 and 4294967294 (both inclusive)
 
 
 
-## my\.router\.configInterface\.\*\.dhcp\.server\.pxe-boot\.enable
+## my\.router\.configInterface\.\<name>\.dhcp\.server\.pxe-boot\.enable
 
 
 
@@ -1421,7 +1437,7 @@ true
 
 
 
-## my\.router\.configInterface\.\*\.dhcp\.server\.pxe-boot\.defaultIso
+## my\.router\.configInterface\.\<name>\.dhcp\.server\.pxe-boot\.defaultIso
 
 
 
@@ -1453,7 +1469,7 @@ string
 
 
 
-## my\.router\.configInterface\.\*\.dhcp\.server\.pxe-boot\.defaultScriptName
+## my\.router\.configInterface\.\<name>\.dhcp\.server\.pxe-boot\.defaultScriptName
 
 
 
@@ -1485,7 +1501,7 @@ string
 
 
 
-## my\.router\.configInterface\.\*\.dhcp\.server\.reservations
+## my\.router\.configInterface\.\<name>\.dhcp\.server\.reservations
 
 
 
@@ -1523,7 +1539,7 @@ attribute set of (submodule)
 
 
 
-## my\.router\.configInterface\.\*\.dhcp\.server\.reservations\.\<name>\.ip-address
+## my\.router\.configInterface\.\<name>\.dhcp\.server\.reservations\.\<name>\.ip-address
 
 
 
@@ -1547,7 +1563,7 @@ null
 
 
 
-## my\.router\.configInterface\.\*\.dhcp\.server\.reservations-only
+## my\.router\.configInterface\.\<name>\.dhcp\.server\.reservations-only
 
 
 
@@ -1579,7 +1595,7 @@ true
 
 
 
-## my\.router\.configInterface\.\*\.dhcp\.static
+## my\.router\.configInterface\.\<name>\.dhcp\.static
 
 
 
@@ -1603,7 +1619,7 @@ submodule
 
 
 
-## my\.router\.configInterface\.\*\.dhcp\.static\.dns-servers
+## my\.router\.configInterface\.\<name>\.dhcp\.static\.dns-servers
 
 
 
@@ -1638,7 +1654,7 @@ list of (IP address)
 
 
 
-## my\.router\.configInterface\.\*\.dhcp\.static\.gateway
+## my\.router\.configInterface\.\<name>\.dhcp\.static\.gateway
 
 
 
@@ -1670,7 +1686,7 @@ null
 
 
 
-## my\.router\.configInterface\.\*\.dhcp\.static\.ip-address
+## my\.router\.configInterface\.\<name>\.dhcp\.static\.ip-address
 
 
 
@@ -1696,7 +1712,7 @@ CIDR (IP and Subnet\. Example: 192\.168\.1\.4/24)
 
 
 
-## my\.router\.configInterface\.\*\.excludeFromNetworkManager
+## my\.router\.configInterface\.\<name>\.excludeFromNetworkManager
 
 
 
@@ -1720,7 +1736,7 @@ false
 
 
 
-## my\.router\.configInterface\.\*\.forwarding
+## my\.router\.configInterface\.\<name>\.forwarding
 
 
 
@@ -1744,7 +1760,7 @@ true
 
 
 
-## my\.router\.configInterface\.\*\.ipMasquerade
+## my\.router\.configInterface\.\<name>\.ipMasquerade
 
 
 
@@ -1770,7 +1786,7 @@ false
 
 
 
-## my\.router\.configInterface\.\*\.linkConfig
+## my\.router\.configInterface\.\<name>\.linkConfig
 
 
 
@@ -1796,7 +1812,7 @@ attribute set
 
 
 
-## my\.router\.configInterface\.\*\.mac
+## my\.router\.configInterface\.\<name>\.mac
 
 
 
@@ -1826,7 +1842,7 @@ null
 
 
 
-## my\.router\.configInterface\.\*\.multicast
+## my\.router\.configInterface\.\<name>\.multicast
 
 
 
@@ -1846,7 +1862,7 @@ false
 
 
 
-## my\.router\.configInterface\.\*\.name
+## my\.router\.configInterface\.\<name>\.name
 
 
 
@@ -1862,7 +1878,7 @@ Network Interface Name ()
 
 
 
-## my\.router\.configInterface\.\*\.requiredForOnline
+## my\.router\.configInterface\.\<name>\.requiredForOnline
 
 
 
@@ -1906,7 +1922,7 @@ true
 
 
 
-## my\.router\.configInterface\.\*\.staticRoutes
+## my\.router\.configInterface\.\<name>\.staticRoutes
 
 
 
@@ -1943,7 +1959,7 @@ list of (Subnet)
 
 
 
-## my\.router\.configInterface\.\*\.vlans
+## my\.router\.configInterface\.\<name>\.vlans
 
 
 
@@ -1967,7 +1983,7 @@ list of (submodule)
 
 
 
-## my\.router\.configInterface\.\*\.vlans\.\*\.bridges
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.bridges
 
 
 
@@ -1991,7 +2007,7 @@ list of (submodule)
 
 
 
-## my\.router\.configInterface\.\*\.vlans\.\*\.bridges\.\*\.name
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.bridges\.\*\.name
 
 
 
@@ -2023,7 +2039,7 @@ null
 
 
 
-## my\.router\.configInterface\.\*\.vlans\.\*\.dhcp
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp
 
 
 
@@ -2048,7 +2064,7 @@ null
 
 
 
-## my\.router\.configInterface\.\*\.vlans\.\*\.dhcp\.client
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.client
 
 
 
@@ -2072,7 +2088,7 @@ true
 
 
 
-## my\.router\.configInterface\.\*\.vlans\.\*\.dhcp\.server
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server
 
 
 
@@ -2096,7 +2112,7 @@ submodule
 
 
 
-## my\.router\.configInterface\.\*\.vlans\.\*\.dhcp\.server\.address
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.address
 
 
 
@@ -2123,7 +2139,7 @@ CIDR (IP and Subnet\. Example: 192\.168\.1\.4/24)
 
 
 
-## my\.router\.configInterface\.\*\.vlans\.\*\.dhcp\.server\.classless-static-route
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.classless-static-route
 
 
 
@@ -2156,7 +2172,7 @@ true
 
 
 
-## my\.router\.configInterface\.\*\.vlans\.\*\.dhcp\.server\.default-route
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.default-route
 
 
 
@@ -2189,7 +2205,7 @@ false
 
 
 
-## my\.router\.configInterface\.\*\.vlans\.\*\.dhcp\.server\.dns-servers
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.dns-servers
 
 
 
@@ -2229,7 +2245,7 @@ null
 
 
 
-## my\.router\.configInterface\.\*\.vlans\.\*\.dhcp\.server\.domainName
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.domainName
 
 
 
@@ -2253,7 +2269,7 @@ list of (FQDN (Fully Qualified Domain Name))
 
 
 
-## my\.router\.configInterface\.\*\.vlans\.\*\.dhcp\.server\.firstIP
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.firstIP
 
 
 
@@ -2279,7 +2295,7 @@ signed integer
 
 
 
-## my\.router\.configInterface\.\*\.vlans\.\*\.dhcp\.server\.gateway
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.gateway
 
 
 
@@ -2315,7 +2331,7 @@ null
 
 
 
-## my\.router\.configInterface\.\*\.vlans\.\*\.dhcp\.server\.id
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.id
 
 
 
@@ -2339,7 +2355,7 @@ integer between 1 and 4294967294 (both inclusive)
 
 
 
-## my\.router\.configInterface\.\*\.vlans\.\*\.dhcp\.server\.pxe-boot\.enable
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.pxe-boot\.enable
 
 
 
@@ -2391,7 +2407,7 @@ true
 
 
 
-## my\.router\.configInterface\.\*\.vlans\.\*\.dhcp\.server\.pxe-boot\.defaultIso
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.pxe-boot\.defaultIso
 
 
 
@@ -2423,7 +2439,7 @@ string
 
 
 
-## my\.router\.configInterface\.\*\.vlans\.\*\.dhcp\.server\.pxe-boot\.defaultScriptName
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.pxe-boot\.defaultScriptName
 
 
 
@@ -2455,7 +2471,7 @@ string
 
 
 
-## my\.router\.configInterface\.\*\.vlans\.\*\.dhcp\.server\.reservations
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.reservations
 
 
 
@@ -2493,7 +2509,7 @@ attribute set of (submodule)
 
 
 
-## my\.router\.configInterface\.\*\.vlans\.\*\.dhcp\.server\.reservations\.\<name>\.ip-address
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.reservations\.\<name>\.ip-address
 
 
 
@@ -2517,7 +2533,7 @@ null
 
 
 
-## my\.router\.configInterface\.\*\.vlans\.\*\.dhcp\.server\.reservations-only
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.reservations-only
 
 
 
@@ -2549,7 +2565,7 @@ true
 
 
 
-## my\.router\.configInterface\.\*\.vlans\.\*\.dhcp\.static
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.static
 
 
 
@@ -2573,7 +2589,7 @@ submodule
 
 
 
-## my\.router\.configInterface\.\*\.vlans\.\*\.dhcp\.static\.dns-servers
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.static\.dns-servers
 
 
 
@@ -2608,7 +2624,7 @@ list of (IP address)
 
 
 
-## my\.router\.configInterface\.\*\.vlans\.\*\.dhcp\.static\.gateway
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.static\.gateway
 
 
 
@@ -2640,7 +2656,7 @@ null
 
 
 
-## my\.router\.configInterface\.\*\.vlans\.\*\.dhcp\.static\.ip-address
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.static\.ip-address
 
 
 
@@ -2666,7 +2682,7 @@ CIDR (IP and Subnet\. Example: 192\.168\.1\.4/24)
 
 
 
-## my\.router\.configInterface\.\*\.vlans\.\*\.excludeFromNetworkManager
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.excludeFromNetworkManager
 
 
 
@@ -2690,7 +2706,7 @@ false
 
 
 
-## my\.router\.configInterface\.\*\.vlans\.\*\.forwarding
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.forwarding
 
 
 
@@ -2714,7 +2730,7 @@ true
 
 
 
-## my\.router\.configInterface\.\*\.vlans\.\*\.id
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.id
 
 
 
@@ -2738,7 +2754,7 @@ integer between 1 and 4096 (both inclusive)
 
 
 
-## my\.router\.configInterface\.\*\.vlans\.\*\.ipMasquerade
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.ipMasquerade
 
 
 
@@ -2764,7 +2780,7 @@ false
 
 
 
-## my\.router\.configInterface\.\*\.vlans\.\*\.multicast
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.multicast
 
 
 
@@ -2784,7 +2800,7 @@ false
 
 
 
-## my\.router\.configInterface\.\*\.vlans\.\*\.name
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.name
 
 
 
@@ -2809,7 +2825,7 @@ null
 
 
 
-## my\.router\.configInterface\.\*\.vlans\.\*\.requiredForOnline
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.requiredForOnline
 
 
 
@@ -2853,7 +2869,7 @@ true
 
 
 
-## my\.router\.configInterface\.\*\.vlans\.\*\.staticRoutes
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.staticRoutes
 
 
 
