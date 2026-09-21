@@ -4,25 +4,31 @@
   lib,
   netLib,
   ...
-}: rec {
-  recursiveMerge = with lib; (
-    attrList: let
-      f = attrPath:
-        zipAttrsWith (
-          n: values:
-            if tail values == []
-            then head values
-            else if all isList values
-            then unique (concatLists values)
-            else if all isAttrs values
-            then f (attrPath ++ [n]) values
-            else last values
-        );
-    in
-      f [] attrList
-  );
+}:
+rec {
+  recursiveMerge =
+    with lib;
+    (
+      attrList:
+      let
+        f =
+          attrPath:
+          zipAttrsWith (
+            n: values:
+            if tail values == [ ] then
+              head values
+            else if all isList values then
+              unique (concatLists values)
+            else if all isAttrs values then
+              f (attrPath ++ [ n ]) values
+            else
+              last values
+          );
+      in
+      f [ ] attrList
+    );
 
-  ipv4_fn = import ./ipv4.nix {inherit lib netLib;};
+  ipv4_fn = import ./ipv4.nix { inherit lib netLib; };
 
   cfg = config.my.router;
   cfgConfigInterface = cfg.configInterface;
@@ -36,15 +42,16 @@
   cfgNetworkdLinkPath = "systemd.network";
 
   # Moves all interfaces and vlans interfaces into one flatte list
-  allInterfacesFn = interfaces: bridgeInterfaces: vxlanInterfaces:
+  allInterfacesFn =
+    interfaces: bridgeInterfaces: vxlanInterfaces:
     lib.lists.flatten (
-      (lib.lists.forEach interfaces (
+      (lib.lists.forEach (builtins.attrValues interfaces) (
         interface_conf:
-          [interface_conf]
-          ++ (lib.lists.optional (lib.hasAttr "vlans" interface_conf) (
-            lib.lists.forEach interface_conf.vlans (vlan_conf: vlan_conf // {name = vlanName vlan_conf;})
-          ))
-          ++ (lib.lists.forEach interface_conf.bridges (bridge_conf: bridge_conf))
+        [ interface_conf ]
+        ++ (lib.lists.optional (lib.hasAttr "vlans" interface_conf) (
+          lib.lists.forEach interface_conf.vlans (vlan_conf: vlan_conf // { name = vlanName vlan_conf; })
+        ))
+        ++ (lib.lists.forEach interface_conf.bridges (bridge_conf: bridge_conf))
       ))
       ++ (builtins.attrValues bridgeInterfaces)
       ++ (builtins.attrValues vxlanInterfaces)
@@ -56,55 +63,56 @@
     (
       lib.lists.flatten (
         lib.lists.forEach
-        # lib.debug.traceValSeq
-        allInterfaces
-        (
-          # `allInterfaces` also contains the bare `{ name = ...; }` bridge-
-          # membership entries an interface's own `bridges` list declares
-          # (see `allInterfacesFn` above); these carry none of the real
-          # per-interface options, so guard with `hasAttr` the same way
-          # every other `allInterfaces` consumer already does (the
-          # multicast/pimd filter and the masquerade-interface filter in
-          # config.nix), instead of assuming every entry has `.dhcp`.
-          interface_conf: (
-            lib.optionals
-            (
-              lib.hasAttr "dhcp" interface_conf
-              && interface_conf.dhcp != null
-              && lib.hasAttr "server" interface_conf.dhcp
+          # lib.debug.traceValSeq
+          allInterfaces
+          (
+            # `allInterfaces` also contains the bare `{ name = ...; }` bridge-
+            # membership entries an interface's own `bridges` list declares
+            # (see `allInterfacesFn` above); these carry none of the real
+            # per-interface options, so guard with `hasAttr` the same way
+            # every other `allInterfaces` consumer already does (the
+            # multicast/pimd filter and the masquerade-interface filter in
+            # config.nix), instead of assuming every entry has `.dhcp`.
+            interface_conf:
+            (lib.optionals
+              (
+                lib.hasAttr "dhcp" interface_conf
+                && interface_conf.dhcp != null
+                && lib.hasAttr "server" interface_conf.dhcp
+              )
+              [
+                {
+                  interfaceName = interface_conf.name;
+                  dhcp = interface_conf.dhcp;
+                }
+              ]
             )
-            [
-              {
-                interfaceName = interface_conf.name;
-                dhcp = interface_conf.dhcp;
-              }
-            ]
           )
-        )
       )
     );
 
   cfgSetDhcpServerInterfaceOnlyFilter = fn: lib.lists.filter fn cfgSetDhcpServerInterfaceOnly;
 
   getInterfaceConf = (
-    name: (
-      lib.lists.findSingle (link_conf: link_conf.linkConfig.Name == name)
+    name:
+    (lib.lists.findSingle (link_conf: link_conf.linkConfig.Name == name)
       (throw "No interfaces are configured to the name \"${name}\". Add the interface to the list \"${cfgConfigInterfacePath}\"")
       (throw "Too many. The interface name \"${name}\" is configured 2+ times. Check the list in \"${cfgConfigInterfacePath}\" and also \"${cfgNetworkdLinkPath}\". Debug info (${cfgNetworkdLinkPath}): ${builtins.toJSON cfgNetworkd.links}")
       (
         lib.attrsets.mapAttrsToList (
-          filename: link_conf: link_conf // {_filename = filename;}
-        )
-        cfgNetworkd.links
+          filename: link_conf: link_conf // { _filename = filename; }
+        ) cfgNetworkd.links
       )
     )
   );
 
   _checkIfInterfaceIsSet = (
-    name: (
-      if lib.length (getInterfaceConf name) == 1
-      then name
-      else throw "No interface configured with the name ${name}"
+    name:
+    (
+      if lib.length (getInterfaceConf name) == 1 then
+        name
+      else
+        throw "No interface configured with the name ${name}"
     )
   );
 
@@ -112,14 +120,14 @@
     {
       interfaceName,
       interfaceConf,
-    }: let
+    }:
+    let
       dhcp = interfaceConf.dhcp;
 
       selected_dhcp_config =
-        if (dhcp == null)
-        then null
-        else if lib.lists.length (lib.attrsets.attrNames dhcp) == 1
-        then # lib.debug.traceValSeq
+        if (dhcp == null) then
+          null
+        else if lib.lists.length (lib.attrsets.attrNames dhcp) == 1 then # lib.debug.traceValSeq
           (lib.lists.last (lib.attrsets.attrNames dhcp))
         else
           throw ''
@@ -127,74 +135,66 @@
             Otherwise `dhcp` should be it default value: null
           '';
     in
-      if selected_dhcp_config == null
-      then {
+    if selected_dhcp_config == null then
+      {
         networkConfig = {
           LinkLocalAddressing = "no";
         };
         linkConfig = {
           RequiredForOnline =
-            if interfaceConf.requiredForOnline == null
-            then false
-            else interfaceConf.requiredForOnline;
+            if interfaceConf.requiredForOnline == null then false else interfaceConf.requiredForOnline;
         };
       }
-      else
-        {
-          static = let
+    else
+      {
+        static =
+          let
             cidr = ipv4_fn.fromCidrString dhcp.static.ip-address;
-          in {
-            networkConfig =
-              {
-                LinkLocalAddressing = "no";
-                IPv4Forwarding = interfaceConf.forwarding;
-
-                Address =
-                  if cidr.address == null
-                  then throw "There are no IP-Addr in the CIDR: ${dhcp.static.ip-address}"
-                  else "${cidr.address}/${builtins.toString cidr.prefix}";
-              }
-              // lib.attrsets.optionalAttrs (lib.lists.length dhcp.static.dns-servers > 0) {
-                DNS = dhcp.static.dns-servers;
-              };
-
-            linkConfig = {
-              RequiredForOnline =
-                if interfaceConf.requiredForOnline == null
-                then false
-                else interfaceConf.requiredForOnline;
-            };
-          };
-
-          client = {
+          in
+          {
             networkConfig = {
-              DHCP = "ipv4";
-              IPv4Forwarding = interfaceConf.forwarding;
               LinkLocalAddressing = "no";
+              IPv4Forwarding = interfaceConf.forwarding;
+
+              Address =
+                if cidr.address == null then
+                  throw "There are no IP-Addr in the CIDR: ${dhcp.static.ip-address}"
+                else
+                  "${cidr.address}/${builtins.toString cidr.prefix}";
+            }
+            // lib.attrsets.optionalAttrs (lib.lists.length dhcp.static.dns-servers > 0) {
+              DNS = dhcp.static.dns-servers;
             };
 
-            dhcpV4Config = {
-              RouteMetric =
-                if cfgDefaultRouteInterface == interfaceName
-                then cfgDefaultRouteMetric
-                else 0;
-              UseRoutes =
-                if cfgDefaultRouteInterface == interfaceName
-                then true
-                else false;
-              ClientIdentifier = "mac";
-            };
             linkConfig = {
               RequiredForOnline =
-                if interfaceConf.requiredForOnline == null
-                then false
-                else interfaceConf.requiredForOnline;
+                if interfaceConf.requiredForOnline == null then false else interfaceConf.requiredForOnline;
             };
           };
 
-          server = let
+        client = {
+          networkConfig = {
+            DHCP = "ipv4";
+            IPv4Forwarding = interfaceConf.forwarding;
+            LinkLocalAddressing = "no";
+          };
+
+          dhcpV4Config = {
+            RouteMetric = if cfgDefaultRouteInterface == interfaceName then cfgDefaultRouteMetric else 0;
+            UseRoutes = if cfgDefaultRouteInterface == interfaceName then true else false;
+            ClientIdentifier = "mac";
+          };
+          linkConfig = {
+            RequiredForOnline =
+              if interfaceConf.requiredForOnline == null then false else interfaceConf.requiredForOnline;
+          };
+        };
+
+        server =
+          let
             cidr = ipv4_fn.fromCidrString dhcp.server.address;
-          in {
+          in
+          {
             networkConfig = {
               Address = "${cidr.address}/${builtins.toString cidr.prefix}";
               IPv4Forwarding = interfaceConf.forwarding;
@@ -204,48 +204,45 @@
 
             linkConfig = {
               RequiredForOnline =
-                if interfaceConf.requiredForOnline == null
-                then true
-                else interfaceConf.requiredForOnline;
+                if interfaceConf.requiredForOnline == null then true else interfaceConf.requiredForOnline;
             };
           };
-        }
-      .${
-          selected_dhcp_config
-        }
-        // {
-          routes = lib.lists.forEach interfaceConf.staticRoutes (static_route: {
-            Gateway = (
-              if selected_dhcp_config == "static"
-              then
-                (
-                  if dhcp.static.gateway == null
-                  then
-                    throw ''
-                      The `dhcp.${selected_dhcp_config}.gateway` needs to be configured otherwise
-                      `staticRoutes` cannot be configured.
-                    ''
-                  else dhcp.static.gateway
-                )
-              else if selected_dhcp_config == "client"
-              then "_dhcp4"
-              else if selected_dhcp_config == "server"
-              then (ipv4_fn.fromCidrString dhcp.server.address).address
-              else throw "The `dhcp.${selected_dhcp_config}` config is not supported with `static_route`"
-            );
-            Destination = static_route;
-          });
-        }
+      }
+      .${selected_dhcp_config}
+      // {
+        routes = lib.lists.forEach interfaceConf.staticRoutes (static_route: {
+          Gateway = (
+            if selected_dhcp_config == "static" then
+              (
+                if dhcp.static.gateway == null then
+                  throw ''
+                    The `dhcp.${selected_dhcp_config}.gateway` needs to be configured otherwise
+                    `staticRoutes` cannot be configured.
+                  ''
+                else
+                  dhcp.static.gateway
+              )
+            else if selected_dhcp_config == "client" then
+              "_dhcp4"
+            else if selected_dhcp_config == "server" then
+              (ipv4_fn.fromCidrString dhcp.server.address).address
+            else
+              throw "The `dhcp.${selected_dhcp_config}` config is not supported with `static_route`"
+          );
+          Destination = static_route;
+        });
+      }
   );
 
   interfaceFilename = name: "10-${name}";
   vlanName = (
     vlan_conf:
-      if vlan_conf.name == null
-      then "vlan-${lib.strings.fixedWidthNumber 4 vlan_conf.id}"
-      else vlan_conf.name
+    if vlan_conf.name == null then
+      "vlan-${lib.strings.fixedWidthNumber 4 vlan_conf.id}"
+    else
+      vlan_conf.name
   );
-  vlanFilename = vlan_conf: "20-${vlanName (vlan_conf // {name = null;})}";
+  vlanFilename = vlan_conf: "20-${vlanName (vlan_conf // { name = null; })}";
   bridgeFilename = bridge_conf: "30-${bridge_conf.name}";
   vxlanFilename = vxlan_conf: "40-${vxlan_conf.name}";
 }

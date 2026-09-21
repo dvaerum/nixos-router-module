@@ -39,7 +39,7 @@ in
     # lib.debug.traceValSeq
     (
       recursiveMerge (
-        (lib.lists.forEach cfgConfigInterface (interface_conf: {
+        (lib.lists.forEach (builtins.attrValues cfgConfigInterface) (interface_conf: {
           links = lib.attrsets.optionalAttrs (!builtins.isNull interface_conf.mac) {
             "${interfaceFilename interface_conf.name}" = {
               matchConfig.PermanentMACAddress = interface_conf.mac;
@@ -529,7 +529,7 @@ in
       }
   );
 
-  networking = lib.optionalAttrs (lib.length cfgConfigInterface > 0) {
+  networking = lib.optionalAttrs (cfgConfigInterface != { }) {
     useDHCP = lib.mkDefault false;
 
     useNetworkd = true;
@@ -537,7 +537,7 @@ in
     networkmanager.enable = lib.mkDefault false;
     networkmanager.unmanaged = (
       lib.lists.flatten (
-        lib.lists.forEach cfgConfigInterface (
+        lib.lists.forEach (builtins.attrValues cfgConfigInterface) (
           interface_conf:
           (lib.lists.optional (
             interface_conf.excludeFromNetworkManager || interface_conf.dhcp != null

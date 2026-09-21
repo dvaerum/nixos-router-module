@@ -1,15 +1,18 @@
 {
-  pkgs ? import <nixpkgs> {},
+  pkgs ? import <nixpkgs> { },
   nixosModule ? ../.,
 }:
 pkgs.testers.nixosTest {
   name = "router-basic-routing";
 
   nodes = {
-    router = {...}: {
-      imports = [nixosModule.nixosModules.default];
+    router = { ... }: {
+      imports = [ nixosModule.nixosModules.default ];
 
-      virtualisation.vlans = [1 2];
+      virtualisation.vlans = [
+        1
+        2
+      ];
 
       networking.useDHCP = false;
 
@@ -17,9 +20,8 @@ pkgs.testers.nixosTest {
         enable = true;
         defaultRouteInterface = "eth1";
 
-        configInterface = [
-          {
-            name = "eth1";
+        configInterface = {
+          eth1 = {
             mac = null;
             dhcp = {
               static = {
@@ -29,9 +31,8 @@ pkgs.testers.nixosTest {
             };
             ipMasquerade = true;
             forwarding = true;
-          }
-          {
-            name = "eth2";
+          };
+          eth2 = {
             mac = null;
             dhcp = {
               static = {
@@ -40,14 +41,14 @@ pkgs.testers.nixosTest {
               };
             };
             forwarding = true;
-          }
-        ];
+          };
+        };
       };
     };
 
     # External "internet" node
-    external = {...}: {
-      virtualisation.vlans = [1];
+    external = { ... }: {
+      virtualisation.vlans = [ 1 ];
       networking.interfaces.eth1.ipv4.addresses = [
         {
           address = "10.0.1.1";
@@ -66,8 +67,8 @@ pkgs.testers.nixosTest {
     };
 
     # Internal client
-    client = {...}: {
-      virtualisation.vlans = [2];
+    client = { ... }: {
+      virtualisation.vlans = [ 2 ];
       networking.interfaces.eth1.ipv4.addresses = [
         {
           address = "192.168.100.10";

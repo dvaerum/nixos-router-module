@@ -4,16 +4,15 @@
   options,
   netLib,
   ...
-}: let
-  inherit
-    (lib)
+}:
+let
+  inherit (lib)
     mkOption
     mkOptionType
     types
     ;
 
-  inherit
-    (lib.types)
+  inherit (lib.types)
     bool
     int
     ints
@@ -28,7 +27,7 @@
     submodule
     ;
 
-  ipv4_fn = import ./functions/ipv4.nix {inherit lib netLib;};
+  ipv4_fn = import ./functions/ipv4.nix { inherit lib netLib; };
 
   defaultInterfaceName = "builtin-ether";
 
@@ -69,8 +68,8 @@
       # To-do: This regex for matching FQDN my not be perfect and have bugs
       check = (
         domain:
-          builtins.match "^((xn--)?[a-z0-9][a-z0-9-]{0,61}[a-z0-9]{0,1}[.](xn--)?([a-z0-9-]{1,61}|[a-z0-9-]{1,30}[.][a-z]){2,})$" domain
-          != null
+        builtins.match "^((xn--)?[a-z0-9][a-z0-9-]{0,61}[a-z0-9]{0,1}[.](xn--)?([a-z0-9-]{1,61}|[a-z0-9-]{1,30}[.][a-z]){2,})$" domain
+        != null
       );
     };
   };
@@ -78,7 +77,7 @@
   domainName = mkOption {
     description = "Provide list of Domain Name(s)";
     type = listOf networkTypes.FQDN;
-    default = [];
+    default = [ ];
   };
 
   setLeaseDatabase = mkOption {
@@ -97,12 +96,12 @@
         };
         type = mkOption {
           description = "Only the `memfile` option is available";
-          type = enum ["memfile"];
+          type = enum [ "memfile" ];
           default = "memfile";
         };
       };
     };
-    default = {};
+    default = { };
   };
 
   setGeneralSettings = mkOption {
@@ -127,7 +126,7 @@
         domainName = domainName;
       };
     };
-    default = {};
+    default = { };
   };
 
   setDhcpOptions = mkOption {
@@ -161,11 +160,11 @@
                 "192.168.1.1"
                 "1.1.1.1"
               ];
-              default = [];
+              default = [ ];
             };
           };
         };
-        default = {};
+        default = { };
       };
       client = mkOption {
         description = "To-do: make description";
@@ -272,7 +271,7 @@
                   };
                 };
               });
-              default = {};
+              default = { };
               example = {
                 "00:11:22:33:44:55" = {
                   ip-address = "192.168.1.2";
@@ -330,7 +329,7 @@
             domainName = domainName;
           };
         };
-        default = {};
+        default = { };
       };
     });
   };
@@ -385,8 +384,8 @@
         if the route should be configured as the default use `0.0.0.0/0`.
       '';
       type = listOf networkTypes.subnet;
-      default = [];
-      example = ["172.20.90.0/24"];
+      default = [ ];
+      example = [ "172.20.90.0/24" ];
     };
 
     requiredForOnline = mkOption {
@@ -411,19 +410,17 @@
     };
   };
 
-  interfaceSharedOptions =
-    interfaceSharedOptionsWithoutBridge
-    // {
-      bridges = mkOption {
-        description = ''
-          Creating a bridge interface with and include this interface in the bridge.
-        '';
-        default = [];
-        type = listOf (submodule {
-          options = setBridgeOptions;
-        });
-      };
+  interfaceSharedOptions = interfaceSharedOptionsWithoutBridge // {
+    bridges = mkOption {
+      description = ''
+        Creating a bridge interface with and include this interface in the bridge.
+      '';
+      default = [ ];
+      type = listOf (submodule {
+        options = setBridgeOptions;
+      });
     };
+  };
 
   setBridgeOptions = {
     name = mkOption {
@@ -439,101 +436,99 @@
   # touch the `pimd` wiring below, not needed for a two-router tunnel. Uses
   # the full `interfaceSharedOptions` (unlike bridges) so a VXLAN interface
   # can join a bridge OR carry its own `dhcp.static/client/server`.
-  setVxlanOptions =
-    {
-      vni = mkOption {
-        description = "VXLAN Network Identifier (VNI), 0-16777215.";
-        type = ints.between 0 16777215;
-        example = 1000;
-      };
+  setVxlanOptions = {
+    vni = mkOption {
+      description = "VXLAN Network Identifier (VNI), 0-16777215.";
+      type = ints.between 0 16777215;
+      example = 1000;
+    };
 
-      local = mkOption {
-        description = ''
-          Source IP to bind/send from. `null` (the default) lets the kernel
-          pick whatever address the routing table would use to reach
-          `remote`.
-        '';
-        type = nullOr networkTypes.ipAddress;
-        default = null;
-      };
+    local = mkOption {
+      description = ''
+        Source IP to bind/send from. `null` (the default) lets the kernel
+        pick whatever address the routing table would use to reach
+        `remote`.
+      '';
+      type = nullOr networkTypes.ipAddress;
+      default = null;
+    };
 
-      remote = mkOption {
-        description = ''
-          The other tunnel endpoint's IP address (unicast point-to-point
-          only, no multicast/BUM-flood mode in this module yet). Must be
-          a static, currently-correct, routable IP: NOT a hostname, and NOT
-          usable directly across NAT or a dynamic WAN IP on either end.
-          This assumes both ends already sit on stable, mutually-routable
-          infrastructure.
-        '';
-        type = networkTypes.ipAddress;
-        example = "172.20.1.1";
-      };
+    remote = mkOption {
+      description = ''
+        The other tunnel endpoint's IP address (unicast point-to-point
+        only, no multicast/BUM-flood mode in this module yet). Must be
+        a static, currently-correct, routable IP: NOT a hostname, and NOT
+        usable directly across NAT or a dynamic WAN IP on either end.
+        This assumes both ends already sit on stable, mutually-routable
+        infrastructure.
+      '';
+      type = networkTypes.ipAddress;
+      example = "172.20.1.1";
+    };
 
-      destinationPort = mkOption {
-        description = ''
-          UDP port used for the encapsulated traffic. Defaults to the
-          IANA-assigned standard (4789) rather than the Linux kernel's own
-          historical non-standard default (8472), for interop with
-          non-Linux VXLAN peers.
-        '';
-        type = types.port;
-        default = 4789;
-      };
-    }
-    // interfaceSharedOptions
-    // networkInferfaceNameOptions;
+    destinationPort = mkOption {
+      description = ''
+        UDP port used for the encapsulated traffic. Defaults to the
+        IANA-assigned standard (4789) rather than the Linux kernel's own
+        historical non-standard default (8472), for interop with
+        non-Linux VXLAN peers.
+      '';
+      type = types.port;
+      default = 4789;
+    };
+  }
+  // interfaceSharedOptions
+  // networkInferfaceNameOptions;
 
-  setVlanOptions =
-    {
-      id = mkOption {
-        description = "Set VLan ID of the network interface";
-        type = ints.between 1 4096;
-        example = 1337;
-      };
+  setVlanOptions = {
+    id = mkOption {
+      description = "Set VLan ID of the network interface";
+      type = ints.between 1 4096;
+      example = 1337;
+    };
 
-      name = mkOption {
-        description = ''
-          Option for setting the name of the VLAN
-          Otherwise it will get the default name: vlan-<ID>
-        '';
-        type = nullOr networkTypes.interfaceName;
-        default = null;
-      };
-    }
-    // interfaceSharedOptions;
+    name = mkOption {
+      description = ''
+        Option for setting the name of the VLAN
+        Otherwise it will get the default name: vlan-<ID>
+      '';
+      type = nullOr networkTypes.interfaceName;
+      default = null;
+    };
+  }
+  // interfaceSharedOptions;
 
-  setInterfaceOptions =
-    {
-      mac = mkOption {
-        description = ''
-          MAC address of the network interface.
+  setInterfaceOptions = {
+    mac = mkOption {
+      description = ''
+        MAC address of the network interface.
 
-          It can be either a MAC-address or list of MAC-addresses.
+        It can be either a MAC-address or list of MAC-addresses.
 
-          **Example:** A list of MAC-addresses can make sense if you have multiple
-          USB adapter which are not connected at the same time, but you want to have
-          the same network interface name (and want to be configured the same)
-        '';
-        type = nullOr (either (listOf networkTypes.macAddress) networkTypes.macAddress);
-      };
+        **Example:** A list of MAC-addresses can make sense if you have multiple
+        USB adapter which are not connected at the same time, but you want to have
+        the same network interface name (and want to be configured the same)
+      '';
+      type = nullOr (either (listOf networkTypes.macAddress) networkTypes.macAddress);
+    };
 
-      # Alias for `systemd.network.links.<name>.linkConfig`,
-      # but with the description updated to share this info.
-      linkConfig = let
+    # Alias for `systemd.network.links.<name>.linkConfig`,
+    # but with the description updated to share this info.
+    linkConfig =
+      let
         description = ''
           Alias for `systemd.network.links.<name>.linkConfig`.
 
           Basically live copy-paste of the NixOS `options` for this systemd setting.
         '';
-      in (
+      in
+      (
         # To-do: This if-else statement "hack" is done, because otherwise
         #        I would have to provide `pkgs.nixosOptionsDoc` with part of
         #        `systemd` module from NixOS otherwise `pkgs.nixosOptionsDoc`
         #        would fail.
         #        I hope to find a better way to handle this alias.
-        if builtins.hasAttr "systemd" options
-        then
+        if builtins.hasAttr "systemd" options then
           (
             (builtins.elemAt (builtins.elemAt options.systemd.network.links.type.getSubModules 0).imports 0)
             .options.linkConfig
@@ -548,20 +543,21 @@
           })
       );
 
-      vlans = mkOption {
-        description = ''
-          Create a interface to handle VLAN tagged packages recieved on this interface.
-        '';
-        default = [];
-        type = listOf (submodule {
-          options = setVlanOptions;
-        });
-      };
-    }
-    // networkInferfaceNameOptions
-    // interfaceSharedOptions;
-in {
-  imports = [];
+    vlans = mkOption {
+      description = ''
+        Create a interface to handle VLAN tagged packages recieved on this interface.
+      '';
+      default = [ ];
+      type = listOf (submodule {
+        options = setVlanOptions;
+      });
+    };
+  }
+  // networkInferfaceNameOptions
+  // interfaceSharedOptions;
+in
+{
+  imports = [ ];
   options = {
     my.router = {
       enable = mkOption {
@@ -572,11 +568,21 @@ in {
       };
 
       configInterface = mkOption {
-        description = "List of configured network interfaces";
-        type = listOf (submodule {
-          options = setInterfaceOptions;
-        });
-        default = [];
+        description = "Config all physical/plain network interfaces";
+        type = attrsOf (
+          submodule (
+            { name, ... }: {
+              options = setInterfaceOptions;
+              config.name = lib.mkDefault name;
+            }
+          )
+        );
+        default = { };
+        example = {
+          eth1 = {
+            dhcp.static.ip-address = "10.0.1.2/24";
+          };
+        };
       };
 
       defaultRouteInterface = mkOption {
@@ -599,13 +605,13 @@ in {
         description = "Config all bridge interfaces";
         type = attrsOf (
           submodule (
-            {name, ...}: {
+            { name, ... }: {
               options = interfaceSharedOptionsWithoutBridge // networkInferfaceNameOptions;
               config.name = lib.mkDefault name;
             }
           )
         );
-        default = {};
+        default = { };
         example = {
           br0 = {
             dhcp.client = true;
@@ -617,13 +623,13 @@ in {
         description = "Config all VXLAN (unicast point-to-point) interfaces";
         type = attrsOf (
           submodule (
-            {name, ...}: {
+            { name, ... }: {
               options = setVxlanOptions;
               config.name = lib.mkDefault name;
             }
           )
         );
-        default = {};
+        default = { };
         example = {
           vxlan1000 = {
             vni = 1000;
@@ -670,7 +676,7 @@ in {
           description = ''
             Configure autoinstall script for the different ISOs
           '';
-          default = {};
+          default = { };
           example = {
             "rhel-9.6-x86_64-dvd.iso" = {
               scriptName = "minimal-environment.kstart";
@@ -701,5 +707,5 @@ in {
       };
     };
   };
-  config = {};
+  config = { };
 }

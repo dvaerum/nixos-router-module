@@ -1,5 +1,5 @@
 {
-  pkgs ? import <nixpkgs> {},
+  pkgs ? import <nixpkgs> { },
   nixosModule ? ../.,
 }:
 pkgs.testers.nixosTest {
@@ -21,30 +21,31 @@ pkgs.testers.nixosTest {
   #              client2 end up in the SAME L2 segment despite sitting
   #              behind different routers).
   nodes = {
-    router1 = {...}: {
-      imports = [nixosModule.nixosModules.default];
+    router1 = { ... }: {
+      imports = [ nixosModule.nixosModules.default ];
 
-      virtualisation.vlans = [1 2];
+      virtualisation.vlans = [
+        1
+        2
+      ];
 
       networking.useDHCP = false;
 
       my.router = {
         enable = true;
 
-        configInterface = [
-          {
-            name = "eth1";
+        configInterface = {
+          eth1 = {
             mac = null;
             dhcp.static.ip-address = "10.0.1.1/24";
-          }
-          {
-            name = "eth2";
+          };
+          eth2 = {
             mac = null;
-            bridges = [{name = "br-lan";}];
-          }
-        ];
+            bridges = [ { name = "br-lan"; } ];
+          };
+        };
 
-        bridgeInterfaces.br-lan = {};
+        bridgeInterfaces.br-lan = { };
 
         vxlanInterfaces = {
           vxlan1000 = {
@@ -55,36 +56,37 @@ pkgs.testers.nixosTest {
           vxlan2000 = {
             vni = 2000;
             remote = "10.0.1.2";
-            bridges = [{name = "br-lan";}];
+            bridges = [ { name = "br-lan"; } ];
           };
         };
       };
     };
 
-    router2 = {...}: {
-      imports = [nixosModule.nixosModules.default];
+    router2 = { ... }: {
+      imports = [ nixosModule.nixosModules.default ];
 
-      virtualisation.vlans = [1 3];
+      virtualisation.vlans = [
+        1
+        3
+      ];
 
       networking.useDHCP = false;
 
       my.router = {
         enable = true;
 
-        configInterface = [
-          {
-            name = "eth1";
+        configInterface = {
+          eth1 = {
             mac = null;
             dhcp.static.ip-address = "10.0.1.2/24";
-          }
-          {
-            name = "eth2";
+          };
+          eth2 = {
             mac = null;
-            bridges = [{name = "br-lan";}];
-          }
-        ];
+            bridges = [ { name = "br-lan"; } ];
+          };
+        };
 
-        bridgeInterfaces.br-lan = {};
+        bridgeInterfaces.br-lan = { };
 
         vxlanInterfaces = {
           vxlan1000 = {
@@ -95,14 +97,14 @@ pkgs.testers.nixosTest {
           vxlan2000 = {
             vni = 2000;
             remote = "10.0.1.1";
-            bridges = [{name = "br-lan";}];
+            bridges = [ { name = "br-lan"; } ];
           };
         };
       };
     };
 
-    client1 = {...}: {
-      virtualisation.vlans = [2];
+    client1 = { ... }: {
+      virtualisation.vlans = [ 2 ];
       networking.useDHCP = false;
       networking.interfaces.eth1.ipv4.addresses = [
         {
@@ -113,8 +115,8 @@ pkgs.testers.nixosTest {
       networking.firewall.enable = false;
     };
 
-    client2 = {...}: {
-      virtualisation.vlans = [3];
+    client2 = { ... }: {
+      virtualisation.vlans = [ 3 ];
       networking.useDHCP = false;
       networking.interfaces.eth1.ipv4.addresses = [
         {
