@@ -504,17 +504,30 @@ pkgs.testers.nixosTest {
           router.log("  subnet match-client-id = false (MAC-only reservations)")
 
       with subtest("Autoinstall scripts are deployed"):
+          # Ubuntu (cloud-init NoCloud) serves each script from its own seed
+          # *directory* as `user-data` + `meta-data`, not as a flat file named
+          # after the script (see AutoinstallManager::prepare) -- the GRUB
+          # entry's `ds=nocloud-net;s=<dir>/` param points cloud-init at that
+          # directory.
           ubuntu_ks = router.succeed(
-              "cat /run/pxe-boot/unattented-install/ubuntu-24.04-live-server-amd64.iso/minimal.ks"
+              "cat /run/pxe-boot/unattented-install/ubuntu-24.04-live-server-amd64.iso/minimal.ks/user-data"
           )
           assert "lang en_US.UTF-8" in ubuntu_ks, f"Unexpected content: {ubuntu_ks[:200]}"
           assert "keyboard us" in ubuntu_ks, f"Missing 'keyboard us': {ubuntu_ks[:200]}"
+          router.succeed(
+              "test -f /run/pxe-boot/unattented-install/ubuntu-24.04-live-server-amd64.iso/minimal.ks/meta-data"
+          )
 
           advanced_ks = router.succeed(
-              "cat /run/pxe-boot/unattented-install/ubuntu-24.04-live-server-amd64.iso/advanced.ks"
+              "cat /run/pxe-boot/unattented-install/ubuntu-24.04-live-server-amd64.iso/advanced.ks/user-data"
           )
           assert "network --bootproto=dhcp" in advanced_ks, f"Unexpected: {advanced_ks[:200]}"
+          router.succeed(
+              "test -f /run/pxe-boot/unattented-install/ubuntu-24.04-live-server-amd64.iso/advanced.ks/meta-data"
+          )
 
+          # RHEL kickstart has no NoCloud datasource -- served verbatim as a
+          # flat file under its own name.
           rhel_ks = router.succeed(
               "cat /run/pxe-boot/unattented-install/rhel-9.6-x86_64-dvd.iso/server.ks"
           )
