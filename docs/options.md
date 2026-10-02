@@ -305,6 +305,85 @@ false
 
 
 
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.server\.dns-server\.enable
+
+
+
+Enable the DNS Server (Unbound) for this network interface\.
+
+Only takes effect when ` my.router.dns-server.enable ` is
+also ` true ` — this is a per-interface opt-out, not an
+independent switch\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+
+
+*Example:*
+
+```nix
+false
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.server\.dns-server\.trust
+
+
+
+Controls how DNS requests from this interface’s subnet are
+treated:
+
+ - ` lan ` (the default): the interface’s own DNS-derived
+   records (reservations, DHCP pool leases) are published,
+   and ` my.router.dns-server.spoof ` rules are enforced\.
+ - ` forward-only `: requests are still resolved/forwarded,
+   but no spoof rules are applied and no local records are
+   published for this subnet\. Intended for a trusted peer
+   network (e\.g\. a sibling router reached over a VXLAN
+   tunnel) that should be able to use this router as a
+   resolver without inheriting its spoof policy\.
+
+
+
+*Type:*
+one of “lan”, “forward-only”
+
+
+
+*Default:*
+
+```nix
+"lan"
+```
+
+
+
+*Example:*
+
+```nix
+"forward-only"
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
 ## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.server\.dns-servers
 
 
@@ -599,9 +678,48 @@ attribute set of (submodule)
 ```nix
 {
   "00:11:22:33:44:55" = {
+    hostname = "nas";
     ip-address = "192.168.1.2";
   };
 }
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.server\.reservations\.\<name>\.hostname
+
+
+
+DNS hostname for this reservation\.
+
+When set, ` dns-server.enable ` (this router’s, not
+just this interface’s) publishes it as an A record
+via the DHCP-lease hook – always taking priority
+over anything the client itself requests over DHCP,
+regardless of ` dns-server.publish-leases.enable `\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+"nas"
 ```
 
 *Declared by:*
@@ -1235,6 +1353,85 @@ false
 
 
 
+## my\.router\.configInterface\.\<name>\.dhcp\.server\.dns-server\.enable
+
+
+
+Enable the DNS Server (Unbound) for this network interface\.
+
+Only takes effect when ` my.router.dns-server.enable ` is
+also ` true ` — this is a per-interface opt-out, not an
+independent switch\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+
+
+*Example:*
+
+```nix
+false
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.configInterface\.\<name>\.dhcp\.server\.dns-server\.trust
+
+
+
+Controls how DNS requests from this interface’s subnet are
+treated:
+
+ - ` lan ` (the default): the interface’s own DNS-derived
+   records (reservations, DHCP pool leases) are published,
+   and ` my.router.dns-server.spoof ` rules are enforced\.
+ - ` forward-only `: requests are still resolved/forwarded,
+   but no spoof rules are applied and no local records are
+   published for this subnet\. Intended for a trusted peer
+   network (e\.g\. a sibling router reached over a VXLAN
+   tunnel) that should be able to use this router as a
+   resolver without inheriting its spoof policy\.
+
+
+
+*Type:*
+one of “lan”, “forward-only”
+
+
+
+*Default:*
+
+```nix
+"lan"
+```
+
+
+
+*Example:*
+
+```nix
+"forward-only"
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
 ## my\.router\.configInterface\.\<name>\.dhcp\.server\.dns-servers
 
 
@@ -1529,9 +1726,48 @@ attribute set of (submodule)
 ```nix
 {
   "00:11:22:33:44:55" = {
+    hostname = "nas";
     ip-address = "192.168.1.2";
   };
 }
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.configInterface\.\<name>\.dhcp\.server\.reservations\.\<name>\.hostname
+
+
+
+DNS hostname for this reservation\.
+
+When set, ` dns-server.enable ` (this router’s, not
+just this interface’s) publishes it as an A record
+via the DHCP-lease hook – always taking priority
+over anything the client itself requests over DHCP,
+regardless of ` dns-server.publish-leases.enable `\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+"nas"
 ```
 
 *Declared by:*
@@ -2205,6 +2441,85 @@ false
 
 
 
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.dns-server\.enable
+
+
+
+Enable the DNS Server (Unbound) for this network interface\.
+
+Only takes effect when ` my.router.dns-server.enable ` is
+also ` true ` — this is a per-interface opt-out, not an
+independent switch\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+
+
+*Example:*
+
+```nix
+false
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.dns-server\.trust
+
+
+
+Controls how DNS requests from this interface’s subnet are
+treated:
+
+ - ` lan ` (the default): the interface’s own DNS-derived
+   records (reservations, DHCP pool leases) are published,
+   and ` my.router.dns-server.spoof ` rules are enforced\.
+ - ` forward-only `: requests are still resolved/forwarded,
+   but no spoof rules are applied and no local records are
+   published for this subnet\. Intended for a trusted peer
+   network (e\.g\. a sibling router reached over a VXLAN
+   tunnel) that should be able to use this router as a
+   resolver without inheriting its spoof policy\.
+
+
+
+*Type:*
+one of “lan”, “forward-only”
+
+
+
+*Default:*
+
+```nix
+"lan"
+```
+
+
+
+*Example:*
+
+```nix
+"forward-only"
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
 ## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.dns-servers
 
 
@@ -2499,9 +2814,48 @@ attribute set of (submodule)
 ```nix
 {
   "00:11:22:33:44:55" = {
+    hostname = "nas";
     ip-address = "192.168.1.2";
   };
 }
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.reservations\.\<name>\.hostname
+
+
+
+DNS hostname for this reservation\.
+
+When set, ` dns-server.enable ` (this router’s, not
+just this interface’s) publishes it as an A record
+via the DHCP-lease hook – always taking priority
+over anything the client itself requests over DHCP,
+regardless of ` dns-server.publish-leases.enable `\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+"nas"
 ```
 
 *Declared by:*
@@ -2782,8 +3136,6 @@ false
 
 ## my\.router\.configInterface\.\<name>\.vlans\.\*\.multicast
 
-
-
 *Type:*
 boolean
 
@@ -3037,6 +3389,8 @@ signed integer
 
 ## my\.router\.dhcp\.server\.generalSettings\.renewTimer
 
+
+
 Set renew time (seconds)
 
 
@@ -3074,6 +3428,163 @@ signed integer
 
 ```nix
 4000
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.dhcp\.server\.hooksLibraries
+
+
+
+Kea DHCPv4 hook libraries to load\.
+
+
+
+*Type:*
+submodule
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.dhcp\.server\.hooksLibraries\.run_script
+
+
+
+Kea DHCPv4 ` run_script ` hook instances – each entry calls
+` path ` as ` <path> <hook-point-name> ` for every Kea DHCPv4
+hook point listed in ` triggers `, with lease/query data
+passed via environment variables Kea itself sets
+(` LEASE4_* `, ` QUERY4_* `, …; see the Kea ARM’s Run Script
+hook chapter for the full list per hook point)\.
+
+Keyed by an arbitrary name, not a fixed field, so more
+than one contributor – this module’s own DNS-lease
+publishing, plus anything else in your own configuration
+– can each register an entry without conflicting\.
+
+Unlike most Kea hooks, ` run_script ` cannot actually be
+loaded more than once: Kea logs a second ` hooks-libraries `
+entry pointing at the same hook as “loaded” independently,
+but at runtime only the LAST one configured ever actually
+fires\. So every entry here shares a single generated
+dispatcher script and a single real Kea ` hooks-libraries `
+entry; ` triggers ` is how each one still only reacts to the
+hook points it cares about\.
+
+
+
+*Type:*
+attribute set of (submodule)
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+
+
+*Example:*
+
+```nix
+{
+  my-hook = {
+    path = "/path/to/script.sh";
+    triggers = [
+      "lease4_release"
+    ];
+  };
+}
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.dhcp\.server\.hooksLibraries\.run_script\.\<name>\.environment
+
+
+
+Extra environment variables to set for ` path `\. Kea
+itself never passes anything to a run_script beyond
+the hook-point name, so this is how you get static
+configuration into your script without writing your
+own wrapper\.
+
+
+
+*Type:*
+attribute set of string
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.dhcp\.server\.hooksLibraries\.run_script\.\<name>\.path
+
+
+
+Path to the script to invoke\.
+
+
+
+*Type:*
+string
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.dhcp\.server\.hooksLibraries\.run_script\.\<name>\.triggers
+
+
+
+Which Kea DHCPv4 hook points to invoke ` path ` for\.
+
+
+
+*Type:*
+list of (one of “leases4_committed”, “lease4_expire”, “lease4_release”, “lease4_renew”, “lease4_recover”, “lease4_decline”)
+
+
+
+*Default:*
+
+```nix
+[
+  "leases4_committed"
+  "lease4_expire"
+  "lease4_release"
+  "lease4_renew"
+  "lease4_recover"
+  "lease4_decline"
+]
 ```
 
 *Declared by:*
@@ -3181,7 +3692,12 @@ value “memfile” (singular enum)
 
 
 
-Enable DNS Server
+Enable the DNS Server (Unbound)\.
+
+When enabled, every ` dhcp.server ` interface gets its own DNS
+service, bound directly to that interface’s own address (never
+` 0.0.0.0 `), unless that interface’s own
+` dhcp.server.dns-server.enable ` is set to ` false `\.
 
 
 
@@ -3202,6 +3718,195 @@ true
 
 ```nix
 false
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.dns-server\.publish-leases\.enable
+
+
+
+Also publish an A record for dynamic (non-reserved) DHCP
+pool leases, using the hostname the client itself sends
+over DHCP (option 12) – sanitized by Kea
+(` hostname-char-set `), and rejected outright if it collides
+with any reservation’s ` hostname ` or ` dns-server.spoof.overrides `
+entry\.
+
+Off by default: unlike a reservation’s ` hostname ` (admin-
+authored), a pool client’s hostname is unauthenticated
+input from whatever device asks for an address – turning
+this on means trusting that input enough to serve it back
+as a real DNS answer on the LAN\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+
+
+*Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.dns-server\.spoof\.blocklist\.enable
+
+
+
+Enable ad/tracker DNS blocking via a periodically-fetched
+RPZ zone, built from the hosts-file-format lists in ` urls `\.
+Applied on every interface with
+` dhcp.server.dns-server.trust = "lan" `\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+
+
+*Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.dns-server\.spoof\.blocklist\.updateInterval
+
+
+
+systemd ` OnCalendar ` spec for how often the blocklist is
+re-fetched\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+
+```nix
+"daily"
+```
+
+
+
+*Example:*
+
+```nix
+"hourly"
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.dns-server\.spoof\.blocklist\.urls
+
+
+
+hosts-file-format blocklist URLs (e\.g\. StevenBlack/hosts,
+oisd)\. Fetched and converted to an RPZ zonefile on the
+schedule set by ` updateInterval `; the fetch is a runtime
+network call, not pinned/reproducible like the rest of this
+module\.
+
+
+
+*Type:*
+list of string
+
+
+
+*Default:*
+
+```nix
+[ ]
+```
+
+
+
+*Example:*
+
+```nix
+[
+  "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
+]
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.dns-server\.spoof\.overrides
+
+
+
+Per-hostname DNS overrides (split-horizon redirects), applied
+via RPZ local-data\. These always take priority over the real
+answer, on every interface with ` dhcp.server.dns-server.trust = "lan" ` (the default)\.
+
+
+
+*Type:*
+attribute set of ((list of (IP address)) or (IP address) convertible to it)
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+
+
+*Example:*
+
+```nix
+{
+  "nas.home.arpa" = [
+    "10.0.0.5"
+    "10.0.0.6"
+  ];
+  "printer.home.arpa" = "10.0.0.9";
+}
 ```
 
 *Declared by:*
@@ -3644,6 +4349,85 @@ false
 
 
 
+## my\.router\.vxlanInterfaces\.\<name>\.dhcp\.server\.dns-server\.enable
+
+
+
+Enable the DNS Server (Unbound) for this network interface\.
+
+Only takes effect when ` my.router.dns-server.enable ` is
+also ` true ` — this is a per-interface opt-out, not an
+independent switch\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+
+
+*Example:*
+
+```nix
+false
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.vxlanInterfaces\.\<name>\.dhcp\.server\.dns-server\.trust
+
+
+
+Controls how DNS requests from this interface’s subnet are
+treated:
+
+ - ` lan ` (the default): the interface’s own DNS-derived
+   records (reservations, DHCP pool leases) are published,
+   and ` my.router.dns-server.spoof ` rules are enforced\.
+ - ` forward-only `: requests are still resolved/forwarded,
+   but no spoof rules are applied and no local records are
+   published for this subnet\. Intended for a trusted peer
+   network (e\.g\. a sibling router reached over a VXLAN
+   tunnel) that should be able to use this router as a
+   resolver without inheriting its spoof policy\.
+
+
+
+*Type:*
+one of “lan”, “forward-only”
+
+
+
+*Default:*
+
+```nix
+"lan"
+```
+
+
+
+*Example:*
+
+```nix
+"forward-only"
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
 ## my\.router\.vxlanInterfaces\.\<name>\.dhcp\.server\.dns-servers
 
 
@@ -3938,9 +4722,48 @@ attribute set of (submodule)
 ```nix
 {
   "00:11:22:33:44:55" = {
+    hostname = "nas";
     ip-address = "192.168.1.2";
   };
 }
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.vxlanInterfaces\.\<name>\.dhcp\.server\.reservations\.\<name>\.hostname
+
+
+
+DNS hostname for this reservation\.
+
+When set, ` dns-server.enable ` (this router’s, not
+just this interface’s) publishes it as an A record
+via the DHCP-lease hook – always taking priority
+over anything the client itself requests over DHCP,
+regardless of ` dns-server.publish-leases.enable `\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+"nas"
 ```
 
 *Declared by:*
