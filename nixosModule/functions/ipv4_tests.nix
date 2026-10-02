@@ -109,4 +109,31 @@ lib.runTests {
     expr = ipv4_fn.cidrValid "100.256.1.2/24";
     expected = false;
   };
+
+  # `check` functions on a `mkOptionType` must be total: `coercedTo`
+  # (used by `dns-server.spoof.overrides`, a hostname -> single-IP-or-
+  # list-of-IPs option) probes the "wrong shape" candidate and expects
+  # `false`, not a `builtins.match`/`toUpper` crash on a non-string.
+  test_ipAddressValid_010_non_string_input = {
+    expr = ipv4_fn.ipAddressValid [
+      "10.0.0.5"
+      "10.0.0.6"
+    ];
+    expected = false;
+  };
+
+  test_cidrValid_030_non_string_input = {
+    expr = ipv4_fn.cidrValid [ "192.168.1.2/24" ];
+    expected = false;
+  };
+
+  test_multicastAddressValid_010_non_string_input = {
+    expr = ipv4_fn.multicastAddressValid [ "239.1.1.1" ];
+    expected = false;
+  };
+
+  test_fnValidMacAddress_010_non_string_input = {
+    expr = ipv4_fn.fnValidMacAddress [ "00:11:22:33:44:55" ];
+    expected = false;
+  };
 }

@@ -13,6 +13,7 @@
 
     ./config.nix
     ./config-tftp.nix
+    ./config-dns.nix
   ];
 
   options = { };

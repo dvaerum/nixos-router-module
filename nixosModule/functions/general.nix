@@ -93,6 +93,26 @@ rec {
 
   cfgSetDhcpServerInterfaceOnlyFilter = fn: lib.lists.filter fn cfgSetDhcpServerInterfaceOnly;
 
+  cfgSetDnsServerInterfaceOnly = cfgSetDhcpServerInterfaceOnlyFilter (
+    dhcp_interface_conf: cfg.dns-server.enable && dhcp_interface_conf.dhcp.server.dns-server.enable
+  );
+
+  # Shared by config.nix (Kea's `ddns-qualifying-suffix`, which resolves a
+  # reservation/client hostname into the FQDN reported to the DHCP-lease
+  # hook) and config-dns.nix (building the same FQDNs to check pool-lease
+  # hostnames against, for collision rejection) -- kept as one function so
+  # the two can never drift apart on what "this interface's domain" means.
+  qualifyingSuffixFor =
+    dhcp_interface_conf:
+    let
+      domainNames =
+        dhcp_interface_conf.dhcp.server.domainName ++ cfg.dhcp.server.generalSettings.domainName;
+    in
+    if domainNames == [ ] then
+      null
+    else
+      "${lib.strings.removeSuffix "." (lib.lists.head domainNames)}.";
+
   getInterfaceConf = (
     name:
     (lib.lists.findSingle (link_conf: link_conf.linkConfig.Name == name)

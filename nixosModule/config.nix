@@ -23,6 +23,7 @@ let
     cfgDefaultRouteInterface
     cfgSetDhcpServerInterfaceOnly
     cfgSetDhcpServerInterfaceOnlyFilter
+    qualifyingSuffixFor
     vlanName
     vlanFilename
     bridgeFilename
@@ -33,6 +34,41 @@ let
     ;
 
   ipv4_fn = import ./functions/ipv4.nix { inherit lib netLib; };
+
+  runScriptEntries = cfg.dhcp.server.hooksLibraries.run_script;
+
+  # Kea's run_script hook can only usefully be loaded ONCE: a second
+  # `hooks-libraries` entry pointing at the same
+  # libdhcp_run_script.so logs as "loaded" independently, but at
+  # runtime only the LAST one configured ever actually fires --
+  # verified empirically (a second script's own hook points are
+  # silently never called; Kea gives no error). So every entry under
+  # `hooksLibraries.run_script` is dispatched from one generated
+  # script behind a single hooks-libraries entry, with each entry's
+  # own `triggers` deciding which Kea hook points it gets called for.
+  runScriptDispatcher = pkgs.writeShellApplication {
+    name = "kea-run-script-dispatcher";
+    text = ''
+      hook_point="''${1:-}"
+      status=0
+    ''
+    + lib.concatStrings (
+      lib.mapAttrsToList (_name: entry: ''
+        case "$hook_point" in
+        ${lib.concatStringsSep "|" entry.triggers})
+          ${
+            lib.concatStringsSep " " (
+              lib.mapAttrsToList (k: v: "${k}=${lib.escapeShellArg v}") entry.environment
+            )
+          } ${lib.escapeShellArg entry.path} "$@" || status=$?
+          ;;
+        esac
+      '') runScriptEntries
+    )
+    + ''
+      exit "$status"
+    '';
+  };
 in
 (lib.mkIf cfg.enable {
   systemd.network =
@@ -317,7 +353,18 @@ in
               // lib.attrsets.optionalAttrs (value.ip-address != null) {
                 ip-address = value.ip-address;
               }
+              // lib.attrsets.optionalAttrs (value.hostname != null) {
+                hostname = value.hostname;
+              }
             ) dhcp_interface_conf.dhcp.server.reservations;
+          }
+          // lib.attrsets.optionalAttrs (qualifyingSuffixFor dhcp_interface_conf != null) {
+            # Qualifies a reservation's `hostname` (and, per Kea's default
+            # `ddns-replace-client-name: never`, a pool client's own DHCP
+            # option-12 hostname) into the FQDN reported via LEASE4_HOSTNAME
+            # to the DHCP-lease hook -- consumed by
+            # dns-server-lease-hook.sh, see nixosModule/config-dns.nix.
+            ddns-qualifying-suffix = qualifyingSuffixFor dhcp_interface_conf;
           }
           // lib.attrsets.optionalAttrs dhcp_server.pxe-boot.enable {
             # Match PXE clients by MAC only (ignore the DHCP client-id) on this
@@ -463,7 +510,21 @@ in
             ]
           ) dhcp_server_interface_pxeboot_enabled
         );
-      });
+      })
+      // lib.attrsets.optionalAttrs (runScriptEntries != { }) {
+        hooks-libraries = [
+          {
+            library = "${pkgs.kea}/lib/kea/hooks/libdhcp_run_script.so";
+            parameters = {
+              name = "${runScriptDispatcher}/bin/kea-run-script-dispatcher";
+              # "Currently, enabling synchronous calls to external
+              # scripts is not supported" (Kea ARM) -- false is the
+              # only value that works.
+              sync = false;
+            };
+          }
+        ];
+      };
     };
 
   services.ntp = lib.attrsets.optionalAttrs (lib.length cfgSetDhcpServerInterfaceOnly > 0) {

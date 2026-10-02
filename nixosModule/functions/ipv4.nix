@@ -48,7 +48,13 @@ rec {
       }
     );
 
-  cidrValid = cidr: (builtins.match "^${_regex_validate_cidr}$" "${cidr}") != null;
+  # `check` functions on a `mkOptionType` (this one, and the three below)
+  # must be total: `coercedTo` probes them against values of the *other*
+  # candidate shape (e.g. a list, when probing whether a single IP address
+  # matches) and expects `false` back, not a crash from `builtins.match`
+  # requiring a string.
+  cidrValid =
+    cidr: builtins.isString cidr && (builtins.match "^${_regex_validate_cidr}$" cidr) != null;
 
   subnet =
     cidr_str:
@@ -66,13 +72,19 @@ rec {
 
   subnetValid = cidr_str: (builtins.tryEval (subnet cidr_str)).success;
 
-  ipAddressValid = (ipAddr: builtins.match "^${_regex_validate_ip_address}$" ipAddr != null);
+  ipAddressValid = (
+    ipAddr: builtins.isString ipAddr && builtins.match "^${_regex_validate_ip_address}$" ipAddr != null
+  );
 
   _regex_validate_multicast_address_numbers = "(22[4-9]|23[0-9])";
   _regex_validate_multicast_address = "${_regex_validate_multicast_address_numbers}(\.${_regex_validate_ip_address_numbers}){3}";
   multicastAddressValid =
-    mcAddr: builtins.match "^(${_regex_validate_multicast_address})$" mcAddr != null;
+    mcAddr:
+    builtins.isString mcAddr
+    && builtins.match "^(${_regex_validate_multicast_address})$" mcAddr != null;
 
   fnValidMacAddress =
-    mac: (lib.match "([A-F0-9]{2}[:-]){5}[A-F0-9]{2}" (lib.strings.toUpper mac)) != null;
+    mac:
+    builtins.isString mac
+    && (lib.match "([A-F0-9]{2}[:-]){5}[A-F0-9]{2}" (lib.strings.toUpper mac)) != null;
 }

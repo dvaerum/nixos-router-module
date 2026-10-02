@@ -74,6 +74,8 @@
           dhcp-server = tests.dhcp-server;
           pxe-boot = tests.pxe-boot;
           vxlan = tests.vxlan;
+          dns-server = tests.dns-server;
+          dns-server-disabled = tests.dns-server-disabled;
 
           # Pure `lib.runTests` for the IPv4 helpers (returns [] when all pass).
           ipv4-lib =
@@ -98,6 +100,8 @@
           dhcp-server-test = tests.dhcp-server;
           pxe-boot-test = tests.pxe-boot;
           vxlan-test = tests.vxlan;
+          dns-server-test = tests.dns-server;
+          dns-server-disabled-test = tests.dns-server-disabled;
         }
         // pkgs.lib.optionalAttrs isLinux (
           let
