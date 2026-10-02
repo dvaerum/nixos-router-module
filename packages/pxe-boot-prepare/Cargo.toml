@@ -5,11 +5,11 @@ edition = "2021"
 
 [dependencies]
 # Async runtime
-tokio = { version = "1.35", features = ["full"] }
+tokio = { version = "1.53", features = ["full"] }
 futures = "0.3"
 
 # CLI
-clap = { version = "4.4", features = ["derive"] }
+clap = { version = "4.6", features = ["derive"] }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -24,17 +24,14 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 # File system
-walkdir = "2.4"
-tempfile = "3.8"
+walkdir = "2.5"
+tempfile = "3.27"
 
 # Templating
-handlebars = "5.1"
+handlebars = "6.4"
 
 # Async traits
 async-trait = "0.1"
-
-# Dynamic cloning for trait objects
-dyn-clone = "1.0"
 
 [dev-dependencies]
 tokio-test = "0.4"
