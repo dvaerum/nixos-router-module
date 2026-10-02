@@ -29,6 +29,29 @@ let
     fromCidrString
     ;
 
+  pxeBootInterfaces = cfgSetDhcpServerInterfaceOnlyFilter (
+    dhcp_interface_conf: dhcp_interface_conf.dhcp.server.pxe-boot.enable
+  );
+
+  # Opt-in only (`== true`, not `!= false` as below): a standalone interface
+  # must not silently inherit the pxe-boot-enabled case's default-on behavior
+  # just because `tftpServer` is left unset.
+  standaloneTftpInterfaces = cfgSetDhcpServerInterfaceOnlyFilter (
+    dhcp_interface_conf:
+    !dhcp_interface_conf.dhcp.server.pxe-boot.enable
+    && dhcp_interface_conf.dhcp.server.tftpServer == true
+  );
+
+  tftpServerInterfaces =
+    (lib.lists.filter (
+      dhcp_interface_conf: dhcp_interface_conf.dhcp.server.tftpServer != false
+    ) pxeBootInterfaces)
+    ++ standaloneTftpInterfaces;
+
+  tftpServerOptedOutInterfaces = lib.lists.filter (
+    dhcp_interface_conf: dhcp_interface_conf.dhcp.server.tftpServer == false
+  ) pxeBootInterfaces;
+
   # Build the Rust pxe-boot-prepare binary
   pxe-boot-prepare-pkg = pkgs.callPackage ./../packages/pxe-boot-prepare/package.nix { };
 
@@ -39,30 +62,25 @@ let
       tftp_root = pxe_boot_folder;
       runtime_root = "/run/pxe-boot";
 
-      dhcp_interfaces =
-        lib.forEach
-          (cfgSetDhcpServerInterfaceOnlyFilter (
-            dhcp_interface_conf: dhcp_interface_conf.dhcp.server.pxe-boot.enable
-          ))
-          (
-            dhcp_interface_conf:
-            let
-              dhcp_server = dhcp_interface_conf.dhcp.server;
-              gateway = (fromCidrString dhcp_server.address).address;
-            in
-            {
-              id = dhcp_server.id;
-              name = dhcp_interface_conf.interfaceName;
-              gateway = gateway;
-              default_iso =
-                if dhcp_server.pxe-boot.defaultIso != "" then dhcp_server.pxe-boot.defaultIso else null;
-              default_script =
-                if dhcp_server.pxe-boot.defaultScriptName != "" then
-                  dhcp_server.pxe-boot.defaultScriptName
-                else
-                  null;
-            }
-          );
+      dhcp_interfaces = lib.forEach pxeBootInterfaces (
+        dhcp_interface_conf:
+        let
+          dhcp_server = dhcp_interface_conf.dhcp.server;
+          gateway = (fromCidrString dhcp_server.address).address;
+        in
+        {
+          id = dhcp_server.id;
+          name = dhcp_interface_conf.interfaceName;
+          gateway = gateway;
+          default_iso =
+            if dhcp_server.pxe-boot.defaultIso != "" then dhcp_server.pxe-boot.defaultIso else null;
+          default_script =
+            if dhcp_server.pxe-boot.defaultScriptName != "" then
+              dhcp_server.pxe-boot.defaultScriptName
+            else
+              null;
+        }
+      );
 
       autoinstall = lib.attrsets.mapAttrs (
         isoName: scripts:
@@ -112,112 +130,121 @@ let
 
   signed-grub = import ./../packages/pxe-boot-grub-signed/package.nix { inherit pkgs; };
 in
-(lib.mkIf cfg.pxe-boot.enable {
-  systemd.services = {
-    "pxe-boot-main-script" = {
-      enable = true;
-      description = "PXE Boot - Copy GRUB Binaries";
-      after = [
-        "network.target"
-        "pxe-boot-prepare.service"
-      ];
-      path = with pkgs; [ rsync ];
-      script = ''
-        set -eu
-        set -x
-      ''
-      +
-        lib.strings.concatMapStrings
-          (
-            dhcp_interface_conf:
-            let
-              dhcp_server = dhcp_interface_conf.dhcp.server;
-              gateway = (fromCidrString dhcp_server.address).address;
-            in
-            ''
-              IPXE_BOOT_FOLDER_PATH="${pxe_boot_folder}/${builtins.toString dhcp_server.id}"
-              mkdir -p "$IPXE_BOOT_FOLDER_PATH"
-              rsync "${main_ipxe_file_fn gateway}" "$IPXE_BOOT_FOLDER_PATH/main.ipxe" &
-              # `--chmod=Du+w` keeps the destination directories owner-writable.
-              # Without it, `rsync -a` mirrors the read-only nix-store mode onto
-              # "$IPXE_BOOT_FOLDER_PATH", and pxe-boot-prepare (which runs with a
-              # CapabilityBoundingSet of only CAP_SYS_ADMIN, i.e. no CAP_DAC_OVERRIDE)
-              # can then no longer create the "grub/" subdirectory for grub.cfg.
-              rsync -a --chmod=Du+w --checksum "${signed-grub}/." "$IPXE_BOOT_FOLDER_PATH/." &
-            ''
-          )
-          (
-            cfgSetDhcpServerInterfaceOnlyFilter (
-              dhcp_interface_conf: dhcp_interface_conf.dhcp.server.pxe-boot.enable
-            )
-          )
-      + ''
-        wait
-      '';
-      wantedBy = [ "multi-user.target" ];
-    };
+lib.mkMerge [
+  (lib.mkIf cfg.pxe-boot.enable {
+    warnings =
+      lib.forEach
+        (lib.lists.filter (
+          dhcp_interface_conf: !dhcp_interface_conf.dhcp.server.pxe-boot.disableTftpServerWarning
+        ) tftpServerOptedOutInterfaces)
+        (dhcp_interface_conf: ''
+          my.router: dhcp.server.tftpServer = false for interface
+          "${dhcp_interface_conf.interfaceName}" -- this router will NOT run its
+          own TFTP server for that subnet. The grub/iPXE files are still staged
+          at "${pxe_boot_folder}/${builtins.toString dhcp_interface_conf.dhcp.server.id}";
+          you are responsible for serving that directory over TFTP yourself.
+        '');
 
-    "pxe-boot-prepare" = {
-      enable = true;
-      description = "PXE Boot - Prepare";
-      after = [
-        "network.target"
-        "pxe-boot-http-server.service"
-      ];
-      wantedBy = [ "multi-user.target" ];
+    systemd.services = {
+      "pxe-boot-main-script" = {
+        enable = true;
+        description = "PXE Boot - Copy GRUB Binaries";
+        after = [
+          "network.target"
+          "pxe-boot-prepare.service"
+        ];
+        path = with pkgs; [ rsync ];
+        script = ''
+          set -eu
+          set -x
+        ''
+        + lib.strings.concatMapStrings (
+          dhcp_interface_conf:
+          let
+            dhcp_server = dhcp_interface_conf.dhcp.server;
+            gateway = (fromCidrString dhcp_server.address).address;
+          in
+          ''
+            IPXE_BOOT_FOLDER_PATH="${pxe_boot_folder}/${builtins.toString dhcp_server.id}"
+            mkdir -p "$IPXE_BOOT_FOLDER_PATH"
+            rsync "${main_ipxe_file_fn gateway}" "$IPXE_BOOT_FOLDER_PATH/main.ipxe" &
+            # `--chmod=Du+w` keeps the destination directories owner-writable.
+            # Without it, `rsync -a` mirrors the read-only nix-store mode onto
+            # "$IPXE_BOOT_FOLDER_PATH", and pxe-boot-prepare (which runs with a
+            # CapabilityBoundingSet of only CAP_SYS_ADMIN, i.e. no CAP_DAC_OVERRIDE)
+            # can then no longer create the "grub/" subdirectory for grub.cfg.
+            rsync -a --chmod=Du+w --checksum "${signed-grub}/." "$IPXE_BOOT_FOLDER_PATH/." &
+          ''
+        ) pxeBootInterfaces
+        + ''
+          wait
+        '';
+        wantedBy = [ "multi-user.target" ];
+      };
 
-      # Add mount utilities to PATH
-      path = with pkgs; [ util-linux ];
+      "pxe-boot-prepare" = {
+        enable = true;
+        description = "PXE Boot - Prepare";
+        after = [
+          "network.target"
+          "pxe-boot-http-server.service"
+        ];
+        wantedBy = [ "multi-user.target" ];
 
-      serviceConfig = {
-        Type = "oneshot";
-        RemainAfterExit = true;
-        ExecStart = "${pxe-boot-prepare-pkg}/bin/pxe-boot-prepare --config ${pxe-config} prepare";
-        ExecStop = "${pxe-boot-prepare-pkg}/bin/pxe-boot-prepare --config ${pxe-config} cleanup";
+        # Add mount utilities to PATH
+        path = with pkgs; [ util-linux ];
 
-        # Allow ISO mounting with loop devices
-        AmbientCapabilities = [ "CAP_SYS_ADMIN" ];
-        CapabilityBoundingSet = [ "CAP_SYS_ADMIN" ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          ExecStart = "${pxe-boot-prepare-pkg}/bin/pxe-boot-prepare --config ${pxe-config} prepare";
+          ExecStop = "${pxe-boot-prepare-pkg}/bin/pxe-boot-prepare --config ${pxe-config} cleanup";
 
-        # Disable systemd security features that interfere with mounting
-        PrivateDevices = false; # Allow access to /dev/loop*
-        ProtectKernelModules = false; # Allow kernel module operations
-        NoNewPrivileges = false; # Allow privilege escalation for mount
+          # Allow ISO mounting with loop devices
+          AmbientCapabilities = [ "CAP_SYS_ADMIN" ];
+          CapabilityBoundingSet = [ "CAP_SYS_ADMIN" ];
+
+          # Disable systemd security features that interfere with mounting
+          PrivateDevices = false; # Allow access to /dev/loop*
+          ProtectKernelModules = false; # Allow kernel module operations
+          NoNewPrivileges = false; # Allow privilege escalation for mount
+        };
+      };
+
+      "pxe-boot-http-server" = {
+        enable = true;
+        description = "PXE Boot - HTTP Server";
+        after = [ "network.target" ];
+        wantedBy = [ "multi-user.target" ];
+
+        path = with pkgs; [ darkhttpd ];
+        serviceConfig = {
+          DynamicUser = true;
+          ExecStart = "${lib.getExe pkgs.darkhttpd} /run/pxe-boot --port 1337";
+        };
+      };
+
+      "pxe-boot-http-server2" = {
+        enable = true;
+        description = "PXE Boot - HTTP Server2";
+        after = [ "network.target" ];
+        wantedBy = [ "multi-user.target" ];
+
+        path = with pkgs; [ darkhttpd ];
+        serviceConfig = {
+          DynamicUser = true;
+          ExecStart = "${lib.getExe pkgs.darkhttpd} ${iso_folder_path} --port 1338";
+        };
       };
     };
+  })
 
-    "pxe-boot-http-server" = {
-      enable = true;
-      description = "PXE Boot - HTTP Server";
-      after = [ "network.target" ];
-      wantedBy = [ "multi-user.target" ];
-
-      path = with pkgs; [ darkhttpd ];
-      serviceConfig = {
-        DynamicUser = true;
-        ExecStart = "${lib.getExe pkgs.darkhttpd} /run/pxe-boot --port 1337";
-      };
-    };
-
-    "pxe-boot-http-server2" = {
-      enable = true;
-      description = "PXE Boot - HTTP Server2";
-      after = [ "network.target" ];
-      wantedBy = [ "multi-user.target" ];
-
-      path = with pkgs; [ darkhttpd ];
-      serviceConfig = {
-        DynamicUser = true;
-        ExecStart = "${lib.getExe pkgs.darkhttpd} ${iso_folder_path} --port 1338";
-      };
-    };
-  }
-  // (builtins.listToAttrs (
-    lib.lists.forEach
-      (cfgSetDhcpServerInterfaceOnlyFilter (
-        dhcp_interface_conf: dhcp_interface_conf.dhcp.server.pxe-boot.enable
-      ))
-      (dhcp_interface_conf: {
+  # A separate mkMerge entry, not folded into the block above: standalone
+  # TFTP must come up even when `cfg.pxe-boot.enable` (the whole block
+  # above's gate) is false.
+  (lib.mkIf (tftpServerInterfaces != [ ]) {
+    systemd.services = builtins.listToAttrs (
+      lib.lists.forEach tftpServerInterfaces (dhcp_interface_conf: {
         name = "pxe-boot-tftp-server-for-interface-${dhcp_interface_conf.interfaceName}";
         value = {
           enable = true;
@@ -233,6 +260,10 @@ in
           script = ''
             set -eu
             set -x
+
+            # Standalone use (no pxe-boot on this interface) never runs
+            # pxe-boot-main-script, which would otherwise create this.
+            mkdir -p "${pxe_boot_folder}/${builtins.toString dhcp_interface_conf.dhcp.server.id}"
 
             ip_address="$(
               ${pkgs.iproute2}/bin/ip --json addr show dev ${dhcp_interface_conf.interfaceName} \
@@ -258,5 +289,6 @@ in
           };
         };
       })
-  ));
-})
+    );
+  })
+]

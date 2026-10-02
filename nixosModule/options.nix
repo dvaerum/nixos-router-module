@@ -457,6 +457,45 @@ let
                 default = "";
                 example = "minimal-environment.kstart";
               };
+              disableTftpServerWarning = mkOption {
+                description = ''
+                  Suppress the build-time warning that `tftpServer = false`
+                  otherwise emits for this interface. Use once you've set up
+                  your own TFTP server and no longer need the reminder.
+                '';
+                type = bool;
+                default = false;
+                example = true;
+              };
+            };
+
+            tftpServer = mkOption {
+              description = ''
+                Whether this router should run a TFTP server (`atftpd`,
+                bound to this interface's own address), serving
+                `/srv/pxeboot/<id>` for this subnet. Independent of
+                `pxe-boot.enable` -- it can run standalone, with no PXE
+                boot configured for this interface at all (the directory
+                is then created empty; nothing stages files into it, so
+                you populate it yourself).
+
+                - `null` (the default): on when `pxe-boot.enable = true`,
+                  off otherwise.
+                - `true`: always on, pxe-boot or not.
+                - `false`: always off.
+
+                Effect on `pxe-boot`: this is what makes a PXE-boot-enabled
+                subnet's grub/iPXE files (staged there regardless of this
+                option) actually reachable over the network. Setting it
+                `false` on such a subnet leaves those files staged but
+                unserved -- you must run your own TFTP server against that
+                same directory, or PXE clients there can't reach them.
+                Triggers a build-time warning as a reminder (silence it
+                with `pxe-boot.disableTftpServerWarning`).
+              '';
+              type = nullOr bool;
+              default = null;
+              example = true;
             };
 
             domainName = domainName;

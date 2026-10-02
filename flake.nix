@@ -73,6 +73,7 @@
           basic-routing = tests.basic-routing;
           dhcp-server = tests.dhcp-server;
           pxe-boot = tests.pxe-boot;
+          pxe-boot-tftp-warnings = tests.pxe-boot-tftp-warnings;
           vxlan = tests.vxlan;
           dns-server = tests.dns-server;
           dns-server-disabled = tests.dns-server-disabled;
@@ -99,6 +100,7 @@
           basic-routing-test = tests.basic-routing;
           dhcp-server-test = tests.dhcp-server;
           pxe-boot-test = tests.pxe-boot;
+          pxe-boot-tftp-warnings-test = tests.pxe-boot-tftp-warnings;
           vxlan-test = tests.vxlan;
           dns-server-test = tests.dns-server;
           dns-server-disabled-test = tests.dns-server-disabled;
