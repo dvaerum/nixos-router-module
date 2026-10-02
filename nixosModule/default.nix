@@ -6,7 +6,8 @@
   pimd,
   options,
   ...
-}: {
+}:
+{
   imports = [
     ./options.nix
 
@@ -14,7 +15,7 @@
     ./config-tftp.nix
   ];
 
-  options = {};
+  options = { };
 
-  config = {};
+  config = { };
 }

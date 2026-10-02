@@ -1,4 +1,9 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 # Example configuration showing customization options
 # This demonstrates how to create a custom ISO with additional packages and configuration

@@ -1,12 +1,14 @@
-{ pkgs ? import <nixpkgs> {}
-, ...
-}: let
+{
+  pkgs ? import <nixpkgs> { },
+  ...
+}:
+let
 
   inherit (pkgs)
     lib
     fetchurl
     stdenvNoCC
-  ;
+    ;
 
   pkgs_cross_x86_64 = import pkgs.path {
     localSystem = {
@@ -27,17 +29,20 @@
   };
 
   # Build the GRUB Legacy BIOS binary for PXE Boot on any architecture
-  legacy_bios_grub_pxe = pkgs.runCommand "grub-legacy-pxe-boot" {
-    buildInputs = [ pkgs.qemu ];
-  } ''
-    mkdir -p $out
-    ${pkgs_cross_x86_64.qemu}/bin/qemu-x86_64 -L ${pkgs_cross_x86_64.glibc} \
-      ${pkgs_cross_x86_64.grub2}/bin/grub-mkimage \
-        -O i386-pc-pxe \
-        -o "$out/grub.pxe" \
-        -p /grub \
-        pxe tftp http net configfile normal linux echo sleep
-  '';
+  legacy_bios_grub_pxe =
+    pkgs.runCommand "grub-legacy-pxe-boot"
+      {
+        buildInputs = [ pkgs.qemu ];
+      }
+      ''
+        mkdir -p $out
+        ${pkgs_cross_x86_64.qemu}/bin/qemu-x86_64 -L ${pkgs_cross_x86_64.glibc} \
+          ${pkgs_cross_x86_64.grub2}/bin/grub-mkimage \
+            -O i386-pc-pxe \
+            -o "$out/grub.pxe" \
+            -p /grub \
+            pxe tftp http net configfile normal linux echo sleep
+      '';
 
   raspberrypi_4_config_txt = pkgs.writeTextDir "config.txt" ''
     arm_64bit=1
@@ -46,24 +51,25 @@
     kernel=u-boot.bin
   '';
 
-
-in stdenvNoCC.mkDerivation rec {
+in
+stdenvNoCC.mkDerivation rec {
   pname = "grub-netboot-with-secure-boot";
   version = "24.04.3";
 
   srcs = [
-    ( fetchurl {
-      url = "https://releases.ubuntu.com/${lib.strings.substring 0 5 version}/ubuntu-${version}-netboot-amd64.tar.gz";
+    (fetchurl {
+      url = "https://releases.ubuntu.com/${
+        lib.strings.substring 0 5 version
+      }/ubuntu-${version}-netboot-amd64.tar.gz";
       hash = "sha256-eSXr1ipHvUCF7iqgZVyVSPgl9E8Ok8KsHjyyx5jvic0=";
     })
-    ( fetchurl {
+    (fetchurl {
       url = "https://cdimage.ubuntu.com/releases/${version}/release/ubuntu-${version}-netboot-arm64.tar.gz";
       hash = "sha256-NoleWmizfaPPcf+C/SEG2SPv37IPPbH/oR5VKT4WKnQ=";
     })
   ];
 
   sourceRoot = ".";
-
 
   dontPatch = true;
   dontConfigure = true;

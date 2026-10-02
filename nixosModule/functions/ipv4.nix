@@ -27,56 +27,52 @@ rec {
   #   netmask : dotted netmask
   #   prefix  : prefix length as an int (compared with `> 30` downstream)
   #   addresses, minAddr, maxAddr, broadcast : usable-host count + range
-  fromCidrString = cidr: (
-    let
-      d = netLib.ip4.decompose cidr;
-      mask = d.mask;
-      total = netLib.pow 2 (32 - mask);
-      nth = nthAddress d.network;
-    in {
-      address =
-        if d.addressParts == d.networkParts
-        then null
-        else d.addressNoMask;
-      network = d.networkNoMask;
-      netmask = d.networkMaskNoMask;
-      prefix = mask;
-      addresses = total - 2;
-      minAddr = nth 1;
-      maxAddr = nth (total - 2);
-      broadcast = nth (total - 1);
-    }
-  );
+  fromCidrString =
+    cidr:
+    (
+      let
+        d = netLib.ip4.decompose cidr;
+        mask = d.mask;
+        total = netLib.pow 2 (32 - mask);
+        nth = nthAddress d.network;
+      in
+      {
+        address = if d.addressParts == d.networkParts then null else d.addressNoMask;
+        network = d.networkNoMask;
+        netmask = d.networkMaskNoMask;
+        prefix = mask;
+        addresses = total - 2;
+        minAddr = nth 1;
+        maxAddr = nth (total - 2);
+        broadcast = nth (total - 1);
+      }
+    );
 
   cidrValid = cidr: (builtins.match "^${_regex_validate_cidr}$" "${cidr}") != null;
 
-  subnet = cidr_str: let
-    cidr_attr = fromCidrString cidr_str;
-  in
-    if cidrValid cidr_str == false
-    then throw "`${cidr_str}` is not a valid subnet"
-    else if cidr_attr.prefix > 30
-    then throw "The prefix length must be 30 or less for a valid subnet"
-    else if cidr_attr.address != null
-    then throw "`${cidr_str}` is an IP-address for the subnet `${cidr_attr.network}/${builtins.toString cidr_attr.prefix}`"
-    else cidr_str;
+  subnet =
+    cidr_str:
+    let
+      cidr_attr = fromCidrString cidr_str;
+    in
+    if cidrValid cidr_str == false then
+      throw "`${cidr_str}` is not a valid subnet"
+    else if cidr_attr.prefix > 30 then
+      throw "The prefix length must be 30 or less for a valid subnet"
+    else if cidr_attr.address != null then
+      throw "`${cidr_str}` is an IP-address for the subnet `${cidr_attr.network}/${builtins.toString cidr_attr.prefix}`"
+    else
+      cidr_str;
 
   subnetValid = cidr_str: (builtins.tryEval (subnet cidr_str)).success;
 
-  ipAddressValid = (
-    ipAddr:
-      builtins.match "^${_regex_validate_ip_address}$"
-      ipAddr
-      != null
-  );
+  ipAddressValid = (ipAddr: builtins.match "^${_regex_validate_ip_address}$" ipAddr != null);
 
   _regex_validate_multicast_address_numbers = "(22[4-9]|23[0-9])";
   _regex_validate_multicast_address = "${_regex_validate_multicast_address_numbers}(\.${_regex_validate_ip_address_numbers}){3}";
-  multicastAddressValid = mcAddr:
-    builtins.match
-    "^(${_regex_validate_multicast_address})$"
-    mcAddr
-    != null;
+  multicastAddressValid =
+    mcAddr: builtins.match "^(${_regex_validate_multicast_address})$" mcAddr != null;
 
-  fnValidMacAddress = mac: (lib.match "([A-F0-9]{2}[:-]){5}[A-F0-9]{2}" (lib.strings.toUpper mac)) != null;
+  fnValidMacAddress =
+    mac: (lib.match "([A-F0-9]{2}[:-]){5}[A-F0-9]{2}" (lib.strings.toUpper mac)) != null;
 }

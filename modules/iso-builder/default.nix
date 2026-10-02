@@ -5,17 +5,19 @@
   modulesPath,
   ...
 }:
-with lib; let
+with lib;
+let
   cfg = config.pxe-boot-iso;
-in {
-  imports = [(modulesPath + "/installer/cd-dvd/installation-cd-minimal.nix")];
+in
+{
+  imports = [ (modulesPath + "/installer/cd-dvd/installation-cd-minimal.nix") ];
 
   options.pxe-boot-iso = {
     enable = mkEnableOption "PXE-bootable ISO configuration";
 
     extraPackages = mkOption {
       type = types.listOf types.package;
-      default = [];
+      default = [ ];
       description = "Additional packages to include in the ISO";
       example = literalExpression "[ pkgs.vim pkgs.git ]";
     };
@@ -40,9 +42,9 @@ in {
 
     sshAuthorizedKeys = mkOption {
       type = types.listOf types.str;
-      default = [];
+      default = [ ];
       description = "SSH authorized keys for the nixos user";
-      example = ["ssh-ed25519 AAAAC3Nz... user@host"];
+      example = [ "ssh-ed25519 AAAAC3Nz... user@host" ];
     };
 
     kernelPackage = mkOption {
@@ -134,7 +136,12 @@ in {
       };
 
       permitRootLogin = mkOption {
-        type = types.enum ["yes" "no" "prohibit-password" "forced-commands-only"];
+        type = types.enum [
+          "yes"
+          "no"
+          "prohibit-password"
+          "forced-commands-only"
+        ];
         default = "yes";
         description = "Whether to allow root login via SSH";
       };
@@ -161,7 +168,8 @@ in {
     ];
 
     # Package selection based on options
-    environment.systemPackages = with pkgs;
+    environment.systemPackages =
+      with pkgs;
       [
         # Essential tools
         git
@@ -215,7 +223,7 @@ in {
     # Boot configuration
     boot = {
       # ZFS support for advanced storage setups
-      supportedFilesystems = ["zfs"];
+      supportedFilesystems = [ "zfs" ];
       zfs.devNodes = "/dev/disk/by-partuuid";
       kernelPackages = cfg.kernelPackage;
       loader.timeout = mkForce 5;
@@ -300,9 +308,9 @@ in {
     # Configure NetworkManager to manage all ethernet devices automatically
     networking.networkmanager = {
       # Ensure unmanaged devices are empty (manage all by default)
-      unmanaged = [];
+      unmanaged = [ ];
       # Plugins that may help with automatic connection
-      plugins = mkDefault [];
+      plugins = mkDefault [ ];
     };
 
     # Create a default NetworkManager connection profile for auto-connecting to any wired network
@@ -377,11 +385,11 @@ in {
     # Sudo configuration for nixos user
     security.sudo.extraRules = mkIf cfg.users.nixos.allowSudoWithoutPassword [
       {
-        users = ["nixos"];
+        users = [ "nixos" ];
         commands = [
           {
             command = "ALL";
-            options = ["NOPASSWD"];
+            options = [ "NOPASSWD" ];
           }
         ];
       }
@@ -394,9 +402,10 @@ in {
         PermitRootLogin = cfg.ssh.permitRootLogin;
         # Auto-disable password auth if SSH keys are provided, unless explicitly overridden
         PasswordAuthentication =
-          if cfg.ssh.passwordAuthentication != null
-          then cfg.ssh.passwordAuthentication
-          else (cfg.sshAuthorizedKeys == []);
+          if cfg.ssh.passwordAuthentication != null then
+            cfg.ssh.passwordAuthentication
+          else
+            (cfg.sshAuthorizedKeys == [ ]);
       };
     };
 

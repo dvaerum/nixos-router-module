@@ -1,8 +1,9 @@
-{ lib
-, rustPlatform
-, pkg-config
-, util-linux
-, ...
+{
+  lib,
+  rustPlatform,
+  pkg-config,
+  util-linux,
+  ...
 }:
 
 rustPlatform.buildRustPackage rec {
@@ -30,7 +31,7 @@ rustPlatform.buildRustPackage rec {
     description = "Automated PXE boot environment preparation from ISO files";
     homepage = "https://github.com/dvaerum/nixos-router-module";
     license = licenses.gpl3Plus;
-    maintainers = [];
+    maintainers = [ ];
     platforms = platforms.linux;
     mainProgram = "pxe-boot-prepare";
   };
