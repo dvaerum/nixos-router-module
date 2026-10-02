@@ -473,11 +473,13 @@ let
               description = ''
                 Whether this router should run a TFTP server (`atftpd`,
                 bound to this interface's own address), serving
-                `/srv/pxeboot/<id>` for this subnet. Independent of
-                `pxe-boot.enable` -- it can run standalone, with no PXE
-                boot configured for this interface at all (the directory
-                is then created empty; nothing stages files into it, so
-                you populate it yourself).
+                `<tftpServer.root>/<id>` (see `tftpServerRoot` below to
+                override the root for just this interface) for this
+                subnet. Independent of `pxe-boot.enable` -- it can run
+                standalone, with no PXE boot configured for this
+                interface at all (the directory is then created empty;
+                nothing stages files into it, so you populate it
+                yourself).
 
                 - `null` (the default): on when `pxe-boot.enable = true`,
                   off otherwise.
@@ -496,6 +498,18 @@ let
               type = nullOr bool;
               default = null;
               example = true;
+            };
+
+            tftpServerRoot = mkOption {
+              description = ''
+                Override `my.router.tftpServer.root` for just this
+                interface -- it still gets its own `<root>/<id>`
+                subdirectory underneath. `null` (the default) inherits
+                the global root.
+              '';
+              type = nullOr types.path;
+              default = null;
+              example = "/data/tftp-eth1";
             };
 
             domainName = domainName;
@@ -962,6 +976,24 @@ in
               };
             })
           );
+        };
+      };
+
+      tftpServer = {
+        root = mkOption {
+          description = ''
+            Base directory TFTP-serving interfaces stage files under and
+            atftpd serves from -- each interface gets its own
+            `<root>/<id>` subdirectory. pxe-boot follows this same root
+            for the grub/iPXE files it stages; it does not have its own
+            separate path setting.
+
+            Override per-interface with
+            `dhcp.server.tftpServerRoot`.
+          '';
+          type = types.path;
+          default = "/srv/pxeboot";
+          example = "/data/tftp";
         };
       };
     };

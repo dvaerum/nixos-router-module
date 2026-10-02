@@ -34,6 +34,11 @@ pub struct DhcpInterface {
     pub gateway: IpAddr,
     pub default_iso: Option<String>,
     pub default_script: Option<String>,
+
+    /// Per-interface override of `PxeBootConfig::tftp_root`. `None` (the
+    /// default) falls back to that global root.
+    #[serde(default)]
+    pub tftp_root: Option<PathBuf>,
 }
 
 /// Autoinstall script definition

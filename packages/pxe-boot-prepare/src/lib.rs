@@ -233,12 +233,12 @@ impl PxeBootService {
 
         let grub_cfg = builder.build()?;
 
-        // Write to TFTP directory
-        let grub_dir = self
-            .config
-            .tftp_root
-            .join(interface.id.to_string())
-            .join("grub");
+        // Write to TFTP directory -- an interface-level `tftp_root` override
+        // takes precedence over the global one, so this must match whatever
+        // directory the Nix side's TFTP server/file-staging actually use for
+        // this interface.
+        let tftp_root = interface.tftp_root.as_ref().unwrap_or(&self.config.tftp_root);
+        let grub_dir = tftp_root.join(interface.id.to_string()).join("grub");
 
         tokio::fs::create_dir_all(&grub_dir)
             .await
@@ -281,5 +281,69 @@ impl PxeBootService {
     /// Get the ISO mounter for direct access
     pub fn iso_mounter(&self) -> &IsoMounter {
         &self.iso_mounter
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use config::HttpConfig;
+    use std::collections::HashMap;
+
+    fn config_with(tftp_root: &std::path::Path, runtime_root: &std::path::Path) -> PxeBootConfig {
+        PxeBootConfig {
+            iso_folder_path: std::path::PathBuf::from("/data/iso"),
+            tftp_root: tftp_root.to_path_buf(),
+            runtime_root: runtime_root.to_path_buf(),
+            dhcp_interfaces: vec![],
+            autoinstall: HashMap::new(),
+            http: HttpConfig {
+                mount_port: 1337,
+                iso_port: 1338,
+            },
+        }
+    }
+
+    fn interface(id: u32, tftp_root: Option<std::path::PathBuf>) -> DhcpInterface {
+        DhcpInterface {
+            id,
+            name: "eth0".to_string(),
+            gateway: "192.168.1.1".parse().unwrap(),
+            default_iso: None,
+            default_script: None,
+            tftp_root,
+        }
+    }
+
+    #[tokio::test]
+    async fn grub_cfg_written_under_global_tftp_root_by_default() {
+        let rt = tempfile::tempdir().unwrap();
+        let global_root = rt.path().join("global");
+        let config = config_with(&global_root, rt.path());
+        let service = PxeBootService::new(config);
+
+        service
+            .generate_grub_menu(&interface(7, None), &[])
+            .await
+            .unwrap();
+
+        assert!(global_root.join("7").join("grub").join("grub.cfg").exists());
+    }
+
+    #[tokio::test]
+    async fn per_interface_tftp_root_override_takes_precedence() {
+        let rt = tempfile::tempdir().unwrap();
+        let global_root = rt.path().join("global");
+        let override_root = rt.path().join("override");
+        let config = config_with(&global_root, rt.path());
+        let service = PxeBootService::new(config);
+
+        service
+            .generate_grub_menu(&interface(7, Some(override_root.clone())), &[])
+            .await
+            .unwrap();
+
+        assert!(override_root.join("7").join("grub").join("grub.cfg").exists());
+        assert!(!global_root.join("7").join("grub").join("grub.cfg").exists());
     }
 }

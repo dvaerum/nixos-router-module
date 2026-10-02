@@ -10,7 +10,16 @@ let
 
   iso_folder_path = cfg.pxe-boot.isoFolderPath;
 
-  pxe_boot_folder = "/srv/pxeboot";
+  pxe_boot_folder = cfg.tftpServer.root;
+
+  # `dhcp.server.tftpServerRoot` overrides the global root for just that
+  # interface; both still get the same `<root>/<id>` subdirectory layout.
+  rootFor =
+    dhcp_interface_conf:
+    if dhcp_interface_conf.dhcp.server.tftpServerRoot != null then
+      dhcp_interface_conf.dhcp.server.tftpServerRoot
+    else
+      pxe_boot_folder;
 
   functions-general = import ./functions/general.nix {
     inherit
@@ -59,7 +68,7 @@ let
   pxe-config = pkgs.writeText "pxe-boot-config.json" (
     builtins.toJSON {
       iso_folder_path = builtins.toString iso_folder_path;
-      tftp_root = pxe_boot_folder;
+      tftp_root = builtins.toString pxe_boot_folder;
       runtime_root = "/run/pxe-boot";
 
       dhcp_interfaces = lib.forEach pxeBootInterfaces (
@@ -79,6 +88,9 @@ let
               dhcp_server.pxe-boot.defaultScriptName
             else
               null;
+        }
+        // lib.attrsets.optionalAttrs (dhcp_server.tftpServerRoot != null) {
+          tftp_root = builtins.toString dhcp_server.tftpServerRoot;
         }
       );
 
@@ -141,7 +153,7 @@ lib.mkMerge [
           my.router: dhcp.server.tftpServer = false for interface
           "${dhcp_interface_conf.interfaceName}" -- this router will NOT run its
           own TFTP server for that subnet. The grub/iPXE files are still staged
-          at "${pxe_boot_folder}/${builtins.toString dhcp_interface_conf.dhcp.server.id}";
+          at "${rootFor dhcp_interface_conf}/${builtins.toString dhcp_interface_conf.dhcp.server.id}";
           you are responsible for serving that directory over TFTP yourself.
         '');
 
@@ -165,7 +177,7 @@ lib.mkMerge [
             gateway = (fromCidrString dhcp_server.address).address;
           in
           ''
-            IPXE_BOOT_FOLDER_PATH="${pxe_boot_folder}/${builtins.toString dhcp_server.id}"
+            IPXE_BOOT_FOLDER_PATH="${rootFor dhcp_interface_conf}/${builtins.toString dhcp_server.id}"
             mkdir -p "$IPXE_BOOT_FOLDER_PATH"
             rsync "${main_ipxe_file_fn gateway}" "$IPXE_BOOT_FOLDER_PATH/main.ipxe" &
             # `--chmod=Du+w` keeps the destination directories owner-writable.
@@ -263,7 +275,7 @@ lib.mkMerge [
 
             # Standalone use (no pxe-boot on this interface) never runs
             # pxe-boot-main-script, which would otherwise create this.
-            mkdir -p "${pxe_boot_folder}/${builtins.toString dhcp_interface_conf.dhcp.server.id}"
+            mkdir -p "${rootFor dhcp_interface_conf}/${builtins.toString dhcp_interface_conf.dhcp.server.id}"
 
             ip_address="$(
               ${pkgs.iproute2}/bin/ip --json addr show dev ${dhcp_interface_conf.interfaceName} \
@@ -280,7 +292,7 @@ lib.mkMerge [
               --daemon \
               --no-fork \
               --bind-address "$ip_address" \
-              "${pxe_boot_folder}/${builtins.toString dhcp_interface_conf.dhcp.server.id}"
+              "${rootFor dhcp_interface_conf}/${builtins.toString dhcp_interface_conf.dhcp.server.id}"
           '';
 
           serviceConfig = {

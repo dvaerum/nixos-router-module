@@ -214,6 +214,7 @@ in
           2
           3
           4
+          5
         ];
         networking.useDHCP = false;
 
@@ -329,6 +330,30 @@ in
                   pxe-boot = {
                     enable = true;
                     disableTftpServerWarning = true;
+                    defaultIso = testIsoName;
+                    defaultScriptName = "";
+                  };
+                };
+              };
+              forwarding = true;
+            };
+
+            # `tftpServerRoot` regression fixture: overrides the global
+            # `tftpServer.root` for just this interface. Proves the override
+            # reaches BOTH halves that must agree on it -- the Rust
+            # pxe-boot-prepare binary (grub.cfg) and the Nix-generated
+            # rsync/atftpd (grub/iPXE binaries, main.ipxe) -- since a root
+            # known to only one of them would silently break PXE boot here.
+            eth5 = {
+              mac = null;
+              dhcp = {
+                server = {
+                  id = 204;
+                  address = "192.168.79.1/24";
+                  firstIP = 10;
+                  tftpServerRoot = "/srv/custom-tftp-root";
+                  pxe-boot = {
+                    enable = true;
                     defaultIso = testIsoName;
                     defaultScriptName = "";
                   };
@@ -499,6 +524,25 @@ in
                 size = int(router.succeed(f"stat -c %s /srv/pxeboot/203/{name}").strip())
                 assert size > 0, f"{name} is empty (0 bytes)"
             router.fail("systemctl is-active pxe-boot-tftp-server-for-interface-eth4.service")
+
+        with subtest("tftpServerRoot override: Rust-written grub.cfg and Nix-staged files agree"):
+            for name in ["grubx64.efi", "grub.pxe", "grubaa64.efi", "main.ipxe"]:
+                size = int(router.succeed(f"stat -c %s /srv/custom-tftp-root/204/{name}").strip())
+                assert size > 0, f"{name} is empty (0 bytes)"
+            eth5_grub_cfg_size = int(
+                router.succeed("stat -c %s /srv/custom-tftp-root/204/grub/grub.cfg").strip()
+            )
+            assert eth5_grub_cfg_size > 0, "grub.cfg is empty (0 bytes)"
+            router.fail("test -e /srv/pxeboot/204")
+
+            router.succeed(
+                "tftp 192.168.79.1 -c get grub.pxe /tmp/eth5-grub.pxe && "
+                "test -s /tmp/eth5-grub.pxe"
+            )
+            router.succeed(
+                "tftp 192.168.79.1 -c get grub/grub.cfg /tmp/eth5-grub.cfg && "
+                "test -s /tmp/eth5-grub.cfg"
+            )
 
         # Read once, used by multiple subtests below
         grub_cfg = router.succeed("cat /srv/pxeboot/200/grub/grub.cfg")
