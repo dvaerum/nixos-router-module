@@ -19,6 +19,7 @@ let
     str
     enum
     attrs
+    anything
     nullOr
     listOf
     attrsOf
@@ -510,6 +511,48 @@ let
               type = nullOr types.path;
               default = null;
               example = "/data/tftp-eth1";
+            };
+
+            clientClasses = mkOption {
+              description = ''
+                Define Kea client classes
+                (see https://kea.readthedocs.io/en/latest/arm/classify.html)
+                scoped to this subnet.
+
+                Each class is forced into evaluation for this subnet only
+                (Kea's `require-client-classes`), and its Kea class name is
+                this attribute's name suffixed with this subnet's `id`
+                (e.g. `my-class-204`), guaranteeing global uniqueness
+                across interfaces -- the same convention the built-in
+                PXE-boot classes already use.
+
+                `test` (Kea's classification expression) is required;
+                every other field (`option-data`, `next-server`,
+                `boot-file-name`, etc.) is passed through to Kea verbatim
+                in Kea's own JSON shape -- see the docs above for the full
+                set of fields a class can carry.
+              '';
+              type = attrsOf (submodule {
+                freeformType = attrsOf anything;
+                options = {
+                  test = mkOption {
+                    description = "Kea classification test expression.";
+                    type = str;
+                  };
+                };
+              });
+              default = { };
+              example = {
+                dect-setup-1 = {
+                  test = "substring(option[60].hex,0,8) == 'dect-dev'";
+                  option-data = [
+                    {
+                      name = "boot-file-name";
+                      data = "dect-setup-1.efi";
+                    }
+                  ];
+                };
+              };
             };
 
             domainName = domainName;

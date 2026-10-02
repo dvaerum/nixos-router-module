@@ -46,9 +46,17 @@ let
   # `hooksLibraries.run_script` is dispatched from one generated
   # script behind a single hooks-libraries entry, with each entry's
   # own `triggers` deciding which Kea hook points it gets called for.
-  runScriptDispatcher = pkgs.writeShellApplication {
-    name = "kea-run-script-dispatcher";
-    text = ''
+  # `pkgs.writeShellScript`, not the usual `writeShellApplication`: Kea's
+  # `KEA_HOOK_SCRIPTS_PATH` check (nixpkgs' services.kea module sets it to
+  # "/nix/store") requires the script's PARENT DIRECTORY to be exactly
+  # `/nix/store` -- a `writeShellApplication` output lives at
+  # "<drv>/bin/<name>" and fails that check ("invalid path specified").
+  # `writeShellScript` instead IS the file directly at the top level of its
+  # own store path, satisfying the exact-match requirement. Trade-off: no
+  # automatic shellcheck/PATH-closure injection for this one script.
+  runScriptDispatcher = pkgs.writeShellScript "kea-run-script-dispatcher" (
+    ''
+      set -euo pipefail
       hook_point="''${1:-}"
       status=0
     ''
@@ -67,8 +75,8 @@ let
     )
     + ''
       exit "$status"
-    '';
-  };
+    ''
+  );
 in
 (lib.mkIf cfg.enable {
   systemd.network =
@@ -220,6 +228,24 @@ in
       dhcp_server_interface_pxeboot_enabled = cfgSetDhcpServerInterfaceOnlyFilter (
         dhcp_interface_conf: dhcp_interface_conf.dhcp.server.pxe-boot.enable
       );
+
+      # Additive alongside PXE's own (unmodified) hardcoded classes below --
+      # the per-subnet `id` suffix on both guarantees the two can never
+      # collide, so no merging/dedup logic is needed between them.
+      userClientClasses = lib.lists.concatMap (
+        dhcp_interface_conf:
+        let
+          dhcp_server = dhcp_interface_conf.dhcp.server;
+        in
+        lib.mapAttrsToList (
+          localName: classCfg:
+          classCfg
+          // {
+            name = "${localName}-${builtins.toString dhcp_server.id}";
+            only-if-required = true;
+          }
+        ) dhcp_server.clientClasses
+      ) cfgSetDhcpServerInterfaceOnly;
     in
     lib.attrsets.optionalAttrs (lib.length cfgSetDhcpServerInterfaceOnly > 0) {
       enable = true;
@@ -378,8 +404,9 @@ in
             # pxe-boot subnet keys leases/reservations on MAC only, so a fixed
             # reservation survives firmware -> installer -> installed OS.
             match-client-id = false;
-
-            # PXE boot classes are required at the SUBNET level (not the pool):
+          }
+          // lib.attrsets.optionalAttrs (dhcp_server.pxe-boot.enable || dhcp_server.clientClasses != { }) {
+            # Client classes are required at the SUBNET level (not the pool):
             # a DHCP reservation with an IP outside the pool range does not draw
             # from the pool, so a pool-level `require-client-classes` never fires
             # for reserved clients -> their offer carries no next-server /
@@ -387,136 +414,143 @@ in
             # received". At the subnet level it applies to pooled AND reserved
             # clients alike. Regression-tested in tests/pxe-boot.
             # To-do: Rename `require-client-classes` -> `evaluate-additional-classes` in v2.7.4+ of kea
-            require-client-classes = [
-              "iPXE-${builtins.toString dhcp_server.id}"
-              "iPXE-BIOS-${builtins.toString dhcp_server.id}"
-              "iPXE-UEFI-${builtins.toString dhcp_server.id}"
-              "UEFI (x86_64) Client-${builtins.toString dhcp_server.id}"
-              "BIOS Legacy (x86_64) Client-${builtins.toString dhcp_server.id}"
-              "UEFI (aarch64) Client-${builtins.toString dhcp_server.id}"
-            ];
+            require-client-classes =
+              (lib.optionals dhcp_server.pxe-boot.enable [
+                "iPXE-${builtins.toString dhcp_server.id}"
+                "iPXE-BIOS-${builtins.toString dhcp_server.id}"
+                "iPXE-UEFI-${builtins.toString dhcp_server.id}"
+                "UEFI (x86_64) Client-${builtins.toString dhcp_server.id}"
+                "BIOS Legacy (x86_64) Client-${builtins.toString dhcp_server.id}"
+                "UEFI (aarch64) Client-${builtins.toString dhcp_server.id}"
+              ])
+              ++ (lib.mapAttrsToList (
+                localName: _: "${localName}-${builtins.toString dhcp_server.id}"
+              ) dhcp_server.clientClasses);
           }
         );
       }
-      // (lib.attrsets.optionalAttrs (lib.lists.length dhcp_server_interface_pxeboot_enabled > 0) {
-        client-classes = (
-          lib.lists.concatMap (
-            dhcp_interface_conf:
-            let
-              dhcp_server = dhcp_interface_conf.dhcp.server;
-              gateway = (ipv4_fn.fromCidrString dhcp_server.address).address;
-              pxe-boot = dhcp_server.pxe-boot;
-            in
-            [
-              {
-                name = "iPXE-BIOS-${builtins.toString dhcp_server.id}";
-                # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
-                only-if-required = true;
-                test = "option[175].exists and option[93].hex == 0x0000";
-                next-server = gateway;
-                option-data = [
-                  {
-                    name = "tftp-server-name";
-                    data = gateway;
-                  }
-                  {
-                    name = "boot-file-name";
-                    data = "grub.pxe";
-                  }
-                ];
-              }
+      // (lib.attrsets.optionalAttrs
+        (dhcp_server_interface_pxeboot_enabled != [ ] || userClientClasses != [ ])
+        {
+          client-classes =
+            (lib.lists.concatMap (
+              dhcp_interface_conf:
+              let
+                dhcp_server = dhcp_interface_conf.dhcp.server;
+                gateway = (ipv4_fn.fromCidrString dhcp_server.address).address;
+                pxe-boot = dhcp_server.pxe-boot;
+              in
+              [
+                {
+                  name = "iPXE-BIOS-${builtins.toString dhcp_server.id}";
+                  # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
+                  only-if-required = true;
+                  test = "option[175].exists and option[93].hex == 0x0000";
+                  next-server = gateway;
+                  option-data = [
+                    {
+                      name = "tftp-server-name";
+                      data = gateway;
+                    }
+                    {
+                      name = "boot-file-name";
+                      data = "grub.pxe";
+                    }
+                  ];
+                }
 
-              {
-                name = "iPXE-UEFI-${builtins.toString dhcp_server.id}";
-                # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
-                only-if-required = true;
-                test = "option[175].exists and option[93].hex == 0x0007";
-                next-server = gateway;
-                option-data = [
-                  {
-                    name = "tftp-server-name";
-                    data = gateway;
-                  }
-                  {
-                    name = "boot-file-name";
-                    data = "grubx64.efi";
-                  }
-                ];
-              }
+                {
+                  name = "iPXE-UEFI-${builtins.toString dhcp_server.id}";
+                  # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
+                  only-if-required = true;
+                  test = "option[175].exists and option[93].hex == 0x0007";
+                  next-server = gateway;
+                  option-data = [
+                    {
+                      name = "tftp-server-name";
+                      data = gateway;
+                    }
+                    {
+                      name = "boot-file-name";
+                      data = "grubx64.efi";
+                    }
+                  ];
+                }
 
-              {
-                name = "UEFI (x86_64) Client-${builtins.toString dhcp_server.id}";
-                # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
-                only-if-required = true;
-                test = "option[93].hex == 0x0007 and not option[175].exists";
+                {
+                  name = "UEFI (x86_64) Client-${builtins.toString dhcp_server.id}";
+                  # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
+                  only-if-required = true;
+                  test = "option[93].hex == 0x0007 and not option[175].exists";
 
-                # This is apparently need for Grub2 or it will not load `/grub/grub.cfg` !!!
-                next-server = gateway;
+                  # This is apparently need for Grub2 or it will not load `/grub/grub.cfg` !!!
+                  next-server = gateway;
 
-                option-data = [
-                  {
-                    name = "tftp-server-name";
-                    data = gateway;
-                  }
-                  {
-                    name = "boot-file-name";
-                    data = "grubx64.efi";
-                  }
-                ];
-              }
-              {
-                name = "BIOS Legacy (x86_64) Client-${builtins.toString dhcp_server.id}";
-                # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
-                only-if-required = true;
+                  option-data = [
+                    {
+                      name = "tftp-server-name";
+                      data = gateway;
+                    }
+                    {
+                      name = "boot-file-name";
+                      data = "grubx64.efi";
+                    }
+                  ];
+                }
+                {
+                  name = "BIOS Legacy (x86_64) Client-${builtins.toString dhcp_server.id}";
+                  # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
+                  only-if-required = true;
 
-                test = "option[93].hex == 0x0000 and not option[175].exists";
+                  test = "option[93].hex == 0x0000 and not option[175].exists";
 
-                # This is apparently need for Grub2 or it will not load `/grub/grub.cfg` !!!
-                next-server = gateway;
+                  # This is apparently need for Grub2 or it will not load `/grub/grub.cfg` !!!
+                  next-server = gateway;
 
-                option-data = [
-                  {
-                    name = "tftp-server-name";
-                    data = gateway;
-                  }
-                  {
-                    name = "boot-file-name";
-                    data = "/grub.pxe";
-                  }
-                ];
-              }
+                  option-data = [
+                    {
+                      name = "tftp-server-name";
+                      data = gateway;
+                    }
+                    {
+                      name = "boot-file-name";
+                      data = "/grub.pxe";
+                    }
+                  ];
+                }
 
-              {
-                name = "UEFI (aarch64) Client-${builtins.toString dhcp_server.id}";
-                # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
-                only-if-required = true;
-                test = "option[93].hex == 0x000b and not option[175].exists";
+                {
+                  name = "UEFI (aarch64) Client-${builtins.toString dhcp_server.id}";
+                  # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
+                  only-if-required = true;
+                  test = "option[93].hex == 0x000b and not option[175].exists";
 
-                # This is apparently need for Grub2 or it will not load `/grub/grub.cfg`
-                next-server = gateway;
+                  # This is apparently need for Grub2 or it will not load `/grub/grub.cfg`
+                  next-server = gateway;
 
-                option-data = [
-                  {
-                    name = "tftp-server-name";
-                    data = gateway;
-                  }
-                  {
-                    name = "boot-file-name";
-                    data = "grubaa64.efi";
-                    always-send = true;
-                  }
-                ];
-              }
-            ]
-          ) dhcp_server_interface_pxeboot_enabled
-        );
-      })
+                  option-data = [
+                    {
+                      name = "tftp-server-name";
+                      data = gateway;
+                    }
+                    {
+                      name = "boot-file-name";
+                      data = "grubaa64.efi";
+                      always-send = true;
+                    }
+                  ];
+                }
+              ]
+            ) dhcp_server_interface_pxeboot_enabled)
+            ++ userClientClasses;
+        }
+      )
       // lib.attrsets.optionalAttrs (runScriptEntries != { }) {
         hooks-libraries = [
           {
             library = "${pkgs.kea}/lib/kea/hooks/libdhcp_run_script.so";
             parameters = {
-              name = "${runScriptDispatcher}/bin/kea-run-script-dispatcher";
+              name = "${runScriptDispatcher}";
               # "Currently, enabling synchronous calls to external
               # scripts is not supported" (Kea ARM) -- false is the
               # only value that works.

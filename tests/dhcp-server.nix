@@ -16,6 +16,8 @@ pkgs.testers.nixosTest {
         1
         2
         3
+        4
+        5
       ];
 
       networking.useDHCP = false;
@@ -67,6 +69,53 @@ pkgs.testers.nixosTest {
                 default-route = false;
                 dns-servers = [ ];
                 firstIP = 10;
+              };
+            };
+            forwarding = true;
+          };
+
+          # `clientClasses` regression fixtures: eth4 and eth5 both declare a
+          # class under the SAME local name ("shared-class") to prove the
+          # per-subnet `id` suffix prevents any collision between them, with
+          # distinguishable `option-data` on each to prove they don't bleed
+          # into each other. `member('ALL')` is Kea's always-true built-in
+          # class -- no real device cooperation needed to trigger it.
+          eth4 = {
+            mac = null;
+            dhcp = {
+              server = {
+                id = 400;
+                address = "192.168.80.1/24";
+                firstIP = 10;
+                clientClasses.shared-class = {
+                  test = "member('ALL')";
+                  option-data = [
+                    {
+                      name = "boot-file-name";
+                      data = "eth4-boot.efi";
+                    }
+                  ];
+                };
+              };
+            };
+            forwarding = true;
+          };
+          eth5 = {
+            mac = null;
+            dhcp = {
+              server = {
+                id = 500;
+                address = "192.168.90.1/24";
+                firstIP = 10;
+                clientClasses.shared-class = {
+                  test = "member('ALL')";
+                  option-data = [
+                    {
+                      name = "boot-file-name";
+                      data = "eth5-boot.efi";
+                    }
+                  ];
+                };
               };
             };
             forwarding = true;
@@ -127,6 +176,7 @@ pkgs.testers.nixosTest {
     # python
     ''
       import json
+      import re
 
       start_all()
 
@@ -234,5 +284,31 @@ pkgs.testers.nixosTest {
           router.succeed("test -f /var/lib/kea/dhcp4.leases")
           leases = router.succeed("cat /var/lib/kea/dhcp4.leases")
           assert "192.168.50" in leases, "Lease database should contain entries for 192.168.50 network"
+
+      with subtest("clientClasses: same local name on two subnets gets distinct, id-suffixed Kea names"):
+          service_info = router.succeed("systemctl cat kea-dhcp4-server.service")
+          config_match = re.search(r'-c\s+([^\s]+)', service_info)
+          config_path = config_match.group(1) if config_match else "/etc/kea/dhcp4-server.conf"
+          kea_json = json.loads(router.succeed(f"cat {config_path}"))
+
+          classes_by_name = {c["name"]: c for c in kea_json["Dhcp4"]["client-classes"]}
+          assert "shared-class-400" in classes_by_name, \
+              f"Missing shared-class-400 in: {list(classes_by_name)}"
+          assert "shared-class-500" in classes_by_name, \
+              f"Missing shared-class-500 in: {list(classes_by_name)}"
+
+          class4 = classes_by_name["shared-class-400"]
+          class5 = classes_by_name["shared-class-500"]
+          assert class4["test"] == "member('ALL')" == class5["test"]
+          assert class4["only-if-required"] is True
+          assert class4["option-data"][0]["data"] == "eth4-boot.efi", class4
+          assert class5["option-data"][0]["data"] == "eth5-boot.efi", class5
+
+      with subtest("clientClasses: each subnet only requires its own class"):
+          subnets = kea_json["Dhcp4"]["subnet4"]
+          subnet4 = next(s for s in subnets if s.get("id") == 400)
+          subnet5 = next(s for s in subnets if s.get("id") == 500)
+          assert subnet4["require-client-classes"] == ["shared-class-400"], subnet4
+          assert subnet5["require-client-classes"] == ["shared-class-500"], subnet5
     '';
 }
