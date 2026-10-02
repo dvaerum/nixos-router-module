@@ -650,6 +650,40 @@ string
 
 
 
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.server\.pxe-boot\.disableTftpServerWarning
+
+
+
+Suppress the build-time warning that ` tftpServer = false `
+otherwise emits for this interface\. Use once you’ve set up
+your own TFTP server and no longer need the reminder\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+
+
+*Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
 ## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.server\.reservations
 
 
@@ -776,6 +810,95 @@ false
 
 ```nix
 true
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.server\.tftpServer
+
+
+
+Whether this router should run a TFTP server (` atftpd `,
+bound to this interface’s own address), serving
+` <tftpServer.root>/<id> ` (see ` tftpServerRoot ` below to
+override the root for just this interface) for this
+subnet\. Independent of ` pxe-boot.enable ` – it can run
+standalone, with no PXE boot configured for this
+interface at all (the directory is then created empty;
+nothing stages files into it, so you populate it
+yourself)\.
+
+ - ` null ` (the default): on when ` pxe-boot.enable = true `,
+   off otherwise\.
+ - ` true `: always on, pxe-boot or not\.
+ - ` false `: always off\.
+
+Effect on ` pxe-boot `: this is what makes a PXE-boot-enabled
+subnet’s grub/iPXE files (staged there regardless of this
+option) actually reachable over the network\. Setting it
+` false ` on such a subnet leaves those files staged but
+unserved – you must run your own TFTP server against that
+same directory, or PXE clients there can’t reach them\.
+Triggers a build-time warning as a reminder (silence it
+with ` pxe-boot.disableTftpServerWarning `)\.
+
+
+
+*Type:*
+null or boolean
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.server\.tftpServerRoot
+
+
+
+Override ` my.router.tftpServer.root ` for just this
+interface – it still gets its own ` <root>/<id> `
+subdirectory underneath\. ` null ` (the default) inherits
+the global root\.
+
+
+
+*Type:*
+null or absolute path
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+"/data/tftp-eth1"
 ```
 
 *Declared by:*
@@ -1698,6 +1821,40 @@ string
 
 
 
+## my\.router\.configInterface\.\<name>\.dhcp\.server\.pxe-boot\.disableTftpServerWarning
+
+
+
+Suppress the build-time warning that ` tftpServer = false `
+otherwise emits for this interface\. Use once you’ve set up
+your own TFTP server and no longer need the reminder\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+
+
+*Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
 ## my\.router\.configInterface\.\<name>\.dhcp\.server\.reservations
 
 
@@ -1824,6 +1981,95 @@ false
 
 ```nix
 true
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.configInterface\.\<name>\.dhcp\.server\.tftpServer
+
+
+
+Whether this router should run a TFTP server (` atftpd `,
+bound to this interface’s own address), serving
+` <tftpServer.root>/<id> ` (see ` tftpServerRoot ` below to
+override the root for just this interface) for this
+subnet\. Independent of ` pxe-boot.enable ` – it can run
+standalone, with no PXE boot configured for this
+interface at all (the directory is then created empty;
+nothing stages files into it, so you populate it
+yourself)\.
+
+ - ` null ` (the default): on when ` pxe-boot.enable = true `,
+   off otherwise\.
+ - ` true `: always on, pxe-boot or not\.
+ - ` false `: always off\.
+
+Effect on ` pxe-boot `: this is what makes a PXE-boot-enabled
+subnet’s grub/iPXE files (staged there regardless of this
+option) actually reachable over the network\. Setting it
+` false ` on such a subnet leaves those files staged but
+unserved – you must run your own TFTP server against that
+same directory, or PXE clients there can’t reach them\.
+Triggers a build-time warning as a reminder (silence it
+with ` pxe-boot.disableTftpServerWarning `)\.
+
+
+
+*Type:*
+null or boolean
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.configInterface\.\<name>\.dhcp\.server\.tftpServerRoot
+
+
+
+Override ` my.router.tftpServer.root ` for just this
+interface – it still gets its own ` <root>/<id> `
+subdirectory underneath\. ` null ` (the default) inherits
+the global root\.
+
+
+
+*Type:*
+null or absolute path
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+"/data/tftp-eth1"
 ```
 
 *Declared by:*
@@ -2786,6 +3032,40 @@ string
 
 
 
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.pxe-boot\.disableTftpServerWarning
+
+
+
+Suppress the build-time warning that ` tftpServer = false `
+otherwise emits for this interface\. Use once you’ve set up
+your own TFTP server and no longer need the reminder\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+
+
+*Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
 ## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.reservations
 
 
@@ -2912,6 +3192,93 @@ false
 
 ```nix
 true
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.tftpServer
+
+
+
+Whether this router should run a TFTP server (` atftpd `,
+bound to this interface’s own address), serving
+` <tftpServer.root>/<id> ` (see ` tftpServerRoot ` below to
+override the root for just this interface) for this
+subnet\. Independent of ` pxe-boot.enable ` – it can run
+standalone, with no PXE boot configured for this
+interface at all (the directory is then created empty;
+nothing stages files into it, so you populate it
+yourself)\.
+
+ - ` null ` (the default): on when ` pxe-boot.enable = true `,
+   off otherwise\.
+ - ` true `: always on, pxe-boot or not\.
+ - ` false `: always off\.
+
+Effect on ` pxe-boot `: this is what makes a PXE-boot-enabled
+subnet’s grub/iPXE files (staged there regardless of this
+option) actually reachable over the network\. Setting it
+` false ` on such a subnet leaves those files staged but
+unserved – you must run your own TFTP server against that
+same directory, or PXE clients there can’t reach them\.
+Triggers a build-time warning as a reminder (silence it
+with ` pxe-boot.disableTftpServerWarning `)\.
+
+
+
+*Type:*
+null or boolean
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.tftpServerRoot
+
+Override ` my.router.tftpServer.root ` for just this
+interface – it still gets its own ` <root>/<id> `
+subdirectory underneath\. ` null ` (the default) inherits
+the global root\.
+
+
+
+*Type:*
+null or absolute path
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+"/data/tftp-eth1"
 ```
 
 *Declared by:*
@@ -3135,6 +3502,8 @@ false
 
 
 ## my\.router\.configInterface\.\<name>\.vlans\.\*\.multicast
+
+
 
 *Type:*
 boolean
@@ -4058,6 +4427,45 @@ absolute path
 
 
 
+## my\.router\.tftpServer\.root
+
+
+
+Base directory TFTP-serving interfaces stage files under and
+atftpd serves from – each interface gets its own
+` <root>/<id> ` subdirectory\. pxe-boot follows this same root
+for the grub/iPXE files it stages; it does not have its own
+separate path setting\.
+
+Override per-interface with
+` dhcp.server.tftpServerRoot `\.
+
+
+
+*Type:*
+absolute path
+
+
+
+*Default:*
+
+```nix
+"/srv/pxeboot"
+```
+
+
+
+*Example:*
+
+```nix
+"/data/tftp"
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
 ## my\.router\.vxlanInterfaces
 
 
@@ -4694,6 +5102,40 @@ string
 
 
 
+## my\.router\.vxlanInterfaces\.\<name>\.dhcp\.server\.pxe-boot\.disableTftpServerWarning
+
+
+
+Suppress the build-time warning that ` tftpServer = false `
+otherwise emits for this interface\. Use once you’ve set up
+your own TFTP server and no longer need the reminder\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+
+
+*Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
 ## my\.router\.vxlanInterfaces\.\<name>\.dhcp\.server\.reservations
 
 
@@ -4820,6 +5262,95 @@ false
 
 ```nix
 true
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.vxlanInterfaces\.\<name>\.dhcp\.server\.tftpServer
+
+
+
+Whether this router should run a TFTP server (` atftpd `,
+bound to this interface’s own address), serving
+` <tftpServer.root>/<id> ` (see ` tftpServerRoot ` below to
+override the root for just this interface) for this
+subnet\. Independent of ` pxe-boot.enable ` – it can run
+standalone, with no PXE boot configured for this
+interface at all (the directory is then created empty;
+nothing stages files into it, so you populate it
+yourself)\.
+
+ - ` null ` (the default): on when ` pxe-boot.enable = true `,
+   off otherwise\.
+ - ` true `: always on, pxe-boot or not\.
+ - ` false `: always off\.
+
+Effect on ` pxe-boot `: this is what makes a PXE-boot-enabled
+subnet’s grub/iPXE files (staged there regardless of this
+option) actually reachable over the network\. Setting it
+` false ` on such a subnet leaves those files staged but
+unserved – you must run your own TFTP server against that
+same directory, or PXE clients there can’t reach them\.
+Triggers a build-time warning as a reminder (silence it
+with ` pxe-boot.disableTftpServerWarning `)\.
+
+
+
+*Type:*
+null or boolean
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.vxlanInterfaces\.\<name>\.dhcp\.server\.tftpServerRoot
+
+
+
+Override ` my.router.tftpServer.root ` for just this
+interface – it still gets its own ` <root>/<id> `
+subdirectory underneath\. ` null ` (the default) inherits
+the global root\.
+
+
+
+*Type:*
+null or absolute path
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+"/data/tftp-eth1"
 ```
 
 *Declared by:*
