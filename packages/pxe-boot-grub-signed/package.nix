@@ -54,18 +54,18 @@ let
 in
 stdenvNoCC.mkDerivation rec {
   pname = "grub-netboot-with-secure-boot";
-  version = "24.04.3";
+  version = "26.04.1";
 
   srcs = [
     (fetchurl {
       url = "https://releases.ubuntu.com/${
         lib.strings.substring 0 5 version
       }/ubuntu-${version}-netboot-amd64.tar.gz";
-      hash = "sha256-eSXr1ipHvUCF7iqgZVyVSPgl9E8Ok8KsHjyyx5jvic0=";
+      hash = "sha256-NwCJJy9O6ocqu9/Kl9xT0H8WRp5V6EEmJvAIPfxRiDk=";
     })
     (fetchurl {
       url = "https://cdimage.ubuntu.com/releases/${version}/release/ubuntu-${version}-netboot-arm64.tar.gz";
-      hash = "sha256-NoleWmizfaPPcf+C/SEG2SPv37IPPbH/oR5VKT4WKnQ=";
+      hash = "sha256-Odp7+tss1S4zvGzPyFE/7urTzW3OKVEHIVteCtsik0I=";
     })
   ];
 

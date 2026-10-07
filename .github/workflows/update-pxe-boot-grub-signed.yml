@@ -1,0 +1,58 @@
+name: Check for Ubuntu Netboot Release
+
+on:
+  schedule:
+    # Weekly -- Ubuntu LTS point releases land roughly every few months,
+    # no need to poll more often than this.
+    - cron: '0 6 * * 1'
+  workflow_dispatch: {} # allow manual triggering for testing
+
+jobs:
+  check-and-bump:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v25
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+
+      - name: Run unit tests for the bump script
+        run: bash .github/workflows/scripts/check-ubuntu-netboot-release.test.sh
+
+      - name: Check for a newer Ubuntu LTS netboot release
+        id: check
+        run: bash .github/workflows/scripts/check-ubuntu-netboot-release.sh
+
+      # Build-verify the bump BEFORE opening a PR -- a version/hash bump
+      # that merely "fetched without error" doesn't mean the resulting
+      # package is actually usable (wrong internal tarball layout, a
+      # renamed file inside the archive, etc.). This is the same
+      # compile-gate discipline used for any other change in this repo.
+      - name: Build the bumped package
+        if: steps.check.outputs.bumped == 'true'
+        run: nix-build packages/pxe-boot-grub-signed/package.nix --no-out-link
+
+      - name: Open a PR with the bump
+        if: steps.check.outputs.bumped == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "pxe-boot-grub-signed: bump to Ubuntu ${{ steps.check.outputs.new_version }}"
+          title: "pxe-boot-grub-signed: bump to Ubuntu ${{ steps.check.outputs.new_version }}"
+          body: |
+            Automated bump to the latest Ubuntu LTS netboot release with
+            both amd64 and arm64 tarballs available
+            (`releases.ubuntu.com` + `cdimage.ubuntu.com`).
+
+            The bumped package has been built successfully
+            (`nix-build packages/pxe-boot-grub-signed/package.nix`) as part
+            of this workflow run, but it has NOT been verified against the
+            Secure Boot E2E test (`nix flake check
+            .#checks.x86_64-linux.pxe-boot-secure-boot`) -- that test boots
+            real VMs and is too slow/expensive to run on every scheduled
+            check. Run it manually before merging.
+          branch: bump-pxe-boot-grub-signed
+          delete-branch: true

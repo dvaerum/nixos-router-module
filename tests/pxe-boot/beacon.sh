@@ -2,12 +2,13 @@
 # Beacon script for PXE boot end-to-end testing.
 #
 # Runs inside the PXE-booted NixOS ISO after reaching multi-user.target.
-# Sends an HTTP request to the router's darkhttpd (port 1337) containing
+# Sends an HTTP request to the router's nginx vhost (port 1337) containing
 # "NIXOS-PXE-BOOT-SUCCESS". The test driver polls the router's journal
 # for this string to confirm the full boot chain worked.
 #
 # Environment:
 #   ROUTER_IP  - IP of the PXE boot server (set by systemd Environment=)
+#   HTTP_PORT  - port nginx listens on (set by systemd Environment=)
 #
 # Requires: curl, iproute2, networkmanager, systemd (in $PATH)
 
@@ -55,9 +56,20 @@ fi
 
 # ── Send beacon ───────────────────────────────────────────────────────
 TIMESTAMP=$(date +%s)
-BEACON_URL="http://${ROUTER_IP}:1337/NIXOS-PXE-BOOT-SUCCESS-${TIMESTAMP}"
-log_msg "Sending beacon to ${BEACON_URL}"
-curl -s -m 10 "$BEACON_URL" 2>&1 | log || true
+BEACON_URL="http://${ROUTER_IP}:${HTTP_PORT}/NIXOS-PXE-BOOT-SUCCESS-${TIMESTAMP}"
+log_msg "Sending beacon to ${BEACON_URL} via ${IFACE}"
+# `--interface "$IFACE"` is NOT redundant here: these test VMs have a
+# second NIC (the nixosTest framework's own management interface) on the
+# SAME /24 subnet as the PXE interface. With two routes to the same
+# destination differing only by metric, the kernel's source-address/route
+# selection for a new outgoing connection isn't guaranteed to prefer the
+# lower-metric one -- confirmed directly: the beacon request arrived at
+# the router from the OTHER interface's address, not $IP, even though $IP
+# is the one with the lower metric. Binding to the discovered interface
+# explicitly makes the source address match what the test expects (it
+# looks up the PXE interface's own MAC in the router's ARP table to know
+# which source IP to wait for).
+curl -s -m 10 --interface "$IFACE" "$BEACON_URL" 2>&1 | log || true
 
 # ── Shutdown ──────────────────────────────────────────────────────────
 log_msg "=== Beacon complete, shutting down ==="

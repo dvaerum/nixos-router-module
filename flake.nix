@@ -74,6 +74,7 @@
           dhcp-server = tests.dhcp-server;
           pxe-boot = tests.pxe-boot;
           pxe-boot-tftp-warnings = tests.pxe-boot-tftp-warnings;
+          pxe-boot-secure-boot = tests.pxe-boot-secure-boot;
           vxlan = tests.vxlan;
           dns-server = tests.dns-server;
           dns-server-disabled = tests.dns-server-disabled;

@@ -10,7 +10,9 @@ This module provides an easy way to build custom PXE-bootable NixOS ISO images w
 - **Network Boot Support**: Download ISO over network during boot with `findiso=http://...` kernel parameter
 - **ZFS Support**: Pre-configured for ZFS installations
 - **SSH Access**: Easy remote access with authorized keys
-- **Cross-platform**: Build for x86_64 and aarch64
+- **Multi-architecture target**: build attributes exist for both x86_64
+  and aarch64 (see "Architecture Notes" below for the real support level
+  of each -- aarch64 is not equally well-tested)
 
 ## Quick Start
 
@@ -243,4 +245,12 @@ Building for aarch64 on x86_64 requires:
 - Or use a native aarch64 builder
 - Cross-compilation is not yet fully supported for ISO images
 
-Currently, aarch64 ISO builds may require additional testing and may not work out of the box for all hardware configurations.
+Currently, aarch64 ISO builds may require additional testing and may not
+work out of the box for all hardware configurations. **This extends to
+PXE boot specifically**: while the signed-shim package
+(`packages/pxe-boot-grub-signed`) does ship an aarch64 Secure Boot binary
+(`bootaa64.efi`) alongside the x86_64 one, only the x86_64 Secure Boot
+path is exercised by a real end-to-end VM test
+(`tests/pxe-boot/secure-boot.nix`) -- the aarch64 Secure Boot boot chain
+has not been verified end-to-end and should be treated as unverified
+until it is.

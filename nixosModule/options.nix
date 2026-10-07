@@ -9,6 +9,7 @@ let
   inherit (lib)
     mkOption
     mkOptionType
+    literalExpression
     types
     ;
 
@@ -988,6 +989,27 @@ in
           type = types.path;
           example = "/data/iso";
         };
+        shimPackage = mkOption {
+          description = ''
+            The signed shim + GRUB build served over TFTP as
+            `bootx64.efi`/`bootaa64.efi` for UEFI Secure Boot clients
+            (see `tests/pxe-boot/secure-boot.nix`). Overridable so an
+            operator can supply their own MOK-enrolled shim, pin a
+            different Ubuntu netboot release than this module's own
+            auto-bumped default, or substitute a signed build obtained
+            through a different trust chain entirely -- without forking
+            this module.
+
+            Defaults to this project's own `pxe-boot-grub-signed`
+            package (`packages/pxe-boot-grub-signed/package.nix`),
+            Canonical/Microsoft-signed shim + GRUB repackaged from
+            Ubuntu's netboot tarball.
+          '';
+          type = types.package;
+          default = import ./../packages/pxe-boot-grub-signed/package.nix { inherit pkgs; };
+          defaultText = literalExpression "pkgs.callPackage ../packages/pxe-boot-grub-signed/package.nix { }";
+          example = literalExpression "pkgs.my-custom-signed-grub";
+        };
         autoinstall = mkOption {
           description = ''
             Configure autoinstall script for the different ISOs
@@ -1011,7 +1033,18 @@ in
                 };
                 script = mkOption {
                   description = ''
-                    Provide the content of the script or the path to the script
+                    Provide the content of the script or the path to the script.
+
+                    SECURITY: a literal string value here is written to
+                    the world-readable Nix store (/nix/store) and served
+                    completely unauthenticated over plain HTTP on the
+                    LAN (anyone who can reach this router's network can
+                    download it). Do not put secrets -- passwords, API
+                    keys, private keys -- directly in this value. Use a
+                    path to a file managed by a proper secrets mechanism
+                    (e.g. sops-nix) if the script needs to reference a
+                    secret, and have the installer itself fetch/decrypt
+                    it at install time instead.
                   '';
                   type = either types.path str;
                   example = ./path/to/script.kstart;

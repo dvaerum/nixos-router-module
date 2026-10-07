@@ -51,8 +51,13 @@ pub struct AutoinstallScript {
 /// HTTP server configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct HttpConfig {
-    pub mount_port: u16, // default: 1337
-    pub iso_port: u16,   // default: 1338
+    /// Single port serving both the GRUB/kernel/initrd tree
+    /// (`runtime_root`, at `/`) and raw whole-ISO downloads (the
+    /// canonical `runtime_root/isos/` symlink tree, at `/isos/`) --
+    /// previously two separate ports/processes (one darkhttpd instance
+    /// per root), collapsed once the HTTP server itself (nginx) gained
+    /// native multi-root support.
+    pub port: u16, // default: 1337
 }
 
 /// Discovered ISO information

@@ -91,6 +91,46 @@ module automatically generates the JSON configuration from declarative options.
 
 See `nixosModule/config-tftp.nix` for the integration.
 
+## Security Model
+
+This service is designed for a **private, trusted LAN only** -- it is not
+hardened against a hostile local network, and should not be exposed to one.
+
+- **TFTP and HTTP are both plain, unauthenticated protocols.** Anyone who
+  can reach the PXE-serving interface can download any ISO, script, or
+  GRUB config this service serves. Autoinstall/kickstart scripts in
+  particular may end up world-readable in the Nix store AND served
+  unauthenticated over the network -- see the `SECURITY` note on
+  `pxe-boot.autoinstall.*.script` in `nixosModule/options.nix` for why
+  secrets must never be placed directly in one.
+- **Secure Boot (see `nixosModule/options.nix`'s `shimPackage` option and
+  `tests/pxe-boot/secure-boot.nix`) covers the boot CHAIN, not everything
+  a booted client subsequently does.** Concretely: shim + GRUB + kernel
+  are cryptographically verified against Microsoft/Canonical's trust
+  anchors before any of them execute, so a network attacker cannot forge
+  a fake signed bootloader or kernel. That guarantee ends the moment the
+  verified kernel hands off to its own init/installer -- the ISO's
+  payload content, and any autoinstall/kickstart script fetched over
+  plain HTTP post-boot, are **not** covered by Secure Boot's signature
+  chain at all. A client that has successfully verified its boot chain
+  still implicitly trusts "whatever this PXE server serves next" for
+  everything after that point.
+- **TLS/certificate-based transport security was considered and declined
+  for this LAN-only use case**, not merely deferred: bootstrapping a
+  trusted certificate chain for a PXE service that itself runs *before*
+  a client has any OS, network stack, or cert store of its own to
+  validate against is circular -- there is no earlier point in the boot
+  process to anchor that trust from. Secure Boot's hardware/firmware-
+  rooted trust anchor is the mechanism that actually fits this
+  bootstrapping problem; a from-scratch TLS trust chain would not add
+  real security here, only complexity.
+
+The practical implication for operators: treat every device that can
+reach a PXE-enabled interface as implicitly trusted to receive (not just
+request) any ISO/script this service is configured to serve. Firewalling
+or VLAN-isolating that interface, not adding transport encryption, is the
+correct control for a network you don't fully trust.
+
 ## TODO
 
 ### NFS boot for Ubuntu (lower install-time RAM)

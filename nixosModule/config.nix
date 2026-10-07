@@ -472,7 +472,13 @@ in
                     }
                     {
                       name = "boot-file-name";
-                      data = "grubx64.efi";
+                      # Must chain through the Microsoft-signed shim first,
+                      # not grubx64.efi directly -- Secure-Boot-enabled
+                      # firmware only trusts shim's cert out of the box;
+                      # shim then verifies grubx64.efi against Canonical's
+                      # cert before chain-loading it. See
+                      # tests/pxe-boot/secure-boot.nix.
+                      data = "bootx64.efi";
                     }
                   ];
                 }
@@ -493,7 +499,9 @@ in
                     }
                     {
                       name = "boot-file-name";
-                      data = "grubx64.efi";
+                      # Same Secure-Boot rationale as the iPXE-UEFI class
+                      # above: chain through shim, not grubx64.efi directly.
+                      data = "bootx64.efi";
                     }
                   ];
                 }
@@ -535,7 +543,10 @@ in
                     }
                     {
                       name = "boot-file-name";
-                      data = "grubaa64.efi";
+                      # Same Secure-Boot rationale as the x86_64 classes
+                      # above: chain through the signed aarch64 shim,
+                      # not grubaa64.efi directly.
+                      data = "bootaa64.efi";
                       always-send = true;
                     }
                   ];

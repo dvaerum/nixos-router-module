@@ -84,11 +84,19 @@ impl PxeBootService {
         let mut iso_infos = Vec::new();
 
         for (iso_path, mount_path) in mounted_isos.iter() {
-            let file_name = iso_path
-                .file_name()
-                .unwrap()
-                .to_string_lossy()
-                .to_string();
+            // A path with no final component (e.g. "/", or "..") can't
+            // happen for a real discovered ISO in practice, but panicking
+            // here would take down detection for every OTHER ISO too --
+            // skip just this one instead, matching the isolation already
+            // applied to mount/detect failures below.
+            let Some(file_name) = iso_path.file_name() else {
+                tracing::warn!(
+                    "Skipping {}: no file name component in path.",
+                    iso_path.display()
+                );
+                continue;
+            };
+            let file_name = file_name.to_string_lossy().to_string();
 
             // Try to detect and extract boot info, skip on failure
             match self.detector_registry.detect(mount_path).await {
@@ -149,13 +157,65 @@ impl PxeBootService {
             .iter()
             .map(|(iso_info, _, _)| (iso_info.file_name.clone(), iso_info.distro_type.clone()))
             .collect();
-        self.autoinstall_manager
+        // A failure here (e.g. one unreadable autoinstall script source)
+        // must not abort menu generation below -- GRUB menus without a
+        // working autoinstall seed are still useful (manual install still
+        // works), same isolation rationale as the raw-ISO tree above.
+        if let Err(e) = self
+            .autoinstall_manager
             .prepare(&self.config, &distro_by_iso)
-            .await?;
+            .await
+        {
+            tracing::warn!(
+                "Failed to prepare autoinstall scripts: {}. Autoinstall entries may be missing or stale until the next successful run.",
+                e
+            );
+        }
 
-        // 5. Generate GRUB menus for each DHCP interface
-        for interface in &self.config.dhcp_interfaces {
-            self.generate_grub_menu(interface, &iso_infos).await?;
+        // Soft-validate default_iso/default_script against what was
+        // actually discovered -- a mismatch here just means the
+        // configured default silently never takes effect (GRUB falls
+        // back to no default/manual selection), not a fatal error, but
+        // worth surfacing since it's easy to typo an ISO filename or
+        // script name in the Nix config.
+        let discovered_iso_names: std::collections::HashSet<String> = iso_infos
+            .iter()
+            .map(|(iso_info, _, _)| iso_info.file_name.clone())
+            .collect();
+        for warning in check_default_entry_warnings(
+            &self.config.dhcp_interfaces,
+            &discovered_iso_names,
+            &self.config.autoinstall,
+        ) {
+            tracing::warn!("{}", warning);
+        }
+
+        // 5. Generate GRUB menus for each DHCP interface, isolating failures
+        //    so one broken interface's menu doesn't abort preparation for
+        //    the rest (mirrors the per-ISO skip+warn pattern above).
+        //
+        // C34: each interface writes to its own `tftp_root`/`rootFor`
+        // (independent paths, confirmed by C23's per-interface
+        // `ReadWritePaths` hardening), so generating all of them
+        // concurrently is safe -- unlike ISO mounting above, which stays
+        // strictly sequential after a real kernel-level loop-device race.
+        let results = futures::future::join_all(
+            self.config
+                .dhcp_interfaces
+                .iter()
+                .map(|interface| self.generate_grub_menu(interface, &iso_infos, &failed_isos)),
+        )
+        .await;
+
+        for (interface, result) in self.config.dhcp_interfaces.iter().zip(results) {
+            if let Err(e) = result {
+                tracing::warn!(
+                    "Failed to generate GRUB menu for interface {} (ID: {}): {}. Skipping this interface.",
+                    interface.name,
+                    interface.id,
+                    e
+                );
+            }
         }
 
         tracing::info!("PXE boot preparation complete");
@@ -167,26 +227,29 @@ impl PxeBootService {
         interface: &DhcpInterface,
         iso_infos: &[(IsoInfo, BootInfo, &dyn DistroDetector)],
     ) -> Result<()> {
-        let mut builder = GrubMenuBuilder::new();
+        let mut builder = GrubMenuBuilder::new()?;
         
-        let factory = MenuEntryFactory::new(
-            interface.gateway,
-            self.config.http.mount_port,
-            self.config.http.iso_port,
-        );
+        let factory = MenuEntryFactory::new(interface.gateway, self.config.http.port);
 
         let mut position = 0;
         let mut default_position = None;
 
         for (iso_info, boot_info, detector) in iso_infos {
-            // Base entry (no autoinstall)
-            let entry = factory.create_entry(
-                iso_info,
-                boot_info,
-                *detector,
-                None,
-                position,
-            )?;
+            // Base entry (no autoinstall). A single bad entry (e.g. an
+            // unrepresentable path) must not abort the whole menu for
+            // this interface -- skip just this ISO and keep going.
+            let entry = match factory.create_entry(iso_info, boot_info, *detector, None, position)
+            {
+                Ok(entry) => entry,
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to create GRUB entry for {}: {}. Skipping this ISO.",
+                        iso_info.file_name,
+                        e
+                    );
+                    continue;
+                }
+            };
 
             // Check if base entry (no script) should be the default
             if let Some(default_iso) = &interface.default_iso {
@@ -204,13 +267,28 @@ impl PxeBootService {
             // Autoinstall entries
             if let Some(scripts) = self.config.autoinstall.get(&iso_info.file_name) {
                 for script in scripts {
-                    let entry = factory.create_entry(
+                    // Same isolation, one level deeper: a bad autoinstall
+                    // entry only skips that one script, not the ISO's
+                    // base entry (already added above) nor the rest of
+                    // the menu.
+                    let entry = match factory.create_entry(
                         iso_info,
                         boot_info,
                         *detector,
                         Some(script),
                         position,
-                    )?;
+                    ) {
+                        Ok(entry) => entry,
+                        Err(e) => {
+                            tracing::warn!(
+                                "Failed to create GRUB autoinstall entry for {} ({}): {}. Skipping this entry.",
+                                iso_info.file_name,
+                                script.name,
+                                e
+                            );
+                            continue;
+                        }
+                    };
 
                     // Check if this autoinstall entry should be the default
                     if let (Some(default_iso), Some(default_script)) =
@@ -282,12 +360,63 @@ impl PxeBootService {
     pub fn iso_mounter(&self) -> &IsoMounter {
         &self.iso_mounter
     }
+    pub error: Option<String>,
+}
+
+/// Soft-validates each interface's `default_iso`/`default_script` against
+/// what was actually discovered, returning one warning string per
+/// mismatch (empty if everything lines up). A mismatch is never fatal --
+/// the configured default simply never takes effect -- but it's easy to
+/// typo an ISO filename or script name in the Nix config, so it's worth
+/// surfacing. Pulled out of `prepare()` as a pure function so this logic
+/// is unit-testable without building a whole `PxeBootService`.
+fn check_default_entry_warnings(
+    dhcp_interfaces: &[DhcpInterface],
+    discovered_iso_names: &std::collections::HashSet<String>,
+    autoinstall: &std::collections::HashMap<String, Vec<AutoinstallScript>>,
+) -> Vec<String> {
+    let mut warnings = Vec::new();
+
+    for interface in dhcp_interfaces {
+        let Some(default_iso) = &interface.default_iso else {
+            continue;
+        };
+
+        if !discovered_iso_names.contains(default_iso) {
+            warnings.push(format!(
+                "Interface {} (ID: {}): default_iso '{}' does not match any discovered ISO -- it will have no effect.",
+                interface.name, interface.id, default_iso
+            ));
+            continue;
+        }
+
+        let Some(default_script) = &interface.default_script else {
+            continue;
+        };
+        if default_script.is_empty() {
+            continue;
+        }
+
+        let script_known = autoinstall
+            .get(default_iso)
+            .map(|scripts| scripts.iter().any(|s| &s.name == default_script))
+            .unwrap_or(false);
+        if !script_known {
+            warnings.push(format!(
+                "Interface {} (ID: {}): default_script '{}' does not match any autoinstall script for ISO '{}' -- it will have no effect.",
+                interface.name, interface.id, default_script, default_iso
+            ));
+        }
+    }
+
+    warnings
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use config::HttpConfig;
+    use distro::unknown::UnknownDetector;
     use std::collections::HashMap;
 
     fn config_with(tftp_root: &std::path::Path, runtime_root: &std::path::Path) -> PxeBootConfig {
@@ -297,10 +426,7 @@ mod tests {
             runtime_root: runtime_root.to_path_buf(),
             dhcp_interfaces: vec![],
             autoinstall: HashMap::new(),
-            http: HttpConfig {
-                mount_port: 1337,
-                iso_port: 1338,
-            },
+            http: HttpConfig { port: 1337 },
         }
     }
 
@@ -313,6 +439,43 @@ mod tests {
             default_script: None,
             tftp_root,
         }
+    }
+
+    /// `valid=false` produces a kernel/initrd path that is NOT under
+    /// `mount_path`, which makes `MenuEntryFactory::create_entry`'s
+    /// `strip_prefix` fail -- the same failure mode the per-entry
+    /// isolation in `generate_grub_menu` is meant to contain.
+    fn iso_info_and_boot(
+        mount_path: &std::path::Path,
+        valid: bool,
+        file_name: &str,
+    ) -> (IsoInfo, BootInfo) {
+        let (kernel_path, initrd_path) = if valid {
+            (mount_path.join("boot/vmlinuz"), mount_path.join("boot/initrd"))
+        } else {
+            (
+                std::path::PathBuf::from("/totally/unrelated/vmlinuz"),
+                std::path::PathBuf::from("/totally/unrelated/initrd"),
+            )
+        };
+
+        let iso_info = IsoInfo {
+            file_name: file_name.to_string(),
+            file_path: mount_path.join(file_name),
+            mount_path: mount_path.to_path_buf(),
+            distro_type: DistroType::NixOS,
+            kernel_path: kernel_path.clone(),
+            initrd_path: initrd_path.clone(),
+        };
+        let boot_info = BootInfo {
+            kernel_path,
+            initrd_path,
+            distro_type: DistroType::NixOS,
+            version: None,
+            architecture: Some("x86_64".to_string()),
+            init_path: None,
+        };
+        (iso_info, boot_info)
     }
 
     #[tokio::test]
@@ -346,4 +509,194 @@ mod tests {
         assert!(override_root.join("7").join("grub").join("grub.cfg").exists());
         assert!(!global_root.join("7").join("grub").join("grub.cfg").exists());
     }
+
+    #[tokio::test]
+    async fn one_bad_entry_does_not_drop_other_entries_from_menu() {
+        let rt = tempfile::tempdir().unwrap();
+        let global_root = rt.path().join("global");
+        let config = config_with(&global_root, rt.path());
+        let service = PxeBootService::new(config);
+
+        let mount_path = rt.path().join("mnt");
+        let (bad_iso, bad_boot) = iso_info_and_boot(&mount_path, false, "bad.iso");
+        let (good_iso, good_boot) = iso_info_and_boot(&mount_path, true, "good.iso");
+        let bad_detector: Box<dyn DistroDetector> = Box::new(UnknownDetector::new());
+        let good_detector: Box<dyn DistroDetector> = Box::new(UnknownDetector::new());
+
+        let iso_infos: Vec<(IsoInfo, BootInfo, &dyn DistroDetector)> = vec![
+            (bad_iso, bad_boot, bad_detector.as_ref()),
+            (good_iso, good_boot, good_detector.as_ref()),
+        ];
+
+        service
+            .generate_grub_menu(&interface(7, None), &iso_infos, &[])
+            .await
+            .unwrap();
+
+        let grub_cfg = tokio::fs::read_to_string(
+            global_root.join("7").join("grub").join("grub.cfg"),
+        )
+        .await
+        .unwrap();
+
+        assert!(grub_cfg.contains("good.iso"));
+        assert!(!grub_cfg.contains("bad.iso"));
+    }
+
+    #[tokio::test]
+    async fn failed_interface_does_not_affect_other_interfaces() {
+        let rt = tempfile::tempdir().unwrap();
+        let global_root = rt.path().join("global");
+        let config = config_with(&global_root, rt.path());
+        let service = PxeBootService::new(config);
+
+        // A "tftp_root" that's actually a regular file, not a directory --
+        // create_dir_all underneath it fails with ENOTDIR, simulating a
+        // broken per-interface override.
+        let bad_root = rt.path().join("not-a-directory");
+        tokio::fs::write(&bad_root, b"I am a file, not a directory")
+            .await
+            .unwrap();
+
+        let bad_result = service
+            .generate_grub_menu(&interface(1, Some(bad_root)), &[], &[])
+            .await;
+        assert!(bad_result.is_err());
+
+        // A subsequent, independent interface must still succeed -- this
+        // is exactly the property `prepare()`'s `if let Err(e) = ... {
+        // warn }` (no `?`) around this call protects.
+        service
+            .generate_grub_menu(&interface(2, None), &[], &[])
+            .await
+            .unwrap();
+
+        assert!(global_root.join("2").join("grub").join("grub.cfg").exists());
+    }
+
+    fn interface_with_default(
+        id: u32,
+        default_iso: Option<&str>,
+        default_script: Option<&str>,
+    ) -> DhcpInterface {
+        DhcpInterface {
+            id,
+            name: "eth0".to_string(),
+            gateway: "192.168.1.1".parse().unwrap(),
+            default_iso: default_iso.map(|s| s.to_string()),
+            default_script: default_script.map(|s| s.to_string()),
+            tftp_root: None,
+        }
+    }
+
+    fn known_isos(names: &[&str]) -> std::collections::HashSet<String> {
+        names.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn no_warning_when_no_default_iso_configured() {
+        let interfaces = [interface_with_default(1, None, None)];
+        let warnings =
+            check_default_entry_warnings(&interfaces, &known_isos(&[]), &HashMap::new());
+        assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn no_warning_when_default_iso_matches_and_no_script_configured() {
+        let interfaces = [interface_with_default(1, Some("nixos.iso"), None)];
+        let warnings = check_default_entry_warnings(
+            &interfaces,
+            &known_isos(&["nixos.iso"]),
+            &HashMap::new(),
+        );
+        assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn warns_when_default_iso_does_not_match_any_discovered_iso() {
+        let interfaces = [interface_with_default(1, Some("typo.iso"), None)];
+        let warnings = check_default_entry_warnings(
+            &interfaces,
+            &known_isos(&["nixos.iso"]),
+            &HashMap::new(),
+        );
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("typo.iso"));
+        assert!(warnings[0].contains("does not match any discovered ISO"));
+    }
+
+    #[test]
+    fn no_warning_when_default_script_is_empty_string() {
+        // An empty default_script means "no script" (the base entry is
+        // the default), not "a script named ''".
+        let interfaces = [interface_with_default(1, Some("ubuntu.iso"), Some(""))];
+        let warnings = check_default_entry_warnings(
+            &interfaces,
+            &known_isos(&["ubuntu.iso"]),
+            &HashMap::new(),
+        );
+        assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn warns_when_default_script_does_not_match_any_autoinstall_script() {
+        let interfaces = [interface_with_default(
+            1,
+            Some("ubuntu.iso"),
+            Some("typo.ks"),
+        )];
+        let mut autoinstall = HashMap::new();
+        autoinstall.insert(
+            "ubuntu.iso".to_string(),
+            vec![AutoinstallScript {
+                name: "minimal.ks".to_string(),
+                script_path: std::path::PathBuf::from("/nix/store/xxx-minimal.ks"),
+            }],
+        );
+
+        let warnings =
+            check_default_entry_warnings(&interfaces, &known_isos(&["ubuntu.iso"]), &autoinstall);
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("typo.ks"));
+        assert!(warnings[0].contains("ubuntu.iso"));
+    }
+
+    #[test]
+    fn no_warning_when_default_script_matches_a_real_autoinstall_script() {
+        let interfaces = [interface_with_default(
+            1,
+            Some("ubuntu.iso"),
+            Some("minimal.ks"),
+        )];
+        let mut autoinstall = HashMap::new();
+        autoinstall.insert(
+            "ubuntu.iso".to_string(),
+            vec![AutoinstallScript {
+                name: "minimal.ks".to_string(),
+                script_path: std::path::PathBuf::from("/nix/store/xxx-minimal.ks"),
+            }],
+        );
+
+        let warnings =
+            check_default_entry_warnings(&interfaces, &known_isos(&["ubuntu.iso"]), &autoinstall);
+        assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn does_not_check_default_script_when_default_iso_itself_is_unknown() {
+        // Only one warning expected here, not two -- a typo'd default_iso
+        // already explains why nothing takes effect; piling on a second
+        // warning about the script too would just be noise.
+        let interfaces = [interface_with_default(
+            1,
+            Some("typo.iso"),
+            Some("minimal.ks"),
+        )];
+        let warnings =
+            check_default_entry_warnings(&interfaces, &known_isos(&["ubuntu.iso"]), &HashMap::new());
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("default_iso"));
+    }
+
+    #[tokio::test]
 }

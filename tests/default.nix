@@ -14,4 +14,5 @@ in
   dns-server-disabled = dns-server.disabledCheck;
   pxe-boot = pxe-boot.vm;
   pxe-boot-tftp-warnings = pxe-boot.tftpWarningsCheck;
+  pxe-boot-secure-boot = (import ./pxe-boot/secure-boot.nix { inherit pkgs nixosModule; }).vm;
 }

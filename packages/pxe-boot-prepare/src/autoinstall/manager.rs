@@ -137,10 +137,7 @@ mod tests {
             runtime_root: runtime_root.to_path_buf(),
             dhcp_interfaces: vec![],
             autoinstall,
-            http: HttpConfig {
-                mount_port: 1337,
-                iso_port: 1338,
-            },
+            http: HttpConfig { port: 1337 },
         }
     }
 

@@ -9,10 +9,13 @@ pub trait DistroDetector: Send + Sync {
     /// Unique identifier for this detector
     fn id(&self) -> &str;
 
-    /// Priority (higher = checked first)
-    fn priority(&self) -> u8 {
-        50
-    }
+    /// Priority (higher = checked first). No default on purpose: a
+    /// detector that silently inherited a shared default would create an
+    /// invisible tie with any other detector relying on the same
+    /// default, whose winner then depends purely on registration order
+    /// -- forcing every detector to state its own priority turns that
+    /// into a compile-time-visible decision instead.
+    fn priority(&self) -> u8;
 
     /// Check if this detector can handle the mounted ISO
     async fn can_handle(&self, mount_path: &Path) -> Result<bool>;
@@ -54,6 +57,26 @@ impl DetectorRegistry {
     }
 
     pub fn register(&mut self, detector: Box<dyn DistroDetector>) {
+        // Removing the trait's default priority (see above) prevents
+        // ACCIDENTAL collisions from a forgotten override, but two
+        // detectors can still deliberately declare the same priority --
+        // surface that loudly instead of letting registration order
+        // silently decide the winner with no trace in the logs.
+        if let Some(existing) = self
+            .detectors
+            .iter()
+            .find(|d| d.priority() == detector.priority())
+        {
+            tracing::warn!(
+                "Detector '{}' has the same priority ({}) as already-registered \
+                 detector '{}' -- tie-break falls back to registration order, \
+                 which is almost certainly not what either detector intended",
+                detector.id(),
+                detector.priority(),
+                existing.id(),
+            );
+        }
+
         self.detectors.push(detector);
         // Sort by priority (descending)
         self.detectors
@@ -77,5 +100,65 @@ impl DetectorRegistry {
 impl Default for DetectorRegistry {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+    struct FakeDetector {
+        id: &'static str,
+        priority: u8,
+    }
+
+    #[async_trait]
+    impl DistroDetector for FakeDetector {
+        fn id(&self) -> &str {
+            self.id
+        }
+
+        fn priority(&self) -> u8 {
+            self.priority
+        }
+
+        async fn can_handle(&self, _mount_path: &Path) -> Result<bool> {
+            Ok(true)
+        }
+
+        async fn extract_boot_info(&self, _iso_info: &IsoInfo) -> Result<BootInfo> {
+            unimplemented!("not exercised by the tie-break test")
+        }
+
+        fn generate_boot_params(
+            &self,
+            _iso_url: &str,
+            _mounted_url: &str,
+            _boot_info: &BootInfo,
+            _autoinstall: Option<&AutoinstallScript>,
+        ) -> Vec<String> {
+            Vec::new()
+        }
+    }
+
+    #[tokio::test]
+    async fn equal_priority_ties_are_broken_by_registration_order() {
+        // `register`'s `sort_by` is a stable sort (Rust's slice sort is
+        // documented stable) -- two detectors at the SAME priority must
+        // keep their relative registration order rather than the tie
+        // being an accidental, unspecified artifact of sort
+        // implementation details.
+        let mut registry = DetectorRegistry {
+            detectors: Vec::new(),
+        };
+        registry.register(Box::new(FakeDetector {
+            id: "first",
+            priority: 42,
+        }));
+        registry.register(Box::new(FakeDetector {
+            id: "second",
+            priority: 42,
+        }));
+
+        let dir = tempfile::tempdir().unwrap();
+        let detector = registry.detect(dir.path()).await.unwrap();
+
+        assert_eq!(detector.id(), "first");
     }
 }

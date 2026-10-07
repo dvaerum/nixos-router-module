@@ -25,7 +25,7 @@
 #
 # Network:
 #   Router 192.168.75.1/24 — DHCP pool .10-.254
-#   TFTP :69  HTTP :1337 (boot files + beacon)  HTTP :1338 (ISO files)
+#   TFTP :69  HTTP :1337 (boot files + beacon + ISO files, one nginx vhost)
 #
 # Phases:
 #   1. Router init -> start client + BIOS + UEFI VMs in background
@@ -35,8 +35,9 @@
 #      TFTP -> HTTP boot files -> ISO download -> beacon per arch
 #
 # Beacon mechanism: the test ISO sends GET /NIXOS-PXE-BOOT-SUCCESS-<ts>
-# to the router after booting.  darkhttpd logs it with the client IP,
-# letting us attribute beacons to specific VMs via ARP table lookup.
+# to the router after booting. nginx logs it (access_log routed to
+# stdout/journal) with the client IP, letting us attribute beacons to
+# specific VMs via ARP table lookup.
 #
 # Timeouts: PXE chain 90s, boot files 600s, beacon 1200s (ISO download
 # over the virtual network dominates at ~5-8 min).
@@ -46,6 +47,13 @@ let
   # Shared constants — single source of truth for values used in both
   # Nix VM definitions and the Python test script.
   routerIp = "192.168.75.1";
+  # Must match nixosModule/config-tftp.nix's own internal `httpPort`
+  # binding -- that value isn't exposed as a NixOS option today, so this
+  # is the closest to a single source of truth achievable from a test
+  # file; previously this port number was hardcoded independently in 3
+  # separate places in this file plus beacon.sh, with no connection
+  # between any of them.
+  testHttpPort = 1337;
   testIsoName = "nixos-pxe-test-x86_64.iso";
   pxeMacBIOS = "52:54:00:12:01:02";
   pxeMacUEFI = "52:54:00:12:01:03";
@@ -106,7 +114,7 @@ let
               Type = "oneshot";
               RemainAfterExit = true;
               TimeoutStartSec = 300;
-              Environment = "ROUTER_IP=${routerIp}";
+              Environment = "ROUTER_IP=${routerIp} HTTP_PORT=${toString testHttpPort}";
             };
 
             path = with pkgs; [
@@ -425,8 +433,11 @@ in
 
         DHCP_UNIT = "kea-dhcp4-server.service"
         TFTP_UNIT = "pxe-boot-tftp-server-for-interface-eth1.service"
-        HTTP_BOOT_UNIT = "pxe-boot-http-server.service"    # port 1337
-        HTTP_ISO_UNIT = "pxe-boot-http-server2.service"    # port 1338
+        HTTP_PORT = ${toString testHttpPort}
+        # Single nginx vhost now serves both boot files and ISO files
+        # (previously two separate darkhttpd units/ports).
+        HTTP_BOOT_UNIT = "nginx.service"    # port HTTP_PORT, /
+        HTTP_ISO_UNIT = "nginx.service"    # port HTTP_PORT, /isos/
 
         BIOS_MAC = "${pxeMacBIOS}"
         UEFI_MAC = "${pxeMacUEFI}"
@@ -488,6 +499,42 @@ in
 
         with subtest("TFTP service is running"):
             router.succeed(f"systemctl is-active {TFTP_UNIT}")
+
+        with subtest("TFTP service is ordered after the file-staging service"):
+            # Regression: atftpd previously had no ordering dependency on
+            # pxe-boot-main-script.service (the unit that rsyncs
+            # grub.pxe/bootx64.efi/etc. into the tree atftpd serves from)
+            # -- same race-condition class already fixed for
+            # pxe-boot-prepare.service/nginx.service.
+            after_units = router.succeed(
+                f"systemctl show -p After --value {TFTP_UNIT}"
+            )
+            assert "pxe-boot-main-script.service" in after_units, (
+                f"{TFTP_UNIT} is not ordered after pxe-boot-main-script.service: {after_units!r}"
+            )
+
+        with subtest("pxe-boot-prepare.service hardening regression guard"):
+            # Pins both halves of the hardening knobs' history, so a
+            # future edit accidentally reverting either direction is
+            # caught here instead of silently reintroducing a known-bad
+            # state:
+            #   - ProtectKernelModules MUST stay "no" -- "yes" was tried
+            #     and rolled back (see config-tftp.nix comment): it
+            #     forces a private mount namespace, so this service's own
+            #     mount() calls become invisible to nginx/other processes.
+            #   - NoNewPrivileges MUST stay "yes" -- confirmed safe and
+            #     should not regress back to unset/"no" as unrelated
+            #     hardening work touches this unit.
+            props = router.succeed(
+                "systemctl show -p ProtectKernelModules -p NoNewPrivileges "
+                "pxe-boot-prepare.service"
+            )
+            assert "ProtectKernelModules=no" in props, (
+                f"ProtectKernelModules regressed away from 'no': {props!r}"
+            )
+            assert "NoNewPrivileges=yes" in props, (
+                f"NoNewPrivileges regressed away from 'yes': {props!r}"
+            )
 
         with subtest("Router interface has correct IP"):
             addr_info = json.loads(router.succeed("ip --json addr show eth1"))
@@ -577,10 +624,40 @@ in
                 f"Unexpected ISO boot dir contents: {boot_contents}"
             router.succeed("curl -s -f http://${routerIp}:1338/${testIsoName} > /dev/null")
 
-        with subtest("Kea DHCP config has PXE client classes"):
-            service_info = router.succeed("systemctl cat kea-dhcp4-server.service")
-            config_match = re.search(r'-c\s+([^\s]+)', service_info)
-            config_path = config_match.group(1) if config_match else "/etc/kea/kea-dhcp4.conf"
+        with subtest("nginx per-interface binding: standalone-tftp-only eth3 is isolated"):
+            # eth3 is a standalone-TFTP fixture with pxe-boot disabled, so it
+            # must NOT be in `pxeBootInterfaces` -- regression check for the
+            # nginx `listen` binding (config-tftp.nix) actually staying
+            # per-interface rather than silently falling back to `0.0.0.0`,
+            # which would make this vhost reachable from every interface
+            # including ones that never opted into PXE boot.
+            ss_output = router.succeed(f"ss -tlnp 'sport = :{HTTP_PORT}'")
+            # Column 4 is "Local Address:Port" -- column 5 ("Peer
+            # Address:Port") is ALWAYS "0.0.0.0:*" for a listening TCP
+            # socket regardless of how it's bound, so checking the whole
+            # line's text for "0.0.0.0"/"*:" would false-positive on
+            # every correctly-per-interface-bound listener too.
+            local_addrs = [
+                line.split()[3]
+                for line in ss_output.splitlines()
+                if line.startswith("LISTEN")
+            ]
+            assert local_addrs, f"no LISTEN sockets found on port {HTTP_PORT}: {ss_output!r}"
+            for addr in local_addrs:
+                assert not addr.startswith("192.168.77.1:"), (
+                    "nginx is listening on eth3's address (192.168.77.1), which "
+                    f"has pxe-boot disabled (standalone tftp only): {ss_output!r}"
+                )
+                assert not addr.startswith("0.0.0.0:") and not addr.startswith("*:"), (
+                    f"nginx is listening on a wildcard address, not per-interface: {addr!r} in {ss_output!r}"
+                )
+            assert any(addr.startswith("${routerIp}:") for addr in local_addrs), (
+                f"nginx is not listening on eth1's address (${routerIp}): {ss_output!r}"
+            )
+            router.fail(
+                f"curl -s -f --connect-timeout 2 -m 5 --interface eth3 "
+                f"http://192.168.77.1:{HTTP_PORT}/ > /dev/null"
+            )
 
             kea_json = json.loads(router.succeed(f"cat {config_path}"))
             class_names = [c["name"] for c in kea_json["Dhcp4"]["client-classes"]]
@@ -742,8 +819,7 @@ in
             # Collect service logs for post-mortem (runs even on timeout)
             router.log("=== Final Service Logs ===")
             for unit_name, label in [
-                (HTTP_BOOT_UNIT, "HTTP Boot (1337)"),
-                (HTTP_ISO_UNIT, "HTTP ISO (1338)"),
+                (HTTP_BOOT_UNIT, "nginx (boot files + ISO files, port 1337)"),
                 (DHCP_UNIT, "DHCP"),
                 (TFTP_UNIT, "TFTP"),
             ]:
