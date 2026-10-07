@@ -74,6 +74,23 @@ let
   );
 in
 (lib.mkIf cfg.enable {
+  warnings =
+    lib.forEach
+      (lib.lists.filter (
+        ic:
+        lib.hasAttr "dhcp" ic
+        && ic.dhcp != null
+        && (lib.lists.last (lib.attrsets.attrNames ic.dhcp)) == "client"
+        && ic.dhcp.client.useRoutes == false
+        && ic.name == cfgDefaultRouteInterface
+      ) allInterfaces)
+      (ic: ''
+        my.router: interface "${ic.name}" is `defaultRouteInterface` but has
+        `dhcp.client.useRoutes = false;` -- it will still take the DHCP-advertised
+        gateway (option 3) but will NOT accept any classless static routes
+        (option 121) the same DHCP server advertises alongside it.
+      '');
+
   systemd.network =
     # lib.debug.traceValSeq
     (

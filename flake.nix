@@ -72,6 +72,7 @@
         checks = {
           basic-routing = tests.basic-routing;
           dhcp-server = tests.dhcp-server;
+          dhcp-client-use-routes = tests.dhcp-client-use-routes;
           pxe-boot = tests.pxe-boot;
           pxe-boot-tftp-warnings = tests.pxe-boot-tftp-warnings;
           pxe-boot-kea-client-classes = tests.pxe-boot-kea-client-classes;

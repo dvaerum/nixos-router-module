@@ -252,8 +252,34 @@ let
       };
       client = mkOption {
         description = "Configure this interface as a DHCP client.";
-        type = bool;
-        default = true;
+        type =
+          coercedTo bool
+            (
+              b:
+              lib.warn
+                "my.router: `dhcp.client = <bool>;` is deprecated (the boolean value was already ignored) -- use `dhcp.client = { };` instead, or `dhcp.client = { useRoutes = true; };` to accept classless static routes without taking the gateway."
+                { }
+            )
+            (submodule {
+              options.useRoutes = mkOption {
+                type = nullOr bool;
+                default = null;
+                description = ''
+                  Accept classless static routes (DHCP option 121) advertised on
+                  this interface.
+
+                  - `null` (default): only on the interface named by
+                    `defaultRouteInterface` (same as before this option existed).
+                  - `true`/`false`: always/never, regardless of
+                    `defaultRouteInterface`.
+
+                  Independent of the DHCP-advertised gateway (option 3), which is
+                  controlled separately and still only accepted on
+                  `defaultRouteInterface`.
+                '';
+              };
+            });
+        default = { };
       };
       server = mkOption {
         description = "Configure this interface as a DHCP server (reservations, pools, PXE boot, etc. -- see the options below).";
@@ -884,7 +910,7 @@ in
         default = { };
         example = {
           br0 = {
-            dhcp.client = true;
+            dhcp.client = { };
           };
         };
       };

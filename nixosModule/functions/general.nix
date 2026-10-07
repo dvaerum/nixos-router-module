@@ -202,7 +202,12 @@ rec {
 
           dhcpV4Config = {
             RouteMetric = if cfgDefaultRouteInterface == interfaceName then cfgDefaultRouteMetric else 0;
-            UseRoutes = if cfgDefaultRouteInterface == interfaceName then true else false;
+            UseGateway = cfgDefaultRouteInterface == interfaceName;
+            UseRoutes =
+              if dhcp.client.useRoutes != null then
+                dhcp.client.useRoutes
+              else
+                cfgDefaultRouteInterface == interfaceName;
             ClientIdentifier = "mac";
           };
           linkConfig = {
