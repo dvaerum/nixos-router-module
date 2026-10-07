@@ -276,6 +276,9 @@ lib.mkMerge [
         script = ''
           set -eu
           set -x
+
+          pids=()
+          failed=0
         ''
         + lib.strings.concatMapStrings (
           dhcp_interface_conf:
@@ -293,18 +296,70 @@ lib.mkMerge [
             IPXE_BOOT_FOLDER_PATH=${escapedRootFor dhcp_interface_conf}
             mkdir -p "$IPXE_BOOT_FOLDER_PATH"
             rsync "${main_ipxe_file_fn gateway}" "$IPXE_BOOT_FOLDER_PATH/main.ipxe" &
+            pids+=("$!")
             # `--chmod=Du+w` keeps the destination directories owner-writable.
             # Without it, `rsync -a` mirrors the read-only nix-store mode onto
             # "$IPXE_BOOT_FOLDER_PATH", and pxe-boot-prepare (which runs with a
             # CapabilityBoundingSet of only CAP_SYS_ADMIN, i.e. no CAP_DAC_OVERRIDE)
             # can then no longer create the "grub/" subdirectory for grub.cfg.
             rsync -a --chmod=Du+w --checksum "${signed-grub}/." "$IPXE_BOOT_FOLDER_PATH/." &
+            pids+=("$!")
           ''
         ) pxeBootInterfaces
         + ''
-          wait
+          # A bare `wait` with no args returns only the LAST job's exit
+          # status -- an earlier interface's failed rsync would be
+          # silently swallowed even under `set -e`. Wait on every
+          # backgrounded job explicitly instead, and fail if any did.
+          for pid in "''${pids[@]}"; do
+            wait "$pid" || failed=1
+          done
+          if [ "$failed" -ne 0 ]; then
+            echo "pxe-boot-main-script: one or more rsync jobs failed" >&2
+            exit 1
+          fi
         '';
         wantedBy = [ "multi-user.target" ];
+        # C23: unlike pxe-boot-prepare.service (which can't use
+        # ProtectKernelModules/a private mount namespace -- see that
+        # unit's own comment -- because it calls mount() itself and
+        # needs the result visible to OTHER processes), this unit does
+        # a plain `mkdir -p` + `rsync` into possibly-operator-configured
+        # paths and never mounts anything, so it can safely take the
+        # full standard hardening set with no mount-namespace conflict.
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = false;
+          ProtectSystem = "strict";
+          ProtectHome = true;
+          # `ReadWritePaths` must cover every path `rootFor`
+          # (`rsync`'s own destination) can resolve to across ALL
+          # pxeBootInterfaces -- the global default plus every
+          # per-interface `tftpServerRoot` override.
+          ReadWritePaths = lib.lists.unique (
+            map (dhcp_interface_conf: rootFor dhcp_interface_conf) pxeBootInterfaces
+          );
+          PrivateTmp = true;
+          PrivateDevices = true;
+          ProtectKernelModules = true;
+          ProtectKernelTunables = true;
+          ProtectKernelLogs = true;
+          ProtectControlGroups = true;
+          ProtectClock = true;
+          ProtectHostname = true;
+          # No network needed at all: this unit only rsyncs from the
+          # local Nix store to local disk.
+          RestrictAddressFamilies = [ "AF_UNIX" ];
+          RestrictNamespaces = true;
+          LockPersonality = true;
+          MemoryDenyWriteExecute = true;
+          RestrictRealtime = true;
+          RestrictSUIDSGID = true;
+          RemoveIPC = true;
+          NoNewPrivileges = true;
+          SystemCallFilter = [ "@system-service" ];
+          SystemCallArchitectures = "native";
+        };
       };
 
       "pxe-boot-prepare" = {
@@ -336,36 +391,79 @@ lib.mkMerge [
           AmbientCapabilities = [ "CAP_SYS_ADMIN" ];
           CapabilityBoundingSet = [ "CAP_SYS_ADMIN" ];
 
-          # Disable systemd security features that interfere with mounting
-          PrivateDevices = false; # Allow access to /dev/loop*
-          ProtectKernelModules = false; # Allow kernel module operations
-          NoNewPrivileges = false; # Allow privilege escalation for mount
-        };
-      };
+          # `PrivateDevices=false` stays -- mounting a loop device
+          # genuinely needs access to /dev/loop*, there's no narrower
+          # systemd knob for "allow /dev/loop* specifically".
+          PrivateDevices = false;
 
-      "pxe-boot-http-server" = {
-        enable = true;
-        description = "PXE Boot - HTTP Server";
-        after = [ "network.target" ];
-        wantedBy = [ "multi-user.target" ];
+          # `ProtectKernelModules=true` was tried and rolled back:
+          # confirmed empirically (real E2E run) that it makes
+          # `/run/pxe-boot/iso-mountpoint/<iso>` appear EMPTY to every
+          # OTHER process on the host (nginx, this test's own shell),
+          # even though pxe-boot-prepare's own `mount()` call itself
+          # reports success. Root cause: making `/usr/lib/modules`
+          # inaccessible (this option's whole purpose) requires setting
+          # up a file system namespace for the unit -- which means this
+          # service's own `mount(2)` calls land in a PRIVATE mount
+          # namespace, never propagating to the host's root namespace at
+          # all. That's a fundamental incompatibility, not something
+          # preloading kernel modules can work around: this service's
+          # entire job is to create mounts other processes must see.
+          ProtectKernelModules = false;
 
-        path = with pkgs; [ darkhttpd ];
-        serviceConfig = {
-          DynamicUser = true;
-          ExecStart = "${lib.getExe pkgs.darkhttpd} /run/pxe-boot --port 1337";
-        };
-      };
+          # The capability this service actually needs
+          # (CAP_SYS_ADMIN, granted via Ambient/CapabilityBoundingSet
+          # above) is inherited across exec() without requiring any
+          # setuid/file-capability binary -- there is nothing here that
+          # needs privilege ESCALATION beyond what's already granted.
+          NoNewPrivileges = true;
 
-      "pxe-boot-http-server2" = {
-        enable = true;
-        description = "PXE Boot - HTTP Server2";
-        after = [ "network.target" ];
-        wantedBy = [ "multi-user.target" ];
+          # This service runs as root (no User=/DynamicUser=) with no
+          # explicit permissions set on the directories it creates under
+          # `/run/pxe-boot` -- without this, their mode is whatever the
+          # host's ambient umask happens to resolve to (typically 0755,
+          # but never actually guaranteed in code). nginx's fixed-user
+          # (not DynamicUser) serving process depends on being able to
+          # read that tree; this makes the requirement explicit instead
+          # of incidental.
+          UMask = "0022";
 
-        path = with pkgs; [ darkhttpd ];
-        serviceConfig = {
-          DynamicUser = true;
-          ExecStart = "${lib.getExe pkgs.darkhttpd} ${iso_folder_path} --port 1338";
+          # C24: every OTHER systemd sandboxing knob with "Protect"/
+          # "Private"/"Restrict[Namespaces|...]" in its name that
+          # implies setting up a private mount namespace for the unit
+          # hits the exact same incompatibility `ProtectKernelModules`
+          # above already hit (and is deliberately left `false` with a
+          # full explanation) -- this service's own mount() calls MUST
+          # land in the host's root mount namespace, visible to nginx
+          # and everything else. Only knobs confirmed namespace-
+          # independent (pure seccomp/process-attribute restrictions,
+          # not mount-based) are added here.
+          #
+          # No network code anywhere in this binary (confirmed: no
+          # TcpStream/UdpSocket/HTTP client) -- AF_UNIX is still allowed
+          # for local IPC/NSS lookups, not because this service uses
+          # sockets itself.
+          RestrictAddressFamilies = [ "AF_UNIX" ];
+          # `@system-service` is systemd's own curated baseline, but it
+          # explicitly EXCLUDES the `@mount` syscall group (mount/umount2/
+          # pivot_root/...) -- re-added explicitly since this service's
+          # entire purpose is calling mount()/umount().
+          SystemCallFilter = [
+            "@system-service"
+            "@mount"
+          ];
+          SystemCallArchitectures = "native";
+          # Blocks the unit from creating NEW namespaces itself
+          # (unshare/setns/clone with namespace flags) -- unrelated to
+          # whether ITS OWN mount()/umount() calls propagate normally
+          # (that's governed by the ABSENCE of a namespace being set up
+          # FOR this unit, which none of the knobs here create).
+          RestrictNamespaces = true;
+          LockPersonality = true;
+          MemoryDenyWriteExecute = true;
+          RestrictRealtime = true;
+          RestrictSUIDSGID = true;
+          RemoveIPC = true;
         };
       };
     };
