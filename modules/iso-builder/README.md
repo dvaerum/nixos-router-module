@@ -94,11 +94,15 @@ Create a custom configuration file (e.g., `my-iso.nix`):
 }
 ```
 
-Then build it:
+Then add it as a package in your flake (alongside the existing `iso`/`iso-example`
+entries) and build it:
+
+```nix
+packages.my-custom-iso = buildIso ./my-iso.nix;
+```
 
 ```bash
-nix build .#packages.x86_64-linux.my-custom-iso \
-  --override-input nixosSystem ./my-iso.nix
+nix build .#my-custom-iso
 ```
 
 ### Advanced Customization
@@ -142,6 +146,14 @@ You can add any NixOS configuration to your custom ISO:
 | `sshAuthorizedKeys` | list | `[]` | SSH keys for nixos/root users |
 | `kernelPackage` | package | `linuxPackages_latest` | Kernel package to use |
 | `enableNetworkDownload` | bool | `true` | Enable ISO download via network |
+| `networkDownloadTmpfsSize` | str | `"2G"` | tmpfs size for staging the network-downloaded ISO |
+| `networkDownloadStallTimeoutSec` | int | `60` | Abort the download if stalled this many seconds |
+| `users.nixos.password` / `users.root.password` | null or str | `null` | Plain-text password (null = password-less login) |
+| `users.nixos.hashedPassword` / `users.root.hashedPassword` | null or str | `null` | Pre-hashed password, mutually exclusive with `password` |
+| `users.nixos.allowSudoWithoutPassword` | bool | `true` | Let the `nixos` user `sudo` without a password |
+| `ssh.enable` | bool | `true` | Enable the SSH server |
+| `ssh.passwordAuthentication` | null or bool | `null` | `null` disables password auth automatically once SSH keys are set |
+| `ssh.permitRootLogin` | enum | `"yes"` | `PermitRootLogin` value passed to sshd |
 
 ## Integration with PXE Boot Server
 
@@ -188,6 +200,7 @@ This ISO builder module is designed to work seamlessly with the main router modu
 - `lshw`, `hwinfo` - Hardware information
 - `pciutils`, `usbutils` - Device utilities
 - `dmidecode` - DMI/SMBIOS information
+- `libva-utils` - Video acceleration diagnostics
 - `stress-ng` - Stress testing
 
 ### Essential Tools

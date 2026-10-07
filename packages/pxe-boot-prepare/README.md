@@ -26,6 +26,9 @@ pxe-boot-prepare --config config.json validate
 
 # Cleanup mounted ISOs
 pxe-boot-prepare --config config.json cleanup
+
+# Show detected distro and GRUB menu-entry count per ISO
+pxe-boot-prepare --config config.json status
 ```
 
 ## Configuration

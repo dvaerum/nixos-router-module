@@ -37,15 +37,10 @@ let
 
   runScriptEntries = cfg.dhcp.server.hooksLibraries.run_script;
 
-  # Kea's run_script hook can only usefully be loaded ONCE: a second
-  # `hooks-libraries` entry pointing at the same
-  # libdhcp_run_script.so logs as "loaded" independently, but at
-  # runtime only the LAST one configured ever actually fires --
-  # verified empirically (a second script's own hook points are
-  # silently never called; Kea gives no error). So every entry under
-  # `hooksLibraries.run_script` is dispatched from one generated
-  # script behind a single hooks-libraries entry, with each entry's
-  # own `triggers` deciding which Kea hook points it gets called for.
+  # See `setHooksLibraries.run_script`'s description for why every entry
+  # here is dispatched from one generated script behind a single
+  # hooks-libraries entry.
+  #
   # `pkgs.writeShellScript`, not the usual `writeShellApplication`: Kea's
   # `KEA_HOOK_SCRIPTS_PATH` check (nixpkgs' services.kea module sets it to
   # "/nix/store") requires the script's PARENT DIRECTORY to be exactly
@@ -443,7 +438,8 @@ in
               [
                 {
                   name = "iPXE-BIOS-${builtins.toString dhcp_server.id}";
-                  # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
+                  # To-do: Rename `only-if-required` -> `only-in-additional-list` in
+                  # v2.7.4+ of kea (applies to every client-class block below too).
                   only-if-required = true;
                   test = "option[175].exists and option[93].hex == 0x0000";
                   next-server = gateway;
@@ -461,7 +457,6 @@ in
 
                 {
                   name = "iPXE-UEFI-${builtins.toString dhcp_server.id}";
-                  # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
                   only-if-required = true;
                   test = "option[175].exists and option[93].hex == 0x0007";
                   next-server = gateway;
@@ -485,7 +480,6 @@ in
 
                 {
                   name = "UEFI (x86_64) Client-${builtins.toString dhcp_server.id}";
-                  # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
                   only-if-required = true;
                   test = "option[93].hex == 0x0007 and not option[175].exists";
 
@@ -508,7 +502,6 @@ in
                 }
                 {
                   name = "BIOS Legacy (x86_64) Client-${builtins.toString dhcp_server.id}";
-                  # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
                   only-if-required = true;
 
                   test = "option[93].hex == 0x0000 and not option[175].exists";
@@ -531,7 +524,6 @@ in
 
                 {
                   name = "UEFI (aarch64) Client-${builtins.toString dhcp_server.id}";
-                  # To-do: Rename `only-if-required` -> `only-in-additional-list` in v2.7.4+ of kea
                   only-if-required = true;
                   test = "option[93].hex == 0x000b and not option[175].exists";
 

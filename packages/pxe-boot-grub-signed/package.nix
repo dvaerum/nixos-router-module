@@ -74,10 +74,6 @@ stdenvNoCC.mkDerivation rec {
   dontPatch = true;
   dontConfigure = true;
 
-  # buildPhase = ''
-  #   find .
-  # '';
-
   installPhase = ''
     install --verbose --directory "$out"
 

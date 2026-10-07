@@ -47,12 +47,12 @@ let
     };
     subnet = mkOptionType {
       name = "subnet";
-      description = "Subnet";
+      description = "Subnet in CIDR notation, network address only (e.g. 172.20.90.0/24) -- not a host IP address";
       check = ipv4_fn.subnetValid;
     };
     multicastAddress = mkOptionType {
       name = "multicastAddress";
-      description = "Multicast Address (240.0.0.0 - 239.255.255.255)";
+      description = "Multicast Address (224.0.0.0 - 239.255.255.255)";
       check = ipv4_fn.multicastAddressValid;
     };
     CIDR = mkOptionType {
@@ -62,7 +62,7 @@ let
     };
     interfaceName = mkOptionType {
       name = "interfaceName";
-      description = "Network Interface Name ()";
+      description = "Network Interface Name (letters, digits, `.`, `_`, `-`; max 15 characters)";
       check = name: builtins.match "^([A-Za-z0-9._-]{1,15})$" name != null;
     };
     FQDN = mkOptionType {
@@ -108,7 +108,7 @@ let
   };
 
   setGeneralSettings = mkOption {
-    description = "Config";
+    description = "DHCP lease timers and the domain name handed out to clients.";
     type = submodule {
       options = {
         rebindTimer = mkOption {
@@ -156,8 +156,9 @@ let
             loaded more than once: Kea logs a second `hooks-libraries`
             entry pointing at the same hook as "loaded" independently,
             but at runtime only the LAST one configured ever actually
-            fires. So every entry here shares a single generated
-            dispatcher script and a single real Kea `hooks-libraries`
+            fires -- no error is logged, the only symptom is the hook
+            point silently not firing. So every entry here shares a
+            single generated dispatcher script and a single real Kea `hooks-libraries`
             entry; `triggers` is how each one still only reacts to the
             hook points it cares about.
           '';
@@ -310,7 +311,7 @@ let
             };
             firstIP = mkOption {
               description = ''
-                Set the first IP address provides by the DHCP Server.
+                Set the first IP address provided by the DHCP Server.
                 Example: `10` for subnet `192.168.1.0/24`
                           will be calculated to `192.168.1.10`.
               '';
@@ -605,7 +606,7 @@ let
 
     forwarding = mkOption {
       description = ''
-        IPv4 forwarding. It is turn on by default.
+        IPv4 forwarding. It is turned on by default.
       '';
       type = bool;
       default = true;
@@ -620,7 +621,10 @@ let
     };
 
     multicast = mkOption {
-      description = "";
+      description = ''
+        Enable multicast routing (pimd) and the IGMP querier on this
+        interface/bridge.
+      '';
       type = bool;
       default = false;
     };
@@ -672,7 +676,7 @@ let
   interfaceSharedOptions = interfaceSharedOptionsWithoutBridge // {
     bridges = mkOption {
       description = ''
-        Creating a bridge interface with and include this interface in the bridge.
+        Create a bridge interface and include this interface in it.
       '';
       default = [ ];
       type = listOf (submodule {
@@ -804,7 +808,7 @@ let
 
     vlans = mkOption {
       description = ''
-        Create a interface to handle VLAN tagged packages recieved on this interface.
+        Create an interface to handle VLAN tagged packets received on this interface.
       '';
       default = [ ];
       type = listOf (submodule {
@@ -845,15 +849,22 @@ in
       };
 
       defaultRouteInterface = mkOption {
-        description = "Name of the network interface with the default route";
+        description = ''
+          Name of the network interface with the default route.
+
+          When using this module's generated nftables ruleset (i.e. no
+          `./netfilter.ruleset` override file present), this interface
+          also gets IP masquerade (NAT) enabled automatically, regardless
+          of its own `ipMasquerade` setting.
+        '';
         type = networkTypes.interfaceName;
         default = defaultInterfaceName;
       };
 
       defaultRouteMetric = mkOption {
         description = ''
-          Set the matric (priority) for the default route,
-          in case there are other services when also tries to config an default route.
+          Set the metric (priority) for the default route,
+          in case another service also tries to configure a default route.
         '';
         type = int;
         default = 75;
@@ -1005,7 +1016,7 @@ in
             Enable support for PXE Boot.
 
             This will download PXE boot binaries and
-            prepare supported Linux distrobutions for download.
+            prepare supported Linux distributions for download.
           '';
           type = bool;
           default = false;

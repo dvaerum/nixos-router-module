@@ -954,7 +954,7 @@ mod tests {
     async fn reservation_override_falls_back_to_interface_default_script() {
         // A reservation that sets only `default_iso` inherits the
         // interface's own `default_script` for that field -- per-field
-        // override, not all-or-nothing (D35 design doc's "Precedence").
+        // override, not all-or-nothing (D35).
         let rt = tempfile::tempdir().unwrap();
         let global_root = rt.path().join("global");
         let mut autoinstall = HashMap::new();

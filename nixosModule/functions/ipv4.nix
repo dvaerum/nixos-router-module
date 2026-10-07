@@ -48,7 +48,7 @@ rec {
       }
     );
 
-  # `check` functions on a `mkOptionType` (this one, and the three below)
+  # `check` functions on a `mkOptionType` (this one, and the others below)
   # must be total: `coercedTo` probes them against values of the *other*
   # candidate shape (e.g. a list, when probing whether a single IP address
   # matches) and expects `false` back, not a crash from `builtins.match`

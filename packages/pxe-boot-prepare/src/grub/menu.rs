@@ -96,10 +96,9 @@ impl<'a> GrubMenuBuilder<'a> {
         // `[ -f ... ]` makes this a no-op for everyone else. Must run
         // after net_bootp (above) so ${net_default_mac} is populated --
         // confirmed live in this exact boot chain by a dedicated E2E
-        // probe (see pxe-boot-plan-v3.md's D35 design section), since
-        // GRUB's own undocumented automatic grub.cfg-01-<mac> search
-        // (grub-mknetdir's default) does not fire on this project's
-        // Ubuntu-netboot-sourced GRUB build.
+        // probe, since GRUB's own undocumented automatic
+        // grub.cfg-01-<mac> search (grub-mknetdir's default) does not
+        // fire on this project's Ubuntu-netboot-sourced GRUB build.
         output.push_str("if [ -f /grub/grub.cfg-override-${net_default_mac} ]; then\n");
         output.push_str("  configfile /grub/grub.cfg-override-${net_default_mac}\n");
         output.push_str("fi\n");
@@ -384,8 +383,7 @@ mod tests {
         // D35: every generated grub.cfg must test for a per-MAC override
         // file using GRUB's own ${net_default_mac}, and that check must
         // come after net_bootp runs (otherwise the variable isn't
-        // populated yet) -- see this file's own build() comment and
-        // pxe-boot-plan-v3.md's D35 design section for why.
+        // populated yet) -- see this file's own build() comment for why.
         let builder = GrubMenuBuilder::new().unwrap();
         let cfg = builder.build().unwrap();
 

@@ -98,9 +98,10 @@ in
         itself has no total-duration timeout either (no
         `JobRunningTimeoutSec=`) -- this STALL timeout is the only
         safety net against an unbounded hang. On expiry, wget exits
-        non-zero, which the service's `OnFailure=emergency.target`
-        catches, rather than leaving the boot waiting forever for a
-        download that will never finish.
+        non-zero after exhausting its own bounded retry budget
+        (`--tries`, default 20), which the service's
+        `OnFailure=emergency.target` catches, rather than leaving the
+        boot waiting forever for a download that will never finish.
       '';
     };
 
@@ -385,19 +386,16 @@ in
         wants = [ "systemd-networkd-wait-online.service" ];
         unitConfig = {
           DefaultDependencies = false;
-          # The real stall/retry protection lives in wget's own
-          # `--read-timeout` (see script below) -- it self-terminates
-          # in a bounded, calculable worst case (wget's default
-          # `--tries=20`) rather than needing an external time-based
-          # cap here. This just makes that definitive failure actually
-          # DO something: without it, nothing tells the device-wait
-          # job (`sysroot-iso.mount` waiting on the by-label `.device`
-          # unit below) that this service already gave up for good --
-          # it would otherwise wait forever for a device that will
-          # never appear. `emergency.target` matches the same failure
-          # target `sysroot-iso.mount` itself already cascades into on
-          # a device-wait timeout (see the comment on that `.device`
-          # unit drop-in further below).
+          # wget's own `--read-timeout` is the real stall protection (see
+          # `networkDownloadStallTimeoutSec`'s description); this makes that
+          # definitive failure actually DO something: without it, nothing
+          # tells the device-wait job (`sysroot-iso.mount` waiting on the
+          # by-label `.device` unit below) that this service already gave
+          # up for good -- it would otherwise wait forever for a device
+          # that will never appear. `emergency.target` matches the same
+          # failure target `sysroot-iso.mount` itself already cascades
+          # into on a device-wait timeout (see the comment on that
+          # `.device` unit drop-in further below).
           OnFailure = [ "emergency.target" ];
         };
         # `StandardError = "tty"` (not `journal+console`, the systemd
@@ -541,13 +539,13 @@ in
     # silently revert to that same 90s default and reintroduce the
     # original bug, not remove the cap. A time-based cap here was the
     # wrong tool anyway: it can't distinguish "stalled" from "slow but
-    # legitimately still downloading", which is exactly the distinction
-    # wget's own `--read-timeout` (networkDownloadStallTimeoutSec, above)
-    # makes correctly. Removing the cap here is safe specifically because
-    # `findiso-download.service`'s `OnFailure=` (above) now handles the
-    # "this will never succeed" case directly and promptly the moment
-    # wget's own bounded retry budget is exhausted -- this unit no longer
-    # needs its own guess at how long is "too long".
+    # legitimately still downloading", a distinction `networkDownloadStallTimeoutSec`
+    # already makes correctly (see its description). Removing the cap here
+    # is safe specifically because `findiso-download.service`'s
+    # `OnFailure=` (above) now handles the "this will never succeed" case
+    # directly and promptly the moment wget's own bounded retry budget is
+    # exhausted -- this unit no longer needs its own guess at how long is
+    # "too long".
     boot.initrd.systemd.units."${utils.escapeSystemdPath "/dev/disk/by-label/${config.isoImage.volumeID}"}.device" =
       mkIf cfg.enableNetworkDownload {
         overrideStrategy = "asDropinIfExists";

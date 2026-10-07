@@ -34,14 +34,15 @@ rec {
   cfgConfigInterface = cfg.configInterface;
   cfgBridgeInterface = cfg.bridgeInterfaces;
   cfgVxlanInterface = cfg.vxlanInterfaces;
-  cfgConfigInterfacePath = "my.router.setInterface";
+  cfgConfigInterfacePath = "my.router.configInterface";
   cfgDefaultRouteInterface = cfg.defaultRouteInterface;
   cfgDefaultRouteMetric = cfg.defaultRouteMetric;
 
   cfgNetworkd = config.systemd.network;
   cfgNetworkdLinkPath = "systemd.network";
 
-  # Moves all interfaces and vlans interfaces into one flat list
+  # Flattens interfaces, their vlans, their own bridge-membership entries,
+  # plus bridgeInterfaces and vxlanInterfaces, into one flat list.
   allInterfacesFn =
     interfaces: bridgeInterfaces: vxlanInterfaces:
     lib.lists.flatten (

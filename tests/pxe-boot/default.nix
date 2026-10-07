@@ -73,9 +73,7 @@ let
   # MAC -- two real QEMU network devices (ours, explicitly added via
   # qemu.networkingOptions, and the framework's own vlan-1 one) sharing one
   # MAC confused NetworkManager/DHCP enough to delay IPv4 address
-  # acquisition past any reasonable beacon-script timeout (confirmed via
-  # `ip addr show` showing identical MACs on enp0s3/enp0s4, and IPv6
-  # duplicate-address-detection failing on the second one).
+  # acquisition past any reasonable beacon-script timeout.
   pxeMacBIOS = "52:54:00:aa:01:02";
   pxeMacUEFI = "52:54:00:aa:01:03";
   # Regression: a reservation with an IP OUTSIDE the DHCP pool (.10-.254).
@@ -144,12 +142,8 @@ let
             };
 
             # gawk: NOT optional -- beacon.sh's interface/IP discovery is
-            # awk-based. Its absence here was the actual root cause of every
-            # "My interface: NONE, IP: NONE" failure investigated above:
-            # `command -v awk` confirmed MISSING in this exact service's
-            # PATH, so every awk invocation was silently failing
-            # ("command not found" under `|| true`), regardless of how
-            # correct the parsing logic or how long the wait was.
+            # awk-based; without it on PATH, every awk invocation fails
+            # silently ("command not found" under `|| true`).
             path = with pkgs; [
               curl
               iproute2
@@ -170,11 +164,11 @@ let
           # doesn't fail the WHOLE connection -- NetworkManager still waits
           # out its own internal SLAAC retry/timeout window before
           # considering activation complete and flushing the (already-
-          # obtained) IPv4 lease to the kernel. Confirmed directly: `nmcli`
-          # reports the device "connected" well under 90s, but `ip addr
-          # show` doesn't show the IPv4 address until ~90s+ later --
-          # exactly NetworkManager's own default activation-timeout window.
-          # `method=disabled` skips SLAAC entirely, removing that wait at
+          # obtained) IPv4 lease to the kernel: `nmcli` reports the device
+          # "connected" well under 90s, but `ip addr show` doesn't show the
+          # IPv4 address until ~90s+ later -- exactly NetworkManager's own
+          # default activation-timeout window. `method=disabled` skips
+          # SLAAC entirely, removing that wait at
           # the root instead of just padding the beacon script's own
           # polling window to outlast it.
           environment.etc."NetworkManager/system-connections/Wired-Auto.nmconnection" = lib.mkForce {
@@ -405,8 +399,7 @@ in
                     # the "D35" subtest below reads directly off the
                     # router. The GRUB-side consumption of that file
                     # (${"$"}{net_default_mac} + configfile) was verified
-                    # separately via a live E2E probe -- see
-                    # pxe-boot-plan-v3.md's D35 design section.
+                    # separately via a live E2E probe.
                     "${d35OverrideMac}" = {
                       ip-address = d35OverrideIp;
                       defaultIso = "rhel-9.6-x86_64-dvd.iso";
