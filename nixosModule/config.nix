@@ -489,7 +489,8 @@ in
                   only-if-required = true;
                   test = "option[93].hex == 0x0007 and not option[175].exists";
 
-                  # This is apparently need for Grub2 or it will not load `/grub/grub.cfg` !!!
+                  # next-server is required here: GRUB2 refuses to load
+                  # /grub/grub.cfg without it.
                   next-server = gateway;
 
                   option-data = [
@@ -512,7 +513,8 @@ in
 
                   test = "option[93].hex == 0x0000 and not option[175].exists";
 
-                  # This is apparently need for Grub2 or it will not load `/grub/grub.cfg` !!!
+                  # next-server required -- same GRUB2 requirement as the
+                  # UEFI (x86_64) class above.
                   next-server = gateway;
 
                   option-data = [
@@ -533,7 +535,7 @@ in
                   only-if-required = true;
                   test = "option[93].hex == 0x000b and not option[175].exists";
 
-                  # This is apparently need for Grub2 or it will not load `/grub/grub.cfg`
+                  # next-server required -- same GRUB2 requirement as above.
                   next-server = gateway;
 
                   option-data = [

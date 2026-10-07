@@ -231,7 +231,7 @@ mod tests {
         assert_eq!(boot_info.kernel_path, dir.path().join("casper/vmlinuz"));
         assert_eq!(boot_info.initrd_path, dir.path().join("casper/initrd"));
         assert_eq!(boot_info.distro_type, DistroType::Ubuntu);
-        // Normalized to "x86_64" (GRUB's own $grub_cpu convention, see
+        // Normalized to "x86_64" (the Linux/Nix CPU-name convention, see
         // distro::arch), not Ubuntu's native "amd64" naming.
         assert_eq!(boot_info.architecture.as_deref(), Some("x86_64"));
     }

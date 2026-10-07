@@ -173,7 +173,7 @@ mod tests {
 
     #[tokio::test]
     async fn equal_priority_ties_are_broken_by_registration_order() {
-        // `register`'s `sort_by` is a stable sort (Rust's slice sort is
+        // `register`'s `sort_by_key` is a stable sort (Rust's slice sort is
         // documented stable) -- two detectors at the SAME priority must
         // keep their relative registration order rather than the tie
         // being an accidental, unspecified artifact of sort

@@ -41,7 +41,7 @@ rec {
   cfgNetworkd = config.systemd.network;
   cfgNetworkdLinkPath = "systemd.network";
 
-  # Moves all interfaces and vlans interfaces into one flatte list
+  # Moves all interfaces and vlans interfaces into one flat list
   allInterfacesFn =
     interfaces: bridgeInterfaces: vxlanInterfaces:
     lib.lists.flatten (

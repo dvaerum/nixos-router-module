@@ -34,7 +34,7 @@ See `examples/example_config.json` for a complete configuration example.
 
 ### Required Fields
 
-- `iso_folder_path`: Path to directory containing ISO files
+- `iso_folder_paths`: List of directories to scan for ISO files
 - `tftp_root`: TFTP server root directory (usually `/srv/pxeboot`)
 - `runtime_root`: Runtime directory for mounts (usually `/run/pxe-boot`)
 - `dhcp_interfaces`: List of DHCP interfaces with PXE boot enabled
@@ -72,9 +72,15 @@ For each DHCP interface, generates a GRUB configuration with:
 ├── iso-mountpoint/
 │   ├── nixos.iso/       (mounted ISO)
 │   └── rhel.iso/        (mounted ISO)
+├── isos/
+│   └── nixos.iso        (symlink -> Nix store or source dir; raw whole-ISO download)
 └── unattented-install/
-    └── rhel.iso/
-        └── minimal.kstart
+    ├── rhel.iso/
+    │   └── minimal.kstart       (RHEL/Rocky/Alma: flat file, served verbatim)
+    └── ubuntu.iso/
+        └── minimal.ks/
+            ├── user-data        (Ubuntu: NoCloud seed directory)
+            └── meta-data
 
 /srv/pxeboot/
 └── {dhcp-id}/
