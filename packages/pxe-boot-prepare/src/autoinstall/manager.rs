@@ -230,4 +230,84 @@ mod tests {
             "no NoCloud files for non-Ubuntu distros"
         );
     }
+
+    #[tokio::test]
+    async fn overwrites_a_read_only_destination_from_a_prior_run() {
+        // B16: a /nix/store-sourced copy is 0444 (read-only) -- see
+        // `install_file`'s doc comment. A prior `prepare()` run leaves
+        // the destination in exactly that mode; without the
+        // remove-then-create fix, the NEXT run's overwrite attempt
+        // would fail with "Permission denied" since this service runs
+        // without CAP_DAC_OVERRIDE and the destination file itself
+        // (not its parent directory) denies the write.
+        let rt = tempfile::tempdir().unwrap();
+        let src = rt.path().join("ks.cfg");
+        tokio::fs::write(&src, b"# new kickstart content\n")
+            .await
+            .unwrap();
+
+        let iso = "rhel-10.2-x86_64-dvd.iso";
+        let cfg = config_with(rt.path(), iso, &src, "minimal-environment.kstart");
+        let mgr = AutoinstallManager::new(rt.path().to_path_buf());
+        let mut distro = HashMap::new();
+        distro.insert(iso.to_string(), DistroType::RedHat);
+
+        // Simulate the destination left over from a prior run, with the
+        // SAME read-only mode `tokio::fs::copy` would have produced.
+        let iso_dir = rt.path().join("unattented-install").join(iso);
+        tokio::fs::create_dir_all(&iso_dir).await.unwrap();
+        let dest = iso_dir.join("minimal-environment.kstart");
+        tokio::fs::write(&dest, b"# stale old content\n")
+            .await
+            .unwrap();
+        let mut perms = tokio::fs::metadata(&dest).await.unwrap().permissions();
+        perms.set_readonly(true);
+        tokio::fs::set_permissions(&dest, perms).await.unwrap();
+
+        // Must not error with "Permission denied", and the content must
+        // actually be the NEW source's, not the stale read-only one.
+        mgr.prepare(&cfg, &distro).await.unwrap();
+
+        let contents = tokio::fs::read_to_string(&dest).await.unwrap();
+        assert_eq!(contents, "# new kickstart content\n");
+    }
+
+    #[tokio::test]
+    async fn overwrites_a_read_only_ubuntu_meta_data_from_a_prior_run() {
+        // Same regression, but for write_fresh's call site (Ubuntu's
+        // always-written meta-data, not install_file's copy path).
+        let rt = tempfile::tempdir().unwrap();
+        let src = rt.path().join("src.yaml");
+        tokio::fs::write(&src, b"#cloud-config\nautoinstall:\n  version: 1\n")
+            .await
+            .unwrap();
+
+        let iso = "ubuntu-26.04-live-server-amd64.iso";
+        let cfg = config_with(rt.path(), iso, &src, "minimal-environment.yaml");
+        let mgr = AutoinstallManager::new(rt.path().to_path_buf());
+        let mut distro = HashMap::new();
+        distro.insert(iso.to_string(), DistroType::Ubuntu);
+
+        let seed_dir = rt
+            .path()
+            .join("unattented-install")
+            .join(iso)
+            .join("minimal-environment.yaml");
+        tokio::fs::create_dir_all(&seed_dir).await.unwrap();
+        let meta_data = seed_dir.join("meta-data");
+        tokio::fs::write(&meta_data, b"stale").await.unwrap();
+        let mut perms = tokio::fs::metadata(&meta_data)
+            .await
+            .unwrap()
+            .permissions();
+        perms.set_readonly(true);
+        tokio::fs::set_permissions(&meta_data, perms)
+            .await
+            .unwrap();
+
+        mgr.prepare(&cfg, &distro).await.unwrap();
+
+        let contents = tokio::fs::read_to_string(&meta_data).await.unwrap();
+        assert_eq!(contents, "", "meta-data must be replaced with the fresh (empty) content");
+    }
 }
