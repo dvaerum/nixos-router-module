@@ -14,9 +14,10 @@
 #   |  |  router  |  | client |  | pxeClientUEFI|  | pxeClientBIOS|  |
 #   |  | (server) |  |(tftp   |  |(diskless VM) |  |(diskless VM) |  |
 #   |  |          |  | test)  |  |              |  |              |  |
-#   |  | eth1:    |  | eth1   |  | ens8 (DHCP)  |  | ens8 (DHCP)  |  |
-#   |  |192.168.  |  |        |  | PXE boot     |  | PXE boot     |  |
-#   |  |  75.1/24 |  |        |  | enabled      |  | enabled      |  |
+#   |  | eth1:    |  | eth1   |  | PXE iface,   |  | PXE iface,   |  |
+#   |  |192.168.  |  |        |  | name varies  |  | name varies  |  |
+#   |  |  75.1/24 |  |        |  | by kernel/   |  | by kernel/   |  |
+#   |  |          |  |        |  | bus, DHCP    |  | bus, DHCP    |  |
 #   |  +----+-----+  +---+----+  +------+-------+  +------+-------+  |
 #   |       |            |              |                 |          |
 #   |       +------------+--------------+-----------------+          |
@@ -137,13 +138,60 @@ let
               Environment = "ROUTER_IP=${routerIp} HTTP_PORT=${toString testHttpPort}";
             };
 
+            # gawk: NOT optional -- beacon.sh's interface/IP discovery is
+            # awk-based. Its absence here was the actual root cause of every
+            # "My interface: NONE, IP: NONE" failure investigated above:
+            # `command -v awk` confirmed MISSING in this exact service's
+            # PATH, so every awk invocation was silently failing
+            # ("command not found" under `|| true`), regardless of how
+            # correct the parsing logic or how long the wait was.
             path = with pkgs; [
               curl
               iproute2
               networkmanager
               systemd
+              gawk
+              coreutils
             ];
             script = builtins.readFile ./beacon.sh;
+          };
+
+          # modules/iso-builder's own "Wired-Auto" NetworkManager profile
+          # (reused as-is: it's a plain assignment, so mkForce cleanly wins
+          # here, unlike fileSystems above) uses `ipv6.method=auto,
+          # may-fail=true` -- reasonable for real-world use where IPv6 may
+          # genuinely be present, but this test's VLAN is isolated with no
+          # IPv6 router at all. `may-fail=true` only means SLAAC failure
+          # doesn't fail the WHOLE connection -- NetworkManager still waits
+          # out its own internal SLAAC retry/timeout window before
+          # considering activation complete and flushing the (already-
+          # obtained) IPv4 lease to the kernel. Confirmed directly: `nmcli`
+          # reports the device "connected" well under 90s, but `ip addr
+          # show` doesn't show the IPv4 address until ~90s+ later --
+          # exactly NetworkManager's own default activation-timeout window.
+          # `method=disabled` skips SLAAC entirely, removing that wait at
+          # the root instead of just padding the beacon script's own
+          # polling window to outlast it.
+          environment.etc."NetworkManager/system-connections/Wired-Auto.nmconnection" = lib.mkForce {
+            text = ''
+              [connection]
+              id=Wired-Auto
+              type=ethernet
+              autoconnect=true
+              autoconnect-priority=999
+
+              [ethernet]
+
+              [ipv4]
+              method=auto
+              may-fail=false
+
+              [ipv6]
+              method=disabled
+
+              [proxy]
+            '';
+            mode = "0600";
           };
         }
       );
