@@ -128,7 +128,7 @@ attribute set of (submodule)
 {
   br0 = {
     dhcp = {
-      client = true;
+      client = { };
     };
   };
 }
@@ -173,14 +173,48 @@ Configure this interface as a DHCP client\.
 
 
 *Type:*
-boolean
+(submodule) or boolean convertible to it
 
 
 
 *Default:*
 
 ```nix
-true
+{ }
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.client\.useRoutes
+
+
+
+Accept classless static routes (DHCP option 121) advertised on
+this interface\.
+
+ - ` null ` (default): only on the interface named by
+   ` defaultRouteInterface ` (same as before this option existed)\.
+ - ` true `/` false `: always/never, regardless of
+   ` defaultRouteInterface `\.
+
+Independent of the DHCP-advertised gateway (option 3), which is
+controlled separately and still only accepted on
+` defaultRouteInterface `\.
+
+
+
+*Type:*
+null or boolean
+
+
+
+*Default:*
+
+```nix
+null
 ```
 
 *Declared by:*
@@ -525,7 +559,7 @@ list of (FQDN (Fully Qualified Domain Name))
 
 
 
-Set the first IP address provides by the DHCP Server\.
+Set the first IP address provided by the DHCP Server\.
 Example: ` 10 ` for subnet ` 192.168.1.0/24 `
 will be calculated to ` 192.168.1.10 `\.
 
@@ -1201,7 +1235,7 @@ false
 
 
 
-IPv4 forwarding\. It is turn on by default\.
+IPv4 forwarding\. It is turned on by default\.
 
 
 
@@ -1251,6 +1285,11 @@ false
 
 
 
+Enable multicast routing (pimd) and the IGMP querier on this
+interface/bridge\.
+
+
+
 *Type:*
 boolean
 
@@ -1276,7 +1315,7 @@ Set the name of the network interface
 
 
 *Type:*
-Network Interface Name ()
+Network Interface Name (letters, digits, \`\.\`, \`_\`, \`-\`; max 15 characters)
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -1339,7 +1378,7 @@ if the route should be configured as the default use ` 0.0.0.0/0 `\.
 
 
 *Type:*
-list of (Subnet)
+list of (Subnet in CIDR notation, network address only (e\.g\. 172\.20\.90\.0/24) – not a host IP address)
 
 
 
@@ -1408,7 +1447,7 @@ attribute set of (submodule)
 
 
 
-Creating a bridge interface with and include this interface in the bridge\.
+Create a bridge interface and include this interface in it\.
 
 
 
@@ -1437,15 +1476,7 @@ Select the name of the bridge interface
 
 
 *Type:*
-null or (Network Interface Name ())
-
-
-
-*Default:*
-
-```nix
-null
-```
+Network Interface Name (letters, digits, \`\.\`, \`_\`, \`-\`; max 15 characters)
 
 
 
@@ -1494,14 +1525,48 @@ Configure this interface as a DHCP client\.
 
 
 *Type:*
-boolean
+(submodule) or boolean convertible to it
 
 
 
 *Default:*
 
 ```nix
-true
+{ }
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.configInterface\.\<name>\.dhcp\.client\.useRoutes
+
+
+
+Accept classless static routes (DHCP option 121) advertised on
+this interface\.
+
+ - ` null ` (default): only on the interface named by
+   ` defaultRouteInterface ` (same as before this option existed)\.
+ - ` true `/` false `: always/never, regardless of
+   ` defaultRouteInterface `\.
+
+Independent of the DHCP-advertised gateway (option 3), which is
+controlled separately and still only accepted on
+` defaultRouteInterface `\.
+
+
+
+*Type:*
+null or boolean
+
+
+
+*Default:*
+
+```nix
+null
 ```
 
 *Declared by:*
@@ -1846,7 +1911,7 @@ list of (FQDN (Fully Qualified Domain Name))
 
 
 
-Set the first IP address provides by the DHCP Server\.
+Set the first IP address provided by the DHCP Server\.
 Example: ` 10 ` for subnet ` 192.168.1.0/24 `
 will be calculated to ` 192.168.1.10 `\.
 
@@ -2522,7 +2587,7 @@ false
 
 
 
-IPv4 forwarding\. It is turn on by default\.
+IPv4 forwarding\. It is turned on by default\.
 
 
 
@@ -2628,6 +2693,11 @@ null
 
 
 
+Enable multicast routing (pimd) and the IGMP querier on this
+interface/bridge\.
+
+
+
 *Type:*
 boolean
 
@@ -2653,7 +2723,7 @@ Set the name of the network interface
 
 
 *Type:*
-Network Interface Name ()
+Network Interface Name (letters, digits, \`\.\`, \`_\`, \`-\`; max 15 characters)
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -2716,7 +2786,7 @@ if the route should be configured as the default use ` 0.0.0.0/0 `\.
 
 
 *Type:*
-list of (Subnet)
+list of (Subnet in CIDR notation, network address only (e\.g\. 172\.20\.90\.0/24) – not a host IP address)
 
 
 
@@ -2745,7 +2815,7 @@ list of (Subnet)
 
 
 
-Create a interface to handle VLAN tagged packages recieved on this interface\.
+Create an interface to handle VLAN tagged packets received on this interface\.
 
 
 
@@ -2769,7 +2839,7 @@ list of (submodule)
 
 
 
-Creating a bridge interface with and include this interface in the bridge\.
+Create a bridge interface and include this interface in it\.
 
 
 
@@ -2798,15 +2868,7 @@ Select the name of the bridge interface
 
 
 *Type:*
-null or (Network Interface Name ())
-
-
-
-*Default:*
-
-```nix
-null
-```
+Network Interface Name (letters, digits, \`\.\`, \`_\`, \`-\`; max 15 characters)
 
 
 
@@ -2855,14 +2917,48 @@ Configure this interface as a DHCP client\.
 
 
 *Type:*
-boolean
+(submodule) or boolean convertible to it
 
 
 
 *Default:*
 
 ```nix
-true
+{ }
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.client\.useRoutes
+
+
+
+Accept classless static routes (DHCP option 121) advertised on
+this interface\.
+
+ - ` null ` (default): only on the interface named by
+   ` defaultRouteInterface ` (same as before this option existed)\.
+ - ` true `/` false `: always/never, regardless of
+   ` defaultRouteInterface `\.
+
+Independent of the DHCP-advertised gateway (option 3), which is
+controlled separately and still only accepted on
+` defaultRouteInterface `\.
+
+
+
+*Type:*
+null or boolean
+
+
+
+*Default:*
+
+```nix
+null
 ```
 
 *Declared by:*
@@ -3181,8 +3277,6 @@ null
 
 ## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.domainName
 
-
-
 Provide list of Domain Name(s)
 
 
@@ -3207,7 +3301,7 @@ list of (FQDN (Fully Qualified Domain Name))
 
 
 
-Set the first IP address provides by the DHCP Server\.
+Set the first IP address provided by the DHCP Server\.
 Example: ` 10 ` for subnet ` 192.168.1.0/24 `
 will be calculated to ` 192.168.1.10 `\.
 
@@ -3266,6 +3360,8 @@ null
 
 
 ## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.id
+
+
 
 Subnet IDs must be greater than zero and less than 4294967295
 
@@ -3881,7 +3977,7 @@ false
 
 
 
-IPv4 forwarding\. It is turn on by default\.
+IPv4 forwarding\. It is turned on by default\.
 
 
 
@@ -3955,6 +4051,11 @@ false
 
 
 
+Enable multicast routing (pimd) and the IGMP querier on this
+interface/bridge\.
+
+
+
 *Type:*
 boolean
 
@@ -3981,7 +4082,7 @@ Otherwise it will get the default name: vlan-\<ID>
 
 
 *Type:*
-null or (Network Interface Name ())
+null or (Network Interface Name (letters, digits, \`\.\`, \`_\`, \`-\`; max 15 characters))
 
 
 
@@ -4052,7 +4153,7 @@ if the route should be configured as the default use ` 0.0.0.0/0 `\.
 
 
 *Type:*
-list of (Subnet)
+list of (Subnet in CIDR notation, network address only (e\.g\. 172\.20\.90\.0/24) – not a host IP address)
 
 
 
@@ -4081,12 +4182,17 @@ list of (Subnet)
 
 
 
-Name of the network interface with the default route
+Name of the network interface with the default route\.
+
+When using this module’s generated nftables ruleset (i\.e\. no
+` ./netfilter.ruleset ` override file present), this interface
+also gets IP masquerade (NAT) enabled automatically, regardless
+of its own ` ipMasquerade ` setting\.
 
 
 
 *Type:*
-Network Interface Name ()
+Network Interface Name (letters, digits, \`\.\`, \`_\`, \`-\`; max 15 characters)
 
 
 
@@ -4105,8 +4211,8 @@ Network Interface Name ()
 
 
 
-Set the matric (priority) for the default route,
-in case there are other services when also tries to config an default route\.
+Set the metric (priority) for the default route,
+in case another service also tries to configure a default route\.
 
 
 
@@ -4138,7 +4244,7 @@ signed integer
 
 
 
-Config
+DHCP lease timers and the domain name handed out to clients\.
 
 
 
@@ -4298,8 +4404,9 @@ Unlike most Kea hooks, ` run_script ` cannot actually be
 loaded more than once: Kea logs a second ` hooks-libraries `
 entry pointing at the same hook as “loaded” independently,
 but at runtime only the LAST one configured ever actually
-fires\. So every entry here shares a single generated
-dispatcher script and a single real Kea ` hooks-libraries `
+fires – no error is logged, the only symptom is the hook
+point silently not firing\. So every entry here shares a
+single generated dispatcher script and a single real Kea ` hooks-libraries `
 entry; ` triggers ` is how each one still only reacts to the
 hook points it cares about\.
 
@@ -4740,7 +4847,7 @@ attribute set of ((list of (IP address)) or (IP address) convertible to it)
 Enable support for PXE Boot\.
 
 This will download PXE boot binaries and
-prepare supported Linux distrobutions for download\.
+prepare supported Linux distributions for download\.
 
 
 
@@ -5136,7 +5243,7 @@ attribute set of (submodule)
 
 
 
-Creating a bridge interface with and include this interface in the bridge\.
+Create a bridge interface and include this interface in it\.
 
 
 
@@ -5165,15 +5272,7 @@ Select the name of the bridge interface
 
 
 *Type:*
-null or (Network Interface Name ())
-
-
-
-*Default:*
-
-```nix
-null
-```
+Network Interface Name (letters, digits, \`\.\`, \`_\`, \`-\`; max 15 characters)
 
 
 
@@ -5249,14 +5348,48 @@ Configure this interface as a DHCP client\.
 
 
 *Type:*
-boolean
+(submodule) or boolean convertible to it
 
 
 
 *Default:*
 
 ```nix
-true
+{ }
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.vxlanInterfaces\.\<name>\.dhcp\.client\.useRoutes
+
+
+
+Accept classless static routes (DHCP option 121) advertised on
+this interface\.
+
+ - ` null ` (default): only on the interface named by
+   ` defaultRouteInterface ` (same as before this option existed)\.
+ - ` true `/` false `: always/never, regardless of
+   ` defaultRouteInterface `\.
+
+Independent of the DHCP-advertised gateway (option 3), which is
+controlled separately and still only accepted on
+` defaultRouteInterface `\.
+
+
+
+*Type:*
+null or boolean
+
+
+
+*Default:*
+
+```nix
+null
 ```
 
 *Declared by:*
@@ -5601,7 +5734,7 @@ list of (FQDN (Fully Qualified Domain Name))
 
 
 
-Set the first IP address provides by the DHCP Server\.
+Set the first IP address provided by the DHCP Server\.
 Example: ` 10 ` for subnet ` 192.168.1.0/24 `
 will be calculated to ` 192.168.1.10 `\.
 
@@ -6277,7 +6410,7 @@ false
 
 
 
-IPv4 forwarding\. It is turn on by default\.
+IPv4 forwarding\. It is turned on by default\.
 
 
 
@@ -6325,8 +6458,6 @@ false
 
 ## my\.router\.vxlanInterfaces\.\<name>\.local
 
-
-
 Source IP to bind/send from\. ` null ` (the default) lets the kernel
 pick whatever address the routing table would use to reach
 ` remote `\.
@@ -6350,6 +6481,11 @@ null
 
 
 ## my\.router\.vxlanInterfaces\.\<name>\.multicast
+
+
+
+Enable multicast routing (pimd) and the IGMP querier on this
+interface/bridge\.
 
 
 
@@ -6378,7 +6514,7 @@ Set the name of the network interface
 
 
 *Type:*
-Network Interface Name ()
+Network Interface Name (letters, digits, \`\.\`, \`_\`, \`-\`; max 15 characters)
 
 *Declared by:*
  - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
@@ -6415,6 +6551,8 @@ IP address
 
 
 ## my\.router\.vxlanInterfaces\.\<name>\.requiredForOnline
+
+
 
 When configured to ` null ` (which is the default)\.
 
@@ -6468,7 +6606,7 @@ if the route should be configured as the default use ` 0.0.0.0/0 `\.
 
 
 *Type:*
-list of (Subnet)
+list of (Subnet in CIDR notation, network address only (e\.g\. 172\.20\.90\.0/24) – not a host IP address)
 
 
 
@@ -6724,9 +6862,10 @@ Design note: the systemd stage-1 ` findiso-download.service ` unit
 itself has no total-duration timeout either (no
 ` JobRunningTimeoutSec= `) – this STALL timeout is the only
 safety net against an unbounded hang\. On expiry, wget exits
-non-zero, which the service’s ` OnFailure=emergency.target `
-catches, rather than leaving the boot waiting forever for a
-download that will never finish\.
+non-zero after exhausting its own bounded retry budget
+(` --tries `, default 20), which the service’s
+` OnFailure=emergency.target ` catches, rather than leaving the
+boot waiting forever for a download that will never finish\.
 
 
 
