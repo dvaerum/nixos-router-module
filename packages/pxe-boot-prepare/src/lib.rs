@@ -8,7 +8,7 @@ pub mod iso;
 use autoinstall::AutoinstallManager;
 use config::{BootInfo, DhcpInterface, DistroType, IsoInfo, PxeBootConfig};
 use distro::{DetectorRegistry, DistroDetector};
-use error::{PxeBootError, Result};
+use error::{IoResultExt, PxeBootError, Result};
 use grub::{GrubMenuBuilder, MenuEntryFactory};
 use iso::{IsoDiscovery, IsoMounter};
 
@@ -101,20 +101,15 @@ impl PxeBootService {
             // Try to detect and extract boot info, skip on failure
             match self.detector_registry.detect(mount_path).await {
                 Ok(detector) => {
-                    let mut iso_info = IsoInfo {
-                        file_name: file_name.clone(),
-                        file_path: iso_path.clone(),
-                        mount_path: mount_path.clone(),
-                        distro_type: DistroType::Unknown("".into()),
-                        kernel_path: std::path::PathBuf::new(),
-                        initrd_path: std::path::PathBuf::new(),
-                    };
+                    let mut iso_info = IsoInfo::placeholder(
+                        file_name.clone(),
+                        iso_path.clone(),
+                        mount_path.clone(),
+                    );
 
                     match detector.extract_boot_info(&iso_info).await {
                         Ok(boot_info) => {
-                            iso_info.distro_type = boot_info.distro_type.clone();
-                            iso_info.kernel_path = boot_info.kernel_path.clone();
-                            iso_info.initrd_path = boot_info.initrd_path.clone();
+                            iso_info.apply_boot_info(&boot_info);
 
                             tracing::info!(
                                 "Detected {} as {:?}",
@@ -356,10 +351,100 @@ impl PxeBootService {
         self.iso_discovery.discover().await
     }
 
-    /// Get the ISO mounter for direct access
-    pub fn iso_mounter(&self) -> &IsoMounter {
-        &self.iso_mounter
+    /// Post-hoc diagnostic report: for each discovered ISO, actually run
+    /// distro detection (reusing already-mounted ISOs from a prior
+    /// `prepare()` run where possible -- `IsoMounter::mount` is a no-op
+    /// in that case) and report what would end up in the GRUB menu,
+    /// instead of just the raw filenames `list_isos` returns. Read-only:
+    /// never writes a GRUB menu or touches autoinstall seeds. Intended
+    /// for an operator debugging "why isn't my ISO showing up" after the
+    /// fact, not a pre-run preview (`prepare()`'s steps are all
+    /// idempotent, so there's no destructive action to preview away from
+    /// in the first place).
+    pub async fn status(&self) -> Result<Vec<IsoStatus>> {
+        let iso_paths = self.iso_discovery.discover().await?;
+        let mut report = Vec::with_capacity(iso_paths.len());
+
+        for iso_path in &iso_paths {
+            let Some(file_name) = iso_path.file_name() else {
+                continue;
+            };
+            let file_name = file_name.to_string_lossy().to_string();
+
+            let mount_path = match self.iso_mounter.mount(iso_path).await {
+                Ok(path) => path,
+                Err(e) => {
+                    report.push(IsoStatus {
+                        file_name,
+                        distro: None,
+                        menu_entries: 0,
+                        error: Some(format!("failed to mount: {e}")),
+                    });
+                    continue;
+                }
+            };
+
+            let detector = match self.detector_registry.detect(&mount_path).await {
+                Ok(detector) => detector,
+                Err(e) => {
+                    report.push(IsoStatus {
+                        file_name,
+                        distro: None,
+                        menu_entries: 0,
+                        error: Some(format!("failed to detect distribution: {e}")),
+                    });
+                    continue;
+                }
+            };
+
+            let mut iso_info =
+                IsoInfo::placeholder(file_name.clone(), iso_path.clone(), mount_path.clone());
+
+            match detector.extract_boot_info(&iso_info).await {
+                Ok(boot_info) => {
+                    iso_info.apply_boot_info(&boot_info);
+                    // Base entry + one per configured autoinstall script
+                    // for this ISO -- mirrors generate_grub_menu's own
+                    // entry count exactly, without needing to actually
+                    // build any GRUB entries.
+                    let autoinstall_entries = self
+                        .config
+                        .autoinstall
+                        .get(&file_name)
+                        .map(|scripts| scripts.len())
+                        .unwrap_or(0);
+                    report.push(IsoStatus {
+                        file_name,
+                        distro: Some(format!("{:?}", boot_info.distro_type)),
+                        menu_entries: 1 + autoinstall_entries,
+                        error: None,
+                    });
+                }
+                Err(e) => {
+                    report.push(IsoStatus {
+                        file_name,
+                        distro: Some(detector.id().to_string()),
+                        menu_entries: 0,
+                        error: Some(format!("detected but failed to extract boot info: {e}")),
+                    });
+                }
+            }
+        }
+
+        Ok(report)
     }
+}
+
+/// One ISO's outcome as reported by `PxeBootService::status()`.
+#[derive(Debug, Clone)]
+pub struct IsoStatus {
+    pub file_name: String,
+    /// `None` only when mounting or detection itself failed outright
+    /// (not even the `unknown` fallback detector result).
+    pub distro: Option<String>,
+    /// How many GRUB menu entries this ISO would contribute (base entry
+    /// + one per configured autoinstall script); `0` if it errored.
+    pub menu_entries: usize,
     pub error: Option<String>,
 }
 
@@ -699,4 +784,65 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn status_reports_a_discovered_iso_that_fails_to_mount() {
+        // Mounting a real ISO requires CAP_SYS_ADMIN -- this test runs
+        // unprivileged (same as any non-root CI sandbox), so the real
+        // `mount` command deterministically fails regardless of the
+        // file's actual content, exercising status()'s error-reporting
+        // path without needing root or a real loop device.
+        let rt = tempfile::tempdir().unwrap();
+        let iso_dir = tempfile::tempdir().unwrap();
+        let fake_iso = iso_dir.path().join("test.iso");
+        tokio::fs::write(&fake_iso, b"not a real iso")
+            .await
+            .unwrap();
+
+        let mut config = config_with(rt.path(), rt.path());
+        config.iso_folder_paths = vec![iso_dir.path().to_path_buf()];
+        let service = PxeBootService::new(config);
+
+        let report = service.status().await.unwrap();
+
+        assert_eq!(report.len(), 1);
+        assert_eq!(report[0].file_name, "test.iso");
+        assert_eq!(report[0].menu_entries, 0);
+        assert!(report[0].error.is_some());
+        let error = report[0].error.as_ref().unwrap();
+        assert!(error.contains("failed to mount"));
+        // A3 regression: the real `mount` command's own stderr (not just
+        // a generic "exited with <status>") must reach this error --
+        // `do_mount` previously used `.status()`, which discarded stderr
+        // entirely (it only ever reached the systemd journal via fd
+        // inheritance, invisible to this programmatic error path).
+        //
+        // Asserting on "mount:" (not a specific denial reason like
+        // "Permission denied") is deliberate: the EXACT failure mode is
+        // environment-dependent -- an interactive unprivileged shell saw
+        // "mount failed: Permission denied.", while the Nix build
+        // sandbox saw "failed to set up loop device for ..." instead
+        // (no /dev/loop* access at all, a different restriction than
+        // plain CAP_SYS_ADMIN denial) -- but util-linux's `mount(8)`
+        // always prefixes its OWN diagnostic output with "mount:",
+        // regardless of which restriction tripped, so that prefix is
+        // the one environment-agnostic thing to check for.
+        assert!(
+            error.contains("mount:"),
+            "error should include mount's own stderr text (prefixed \"mount:\"), got: {error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn status_reports_empty_when_no_isos_discovered() {
+        let rt = tempfile::tempdir().unwrap();
+        let iso_dir = tempfile::tempdir().unwrap();
+
+        let mut config = config_with(rt.path(), rt.path());
+        config.iso_folder_paths = vec![iso_dir.path().to_path_buf()];
+        let service = PxeBootService::new(config);
+
+        let report = service.status().await.unwrap();
+
+        assert!(report.is_empty());
+    }
+
 }

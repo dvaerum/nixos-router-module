@@ -1,5 +1,6 @@
 use clap::Parser;
 use pxe_boot_prepare::config::PxeBootConfig;
+use pxe_boot_prepare::error::IoResultExt;
 use pxe_boot_prepare::PxeBootService;
 use std::path::PathBuf;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -49,7 +50,9 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     // Load configuration
-    let config_content = tokio::fs::read_to_string(&cli.config).await?;
+    let config_content = tokio::fs::read_to_string(&cli.config)
+        .await
+        .with_path(&cli.config)?;
     let config: PxeBootConfig = serde_json::from_str(&config_content)?;
 
     // Validate configuration first

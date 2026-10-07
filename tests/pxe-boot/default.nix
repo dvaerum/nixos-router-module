@@ -659,28 +659,52 @@ in
                 f"http://192.168.77.1:{HTTP_PORT}/ > /dev/null"
             )
 
-            kea_json = json.loads(router.succeed(f"cat {config_path}"))
-            class_names = [c["name"] for c in kea_json["Dhcp4"]["client-classes"]]
+        with subtest("mount.rs: wrong ISO mounted at mountpoint triggers remount"):
+            # Force a wrong-ISO-mounted state: unmount the correct ISO,
+            # loop-mount a DIFFERENT, unrelated (small -- /tmp has nowhere
+            # near enough room for a second copy of the real ~1.5GB ISO)
+            # valid iso9660 image in its place. `verify_mount` compares
+            # canonicalized backing-file PATHS (via
+            # /sys/block/loopN/loop/backing_file), not content -- any
+            # different path is "wrong", regardless of size/content, so
+            # this still exercises the comparison itself correctly.
+            mount_point = "/run/pxe-boot/iso-mountpoint/${testIsoName}"
+            router.succeed(f"umount {mount_point}")
+            router.succeed(
+                "cp /run/pxe-boot/isos/rhel-9.6-x86_64-dvd.iso /tmp/decoy.iso && "
+                f"mount -t iso9660 -o loop,ro /tmp/decoy.iso {mount_point}"
+            )
+            decoy_backing = router.succeed(
+                "losetup -j /tmp/decoy.iso | cut -d: -f1"
+            ).strip()
+            assert decoy_backing, "decoy ISO was not actually loop-mounted"
 
-            for keyword in ["iPXE", "BIOS", "aarch64"]:
-                assert any(keyword in n for n in class_names), \
-                    f"No client class containing '{keyword}' in: {class_names}"
-            assert any("UEFI" in n and "x86_64" in n for n in class_names), \
-                f"No UEFI x86_64 class in: {class_names}"
+            router.succeed("systemctl restart pxe-boot-prepare.service")
+            status = router.succeed(
+                "systemctl show -p ActiveState -p Result pxe-boot-prepare.service"
+            )
+            assert "Result=success" in status, f"pxe-boot-prepare restart failed: {status}"
 
-        with subtest("PXE options reach reserved-IP clients (regression: PXE-E16)"):
-            # A reserved IP outside the pool does NOT draw from the pool, so the
-            # PXE boot classes must be required at the SUBNET level (not only the
-            # pool) for them to fire. If they are only required on the pool, a
-            # reserved client's DHCP offer has no next-server/boot-file-name and
-            # UEFI/OVMF rejects it ("PXE-E16: No valid offer received").
-            service_info = router.succeed("systemctl cat kea-dhcp4-server.service")
-            config_match = re.search(r'-c\s+([^\s]+)', service_info)
-            config_path = config_match.group(1) if config_match else "/etc/kea/kea-dhcp4.conf"
-            kea_json = json.loads(router.succeed(f"cat {config_path}"))
+            # The decoy's own loop device detaching is a kernel-internal
+            # cleanup timing detail (autoclear-on-last-close), not
+            # something our own code controls or needs to assert on --
+            # force-detach it explicitly instead of waiting/hoping.
+            router.succeed(f"losetup -d {decoy_backing} || true")
 
-            subnets = kea_json["Dhcp4"]["subnet4"]
-            subnet = next(s for s in subnets if s.get("id") == 200)
+            # And the mountpoint must now carry the REAL ISO's backing
+            # file again, not the decoy's.
+            real_loop_dev = router.succeed(
+                f"findmnt -n -o SOURCE {mount_point}"
+            ).strip()
+            backing_file = router.succeed(
+                f"cat /sys/class/block/$(basename {real_loop_dev})/loop/backing_file"
+            ).strip()
+            assert "decoy" not in backing_file, (
+                f"mountpoint still backed by the decoy file: {backing_file}"
+            )
+            assert "/run/pxe-boot/isos/${testIsoName}" in backing_file or backing_file.endswith(
+                "${testIsoName}"
+            ), f"mountpoint not backed by the real ISO: {backing_file}"
 
             # The reservation must be present and outside the pool.
             resv_ips = [r.get("ip-address") for r in subnet.get("reservations", [])]

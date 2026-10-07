@@ -1,5 +1,5 @@
 {
-  "iso_folder_path": "/data/iso",
+  "iso_folder_paths": ["/data/iso"],
   "tftp_root": "/srv/pxeboot",
   "runtime_root": "/run/pxe-boot",
   "dhcp_interfaces": [
@@ -20,7 +20,6 @@
     ]
   },
   "http": {
-    "mount_port": 1337,
-    "iso_port": 1338
+    "port": 1337
   }
 }
