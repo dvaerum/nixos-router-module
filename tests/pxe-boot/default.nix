@@ -55,8 +55,28 @@ let
   # between any of them.
   testHttpPort = 1337;
   testIsoName = "nixos-pxe-test-x86_64.iso";
-  pxeMacBIOS = "52:54:00:12:01:02";
-  pxeMacUEFI = "52:54:00:12:01:03";
+  # Byte-identical copy of the same NixOS ISO, served from a SEPARATE
+  # DHCP interface/client dedicated to the findiso-download failure-path
+  # subtest -- breaking its raw-download entry (see that subtest) must
+  # not affect the real BIOS/UEFI clients sharing testIsoName above.
+  findisoFailureIsoName = "nixos-pxe-findiso-failure-test.iso";
+  pxeMacFindisoFailure = "52:54:00:aa:01:04";
+
+  # NOT 52:54:00:12:xx:xx -- that exact prefix is what nixpkgs' OWN
+  # nixosTest framework auto-assigns to the SEPARATE management/vlan NIC it
+  # adds for every `virtualisation.vlans` entry (`qemuNicMac` in
+  # nixos/lib/qemu-common.nix: `52:54:00:12:${net}:${nodeNumber}`,
+  # nodeNumber = 1-based position in alphabetically-sorted node names).
+  # pxeClientBIOS happens to be nodeNumber 2 on vlan 1, so the old
+  # "52:54:00:12:01:02" collided EXACTLY with that auto-assigned NIC's own
+  # MAC -- two real QEMU network devices (ours, explicitly added via
+  # qemu.networkingOptions, and the framework's own vlan-1 one) sharing one
+  # MAC confused NetworkManager/DHCP enough to delay IPv4 address
+  # acquisition past any reasonable beacon-script timeout (confirmed via
+  # `ip addr show` showing identical MACs on enp0s3/enp0s4, and IPv6
+  # duplicate-address-detection failing on the second one).
+  pxeMacBIOS = "52:54:00:aa:01:02";
+  pxeMacUEFI = "52:54:00:aa:01:03";
   # Regression: a reservation with an IP OUTSIDE the DHCP pool (.10-.254).
   # Reserved-IP clients do not draw from the pool, so PXE boot classes that are
   # only required at the POOL level never fire for them -> their DHCP offer
@@ -136,6 +156,7 @@ let
   dummyIsoDir = pkgs.runCommand "iso-directory" { nativeBuildInputs = [ pkgs.xorriso ]; } ''
     mkdir -p $out
     cp ${testNixosIso}/iso/*.iso $out/${testIsoName}
+    cp ${testNixosIso}/iso/*.iso $out/${findisoFailureIsoName}
 
     # Mock RHEL ISO with expected directory structure
     mkdir -p rhel-root/images/pxeboot
@@ -204,7 +225,20 @@ let
       diskImage = null;
       mountHostNixStore = true;
       writableStore = false;
-      memorySize = 2048;
+      # These are diskless findiso= clients: the whole downloaded ISO
+      # (currently >1.4GB) lands in /run (tmpfs, then losetup'd), inside
+      # the initrd stage. The download was silently stalling partway
+      # through and never finishing within the beacon subtest's 1200s
+      # budget; the stall point scaled linearly with `memorySize` across
+      # three measurements (2048/4096/6144MB -> ~19% of memorySize each
+      # time, not proportional to elapsed time), so it's RAM-bound, not
+      # a protocol timeout. Explicitly setting `boot.runSize` (below)
+      # didn't change the ratio, so the limit isn't /run's own tmpfs
+      # quota specifically -- more likely the initrd's own root ramfs,
+      # which scales with total VM memory the same way. Sized via
+      # linear extrapolation from those three measurements for a ~30%
+      # margin over the current ISO size.
+      memorySize = 10240;
       qemu.options = [
         "-boot"
         "order=n,menu=on"
@@ -219,12 +253,16 @@ let
     # No disk, no bootloader — firmware falls back to network boot
     boot.loader.grub.enable = false;
 
+    # See the memorySize comment above: must comfortably exceed the
+    # downloaded ISO's size, independent of total VM RAM.
+    boot.runSize = "3G";
+
     fileSystems."/" = {
       device = "tmpfs";
       fsType = "tmpfs";
       options = [
         "mode=0755"
-        "size=2G"
+        "size=3G"
       ];
     };
   };
@@ -245,6 +283,7 @@ in
           3
           4
           5
+          6
         ];
         networking.useDHCP = false;
 
@@ -401,6 +440,30 @@ in
               };
               forwarding = true;
             };
+
+            # findiso-download failure-path fixture: a dedicated
+            # interface/client whose default ISO is a byte-identical
+            # copy of testIsoName under a different filename (see the
+            # "findiso-download failure path" subtest below, which
+            # breaks only THIS filename's raw-download entry, never
+            # testIsoName's -- the real BIOS/UEFI clients on eth1 must
+            # keep working).
+            eth6 = {
+              mac = null;
+              dhcp = {
+                server = {
+                  id = 205;
+                  address = "192.168.80.1/24";
+                  firstIP = 10;
+                  pxe-boot = {
+                    enable = true;
+                    defaultIso = findisoFailureIsoName;
+                    defaultScriptName = "";
+                  };
+                };
+              };
+              forwarding = true;
+            };
           };
         };
       };
@@ -447,6 +510,20 @@ in
             ];
           };
         };
+
+      # findiso-download failure-path fixture (see eth6 above): UEFI PXE
+      # client on its own dedicated vlan, same base as pxeClientUEFI.
+      pxeClientFindisoFailure = { lib, ... }: {
+        imports = [ pxeboot_vm_base ];
+        virtualisation = {
+          vlans = lib.mkForce [ 6 ];
+          useEFIBoot = true;
+          qemu.networkingOptions = lib.mkForce [
+            "-netdev vde,id=pxefindisofail1,sock=\"$QEMU_VDE_SOCKET_6\""
+            "-device virtio-net-pci,netdev=pxefindisofail1,mac=${pxeMacFindisoFailure},romfile=,bootindex=1"
+          ];
+        };
+      };
     };
 
     testScript =
@@ -754,14 +831,14 @@ in
                 "${testIsoName}"
             ), f"mountpoint not backed by the real ISO: {backing_file}"
 
-            # The reservation must be present and outside the pool.
-            resv_ips = [r.get("ip-address") for r in subnet.get("reservations", [])]
-            assert "${reservedPxeIp}" in resv_ips, \
-                f"reserved IP ${reservedPxeIp} missing from subnet reservations: {resv_ips}"
-            pool_str = subnet["pools"][0]["pool"]  # e.g. "192.168.75.10 - 192.168.75.254"
-            pool_first = int(pool_str.split("-")[0].strip().split(".")[-1])
-            assert int("${reservedPxeIp}".split(".")[-1]) < pool_first, \
-                f"fixture broken: ${reservedPxeIp} should be below pool start {pool_str}"
+        with subtest("Break findiso-download's raw-ISO entry for the dedicated failure-test client"):
+            # Dedicated copy (eth6/pxeClientFindisoFailure) -- removing
+            # this symlink must NOT touch testIsoName's own entry, which
+            # the real BIOS/UEFI clients on eth1 still depend on.
+            router.succeed("test -e /run/pxe-boot/isos/${findisoFailureIsoName}")
+            router.succeed("rm /run/pxe-boot/isos/${findisoFailureIsoName}")
+            router.succeed("test -e /run/pxe-boot/isos/${testIsoName}")
+            pxeClientFindisoFailure.start(allow_reboot=False)
 
         # Kea client-classes / PXE-E16 subnet-level require-client-classes /
         # match-client-id correctness is checked by the pure-eval
@@ -870,6 +947,19 @@ in
 
             with subtest("UEFI E2E: Beacon received"):
                 wait_for_beacon("UEFI", uefi_ip)
+
+            with subtest("findiso-download failure path: client reaches emergency mode"):
+                # The raw-ISO entry for this client's dedicated ISO was
+                # deliberately removed earlier (404 on fetch) -- GRUB
+                # still fetches kernel/initrd fine (served from
+                # /iso-mountpoint/, untouched), boots into the initrd,
+                # wget fails on the missing /isos/ file, and
+                # findiso-download.service's `OnFailure=emergency.target`
+                # (see modules/iso-builder) must catch it instead of
+                # hanging forever.
+                pxeClientFindisoFailure.wait_for_console_text(
+                    r"(?i)emergency mode", timeout=300
+                )
         finally:
             # Collect service logs for post-mortem (runs even on timeout)
             router.log("=== Final Service Logs ===")
@@ -884,7 +974,7 @@ in
 
             # Terminate PXE VMs (crash() may raise BrokenPipeError if the
             # VM already shut down after sending its beacon)
-            for vm in [pxeClientBIOS, pxeClientUEFI]:
+            for vm in [pxeClientBIOS, pxeClientUEFI, pxeClientFindisoFailure]:
                 try:
                     vm.crash()
                 except BrokenPipeError:

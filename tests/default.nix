@@ -19,4 +19,7 @@ in
   pxe-boot-iso-download-rate-limit = pxe-boot.isoDownloadRateLimitCheck;
   pxe-boot-full-disable = pxe-boot.fullDisableCheck;
   pxe-boot-secure-boot = (import ./pxe-boot/secure-boot.nix { inherit pkgs nixosModule; }).vm;
+  iso-builder-network-download-options = import ./iso-builder-network-download-options.nix {
+    inherit pkgs;
+  };
 }

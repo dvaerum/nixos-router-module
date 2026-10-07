@@ -79,6 +79,7 @@
           pxe-boot-iso-download-rate-limit = tests.pxe-boot-iso-download-rate-limit;
           pxe-boot-full-disable = tests.pxe-boot-full-disable;
           pxe-boot-secure-boot = tests.pxe-boot-secure-boot;
+          iso-builder-network-download-options = tests.iso-builder-network-download-options;
           vxlan = tests.vxlan;
           dns-server = tests.dns-server;
           dns-server-disabled = tests.dns-server-disabled;

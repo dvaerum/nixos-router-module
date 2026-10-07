@@ -9,8 +9,45 @@ use autoinstall::AutoinstallManager;
 use config::{BootInfo, DhcpInterface, DistroType, IsoInfo, PxeBootConfig};
 use distro::{DetectorRegistry, DistroDetector};
 use error::{IoResultExt, PxeBootError, Result};
+use fs4::tokio::AsyncFileExt;
 use grub::{GrubMenuBuilder, MenuEntryFactory};
-use iso::{IsoDiscovery, IsoMounter};
+use std::path::Path;
+
+/// Acquires an exclusive, non-blocking lock on `<runtime_root>/.prepare.lock`
+/// (D38) -- held for the duration of `prepare()` via the returned `File`
+/// (released automatically when it's dropped, or by the OS if the
+/// process crashes). Prevents two concurrent `prepare()` invocations
+/// (e.g. an operator's manual CLI run racing the systemd service's own
+/// instance, or a `systemctl restart` landing mid-run) from mounting/
+/// unmounting/rewriting the same ISOs and GRUB configs at the same
+/// time -- confirmed elsewhere in this file that even just concurrent
+/// ISO *mounts* alone hit a real kernel-level loop-device race (see
+/// `prepare()`'s own sequential-mounting comment); racing two FULL
+/// `prepare()` runs would be considerably worse.
+///
+/// Fails fast (does not block waiting for the other run to finish) --
+/// matches this codebase's existing fail-fast-and-report posture rather
+/// than silently queuing.
+async fn acquire_prepare_lock(runtime_root: &Path) -> Result<tokio::fs::File> {
+    let lock_path = runtime_root.join(".prepare.lock");
+    let file = tokio::fs::OpenOptions::new()
+        .create(true)
+        .truncate(true)
+        .write(true)
+        .open(&lock_path)
+        .await
+        .with_path(&lock_path)?;
+
+    file.try_lock().map_err(|_| {
+        PxeBootError::Config(format!(
+            "another 'pxe-boot-prepare prepare' run is already in progress \
+             (lock held on {})",
+            lock_path.display()
+        ))
+    })?;
+
+    Ok(file)
+}
 
 pub struct PxeBootService {
     config: PxeBootConfig,
@@ -38,6 +75,9 @@ impl PxeBootService {
 
     /// Main entry point: prepare PXE boot environment
     pub async fn prepare(&self) -> Result<()> {
+        // D38: held for the rest of this function's scope.
+        let _lock = acquire_prepare_lock(&self.config.runtime_root).await?;
+
         tracing::info!("Starting PXE boot preparation");
 
         // 1. Discover ISOs
@@ -99,6 +139,12 @@ impl PxeBootService {
 
         // 3. Detect distributions and extract boot info
         let mut iso_infos = Vec::new();
+        // D41: (file_name, reason) for ISOs that mounted fine but could
+        // not be prepared for boot -- rendered as a loud, clearly-
+        // labeled placeholder GRUB entry (see generate_grub_menu) instead
+        // of silently vanishing from the menu with no operator-visible
+        // signal beyond the tracing::warn! lines below.
+        let mut failed_isos: Vec<(String, String)> = Vec::new();
 
         for (iso_path, mount_path) in mounted_isos.iter() {
             // A path with no final component (e.g. "/", or "..") can't
@@ -142,6 +188,7 @@ impl PxeBootService {
                                 file_name,
                                 e
                             );
+                            failed_isos.push((file_name, e.to_string()));
                         }
                     }
                 }
@@ -151,6 +198,7 @@ impl PxeBootService {
                         file_name,
                         e
                     );
+                    failed_isos.push((file_name, e.to_string()));
                 }
             }
         }
@@ -238,6 +286,7 @@ impl PxeBootService {
         &self,
         interface: &DhcpInterface,
         iso_infos: &[(IsoInfo, BootInfo, &dyn DistroDetector)],
+        failed_isos: &[(String, String)],
     ) -> Result<()> {
         let mut builder = GrubMenuBuilder::new()?;
         
@@ -319,6 +368,15 @@ impl PxeBootService {
 
         if let Some(pos) = default_position {
             builder.set_default(pos);
+        }
+
+        // D41: every interface's menu shows the same set of failed ISOs
+        // -- detection/extraction happens once, globally, not per
+        // interface (unlike the real bootable entries above, which ARE
+        // per-interface since their URLs embed this interface's own
+        // gateway).
+        for (file_name, reason) in failed_isos {
+            builder.add_placeholder_entry(file_name, reason);
         }
 
         let grub_cfg = builder.build()?;
@@ -521,6 +579,47 @@ mod tests {
     use distro::unknown::UnknownDetector;
     use std::collections::HashMap;
 
+    #[tokio::test]
+    async fn acquire_prepare_lock_succeeds_when_uncontended() {
+        let rt = tempfile::tempdir().unwrap();
+
+        let _lock = acquire_prepare_lock(rt.path()).await.unwrap();
+
+        assert!(rt.path().join(".prepare.lock").exists());
+    }
+
+    #[tokio::test]
+    async fn acquire_prepare_lock_fails_fast_when_already_held() {
+        // D38: a second concurrent attempt must not block (the whole
+        // point is to fail fast and report, not hang waiting for the
+        // first run to finish).
+        let rt = tempfile::tempdir().unwrap();
+
+        let _first_lock = acquire_prepare_lock(rt.path()).await.unwrap();
+        let second_attempt = acquire_prepare_lock(rt.path()).await;
+
+        assert!(second_attempt.is_err());
+        let err = second_attempt.unwrap_err().to_string();
+        assert!(
+            err.contains("already in progress"),
+            "error should explain the lock contention, got: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn acquire_prepare_lock_succeeds_again_after_the_first_is_released() {
+        let rt = tempfile::tempdir().unwrap();
+
+        {
+            let _lock = acquire_prepare_lock(rt.path()).await.unwrap();
+            // Dropped at the end of this block -- the OS releases the
+            // flock automatically.
+        }
+
+        let second_lock = acquire_prepare_lock(rt.path()).await;
+        assert!(second_lock.is_ok());
+    }
+
     fn config_with(tftp_root: &std::path::Path, runtime_root: &std::path::Path) -> PxeBootConfig {
         PxeBootConfig {
             iso_folder_paths: vec![std::path::PathBuf::from("/data/iso")],
@@ -588,7 +687,7 @@ mod tests {
         let service = PxeBootService::new(config);
 
         service
-            .generate_grub_menu(&interface(7, None), &[])
+            .generate_grub_menu(&interface(7, None), &[], &[])
             .await
             .unwrap();
 
@@ -604,7 +703,7 @@ mod tests {
         let service = PxeBootService::new(config);
 
         service
-            .generate_grub_menu(&interface(7, Some(override_root.clone())), &[])
+            .generate_grub_menu(&interface(7, Some(override_root.clone())), &[], &[])
             .await
             .unwrap();
 
@@ -643,6 +742,35 @@ mod tests {
 
         assert!(grub_cfg.contains("good.iso"));
         assert!(!grub_cfg.contains("bad.iso"));
+    }
+
+    #[tokio::test]
+    async fn failed_isos_get_a_placeholder_entry_in_the_menu() {
+        // D41: an ISO that couldn't be prepared must still show up in
+        // the menu, as a non-bootable placeholder with the reason --
+        // not silently vanish with only a journal line.
+        let rt = tempfile::tempdir().unwrap();
+        let global_root = rt.path().join("global");
+        let config = config_with(&global_root, rt.path());
+        let service = PxeBootService::new(config);
+
+        let failed_isos = vec![(
+            "mystery.iso".to_string(),
+            "Unknown distribution type".to_string(),
+        )];
+
+        service
+            .generate_grub_menu(&interface(7, None), &[], &failed_isos)
+            .await
+            .unwrap();
+
+        let grub_cfg =
+            tokio::fs::read_to_string(global_root.join("7").join("grub").join("grub.cfg"))
+                .await
+                .unwrap();
+
+        assert!(grub_cfg.contains("mystery.iso (unsupported)"));
+        assert!(grub_cfg.contains("Unknown distribution type"));
     }
 
     #[tokio::test]

@@ -6,6 +6,15 @@ use serde_json::json;
 
 pub struct GrubMenuBuilder<'a> {
     entries: Vec<MenuEntry>,
+    /// (file_name, reason) pairs for ISOs that were discovered but could
+    /// not be prepared for boot (distro undetected, or a real distro
+    /// detector matched but its own `extract_boot_info` failed -- e.g. a
+    /// malformed `boot.json`). D41: rendered as a non-bootable,
+    /// clearly-labeled GRUB entry instead of silently vanishing from the
+    /// menu with no operator-visible signal beyond a systemd journal
+    /// line (`tracing::warn!`) nobody looking at the boot menu would
+    /// ever see.
+    placeholders: Vec<(String, String)>,
     default_entry: Option<usize>,
     timeout: Option<u32>,
     handlebars: Handlebars<'a>,
@@ -33,6 +42,7 @@ impl<'a> GrubMenuBuilder<'a> {
 
         Ok(Self {
             entries: Vec::new(),
+            placeholders: Vec::new(),
             default_entry: None,
             timeout: None,
             handlebars,
@@ -111,6 +121,14 @@ impl<'a> GrubMenuBuilder<'a> {
             output.push('\n');
         }
 
+        // D41: non-bootable placeholder entries for ISOs that were
+        // discovered but couldn't be prepared -- see field doc comment
+        // on `placeholders`.
+        for (file_name, reason) in &self.placeholders {
+            output.push_str(&render_placeholder(file_name, reason));
+            output.push('\n');
+        }
+
         // Reload entry for convenience
         output.push_str("menuentry \"Reload Grub\" {\n");
         output.push_str("    configfile /grub/grub.cfg\n");
@@ -127,7 +145,38 @@ impl<'a> GrubMenuBuilder<'a> {
             "initrd_url": entry.initrd_url,
         });
 
-        Ok(self.handlebars.render("menuentry", &data)?)
+        let rendered = self.handlebars.render("menuentry", &data)?;
+
+        // A6: wrap in a `$grub_cpu` conditional when the ISO's
+        // architecture is known AND maps to a GRUB cpu string -- an
+        // unknown architecture (either `None`, or `Some` with no GRUB
+        // mapping -- see `to_grub_cpu`) fails OPEN (entry shown
+        // unfiltered): hiding a perfectly good ISO because detection
+        // failed would be worse than showing one that might not work.
+        //
+        // KNOWN LIMITATION, confirmed via the real E2E test: this only
+        // actually filters for UEFI clients. Ubuntu's own pre-built
+        // `grub.pxe` (legacy i386-pc BIOS, fetched wholesale from
+        // releases.ubuntu.com -- this project has no module tree to
+        // patch, only a single self-contained binary) does not include
+        // the `test`/`[` command at all, so `if [ "$grub_cpu" = ... ]`
+        // errors with "can't find command `['" on that path and the
+        // condition effectively fails open there too (confirmed
+        // pre-existing and harmless even before A6: the SAME error
+        // already came from this file's own header-level
+        // `if [ x$feature_timeout_style = xy ]` check). Net effect on
+        // legacy BIOS clients: every entry is shown regardless of
+        // architecture, same as before this feature existed -- not a
+        // regression, just an unfilterable client type. `grubx64.efi`/
+        // `grubaa64.efi` (UEFI, this project's primary/recommended
+        // path -- see Secure Boot docs) DO have `test` compiled in and
+        // filter correctly.
+        Ok(match entry.architecture.as_deref().and_then(to_grub_cpu) {
+            Some(grub_cpu) => format!(
+                "if [ \"$grub_cpu\" = \"{grub_cpu}\" ]; then\n{rendered}\nfi\n"
+            ),
+            None => rendered,
+        })
     }
 }
 
@@ -153,7 +202,22 @@ fn escape_grub_string(s: &str) -> String {
         .replace(['\n', '\r'], " ")
 }
 
-const MENUENTRY_TEMPLATE: &str = r#"menuentry "{{title}}" {
+/// D41: a non-bootable GRUB entry for an ISO that was discovered but
+/// could not be prepared (distro undetected, or a real distro detector
+/// matched but its own metadata extraction failed) -- `reason` is
+/// whatever `PxeBootError` text explains why, surfaced directly to
+/// anyone looking at the boot menu instead of only the systemd journal.
+/// `configfile` (not `reboot`/a bare halt) returns to the live menu
+/// afterwards, same mechanism the existing "Reload Grub" entry uses.
+fn render_placeholder(file_name: &str, reason: &str) -> String {
+    let title = escape_grub_string(&format!("{file_name} (unsupported)"));
+    let reason = escape_grub_string(reason);
+    format!(
+        "menuentry \"{title}\" {{\n    echo \"\"\n    echo \"This ISO could not be prepared for PXE boot:\"\n    echo \"  {reason}\"\n    echo \"\"\n    echo \"Press Enter to return to the menu...\"\n    read dummy\n    configfile /grub/grub.cfg\n}}\n"
+    )
+}
+
+const MENUENTRY_TEMPLATE: &str = r#"menuentry "{{{title}}}" {
     set gfxpayload=keep
     linux  {{{kernel_url}}} {{{kernel_params}}}
     initrd {{{initrd_url}}}

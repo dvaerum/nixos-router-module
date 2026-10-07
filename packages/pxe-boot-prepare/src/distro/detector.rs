@@ -65,6 +65,11 @@ impl DetectorRegistry {
         registry.register(Box::new(super::nixos::NixOsDetector::new()));
         registry.register(Box::new(super::ubuntu::UbuntuDetector::new()));
         registry.register(Box::new(super::rhel::RhelDetector::new()));
+        // Lowest priority (0): always matches, so it only ever gets
+        // reached once every real detector has declined -- gives the
+        // registry a concrete "we tried, nothing matched" outcome instead
+        // of a generic registry-level error.
+        registry.register(Box::new(super::unknown::UnknownDetector::new()));
 
         registry
     }
@@ -115,6 +120,22 @@ impl Default for DetectorRegistry {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn detect_falls_through_to_unknown_detector_when_nothing_else_matches() {
+        let dir = tempfile::tempdir().unwrap();
+        // No nix-store.squashfs, no casper/, no images/pxeboot/ -- nothing
+        // any real detector recognizes.
+        let registry = DetectorRegistry::new();
+
+        let detector = registry.detect(dir.path()).await.unwrap();
+
+        assert_eq!(detector.id(), "unknown");
+    }
 
     struct FakeDetector {
         id: &'static str,
