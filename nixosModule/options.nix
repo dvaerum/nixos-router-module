@@ -1004,6 +1004,7 @@ in
             `lib.mkIf`.
 
             `autoinstall` and each interface's `defaultIso` key by ISO
+            *filename* (the package's `image.fileName`/`p.name`), the
             same as for `isoFolderPath`-discovered ISOs -- there is
             nothing `nixIsos`-specific to configure on that side, just
             use the same filename there too.

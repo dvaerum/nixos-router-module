@@ -49,9 +49,7 @@
   time.timeZone = "UTC";
 
   # Customize ISO name
-  isoImage = {
-    isoName = lib.mkForce "custom-pxe-boot-${pkgs.stdenv.hostPlatform.system}.iso";
-    volumeID = lib.mkForce "CUSTOM_PXE_BOOT";
-  };
+  image.fileName = lib.mkForce "custom-pxe-boot-${pkgs.stdenv.hostPlatform.system}.iso";
+  isoImage.volumeID = lib.mkForce "CUSTOM_PXE_BOOT";
 
 }

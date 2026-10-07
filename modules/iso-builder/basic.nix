@@ -23,8 +23,6 @@
   pxe-boot-iso.kernelPackage = pkgs.linuxPackages_latest;
 
   # ISO metadata
-  isoImage = {
-    isoName = lib.mkForce "nixos-pxe-boot-${pkgs.stdenv.hostPlatform.system}.iso";
-    volumeID = lib.mkForce "NIXOS_PXE_BOOT";
-  };
+  image.fileName = lib.mkForce "nixos-pxe-boot-${pkgs.stdenv.hostPlatform.system}.iso";
+  isoImage.volumeID = lib.mkForce "NIXOS_PXE_BOOT";
 }

@@ -208,9 +208,9 @@ This ISO builder module is designed to work seamlessly with the main router modu
    pxe-boot-iso.includeHardwareTools = false;
    ```
 
-2. **Custom ISO name**: Override the `isoImage` options:
+2. **Custom ISO name**: Override `image.fileName`:
    ```nix
-   isoImage.isoName = lib.mkForce "my-custom-name.iso";
+   image.fileName = lib.mkForce "my-custom-name.iso";
    ```
 
 3. **Multiple ISOs**: Create multiple configuration files for different use cases
