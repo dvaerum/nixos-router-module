@@ -79,7 +79,7 @@ impl<'a> GrubMenuBuilder<'a> {
         output.push_str("insmod http\n");
         output.push_str("insmod net\n");
         output.push_str("insmod efinet\n");
-        output.push_str("\n");
+        output.push('\n');
         
         // Try to initialize network using DHCP/BOOTP
         // Use GRUB's if statement to ignore errors
@@ -89,7 +89,7 @@ impl<'a> GrubMenuBuilder<'a> {
         output.push_str("else\n");
         output.push_str("  echo Network already configured or BOOTP failed\n");
         output.push_str("fi\n");
-        output.push_str("\n");
+        output.push('\n');
 
         // Header
         output.push_str("if [ x$feature_timeout_style = xy ] ; then\n");

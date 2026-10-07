@@ -6,6 +6,12 @@ use std::path::Path;
 
 pub struct UnknownDetector;
 
+impl Default for UnknownDetector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl UnknownDetector {
     pub fn new() -> Self {
         Self

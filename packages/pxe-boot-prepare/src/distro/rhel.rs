@@ -8,6 +8,12 @@ use std::path::Path;
 
 pub struct RhelDetector;
 
+impl Default for RhelDetector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RhelDetector {
     pub fn new() -> Self {
         Self

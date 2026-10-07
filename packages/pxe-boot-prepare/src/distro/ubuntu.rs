@@ -8,6 +8,12 @@ use std::path::Path;
 
 pub struct UbuntuDetector;
 
+impl Default for UbuntuDetector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl UbuntuDetector {
     pub fn new() -> Self {
         Self

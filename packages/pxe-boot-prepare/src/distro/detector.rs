@@ -98,7 +98,7 @@ impl DetectorRegistry {
         self.detectors.push(detector);
         // Sort by priority (descending)
         self.detectors
-            .sort_by(|a, b| b.priority().cmp(&a.priority()));
+            .sort_by_key(|d| std::cmp::Reverse(d.priority()));
     }
 
     pub async fn detect(&self, mount_path: &Path) -> Result<&dyn DistroDetector> {

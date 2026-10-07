@@ -45,6 +45,12 @@ fn architecture_from_system(system: &str) -> Option<String> {
 
 pub struct NixOsDetector;
 
+impl Default for NixOsDetector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NixOsDetector {
     pub fn new() -> Self {
         Self
