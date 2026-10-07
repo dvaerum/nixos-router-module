@@ -1,0 +1,87 @@
+name: Test Suite
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  light-checks:
+    name: Light checks (pure-eval + small VMs + Rust tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v25
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Restore and save Nix store
+        uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: light-${{ runner.os }}-${{ hashFiles('flake.lock', 'packages/pxe-boot-prepare/Cargo.lock') }}
+          restore-prefixes-first-match: light-${{ runner.os }}-
+          gc-max-store-size-linux: 4G
+          purge: true
+          purge-prefixes: light-${{ runner.os }}-
+          purge-primary-key: never
+
+      - name: Rust test suite (pxe-boot-prepare)
+        run: |
+          nix-build --no-out-link -E \
+            '(import <nixpkgs> {}).callPackage ./packages/pxe-boot-prepare/package.nix {}'
+
+      - name: Light flake checks
+        run: |
+          nix build -L --no-link \
+            .#checks.x86_64-linux.ipv4-lib \
+            .#checks.x86_64-linux.iso-builder-network-download-options \
+            .#checks.x86_64-linux.pxe-boot-tftp-warnings \
+            .#checks.x86_64-linux.pxe-boot-kea-client-classes \
+            .#checks.x86_64-linux.pxe-boot-nix-isos-wiring \
+            .#checks.x86_64-linux.pxe-boot-iso-download-rate-limit \
+            .#checks.x86_64-linux.pxe-boot-full-disable \
+            .#checks.x86_64-linux.basic-routing \
+            .#checks.x86_64-linux.dhcp-server \
+            .#checks.x86_64-linux.vxlan \
+            .#checks.x86_64-linux.dns-server \
+            .#checks.x86_64-linux.dns-server-disabled
+
+  # TODO(revisit): this job runs on a standard GitHub-hosted runner (7GB RAM,
+  # no nested KVM), which is almost certainly too small for the pxe-boot VM
+  # fixture (up to 5 concurrent VMs, PXE-client nodes at memorySize=10240 ->
+  # 30GB+ RAM) and will fall back to slow TCG emulation at best, OOM at
+  # worst. Manual-only for now; revisit with a self-hosted runner or GitHub's
+  # paid larger-runner tier once that's worth the investment.
+  heavy-e2e:
+    name: Heavy E2E (manual only)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v25
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Restore and save Nix store
+        uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: heavy-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          restore-prefixes-first-match: heavy-${{ runner.os }}-
+          gc-max-store-size-linux: 4G
+          purge: true
+          purge-prefixes: heavy-${{ runner.os }}-
+          purge-primary-key: never
+
+      - name: Heavy flake checks
+        run: |
+          nix build -L --no-link \
+            .#checks.x86_64-linux.pxe-boot \
+            .#checks.x86_64-linux.pxe-boot-secure-boot
