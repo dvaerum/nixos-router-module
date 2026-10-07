@@ -75,6 +75,9 @@
           pxe-boot = tests.pxe-boot;
           pxe-boot-tftp-warnings = tests.pxe-boot-tftp-warnings;
           pxe-boot-kea-client-classes = tests.pxe-boot-kea-client-classes;
+          pxe-boot-nix-isos-wiring = tests.pxe-boot-nix-isos-wiring;
+          pxe-boot-iso-download-rate-limit = tests.pxe-boot-iso-download-rate-limit;
+          pxe-boot-full-disable = tests.pxe-boot-full-disable;
           pxe-boot-secure-boot = tests.pxe-boot-secure-boot;
           vxlan = tests.vxlan;
           dns-server = tests.dns-server;

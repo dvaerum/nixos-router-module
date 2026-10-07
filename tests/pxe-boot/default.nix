@@ -167,6 +167,28 @@ let
   '';
 
   ###########################################################################
+  # nixIsos fixture: mimics the SHAPE of a real modules/iso-builder package
+  # (`$out/iso/<name>`, name == isoImage.isoName) without actually building
+  # a full bootable NixOS ISO -- B8: this option previously had zero test
+  # coverage, neither pure-eval (Nix-side wiring: tmpfiles symlink farm,
+  # PathChanged, duplicate-name assertion) nor E2E (is a nixIsos-sourced
+  # ISO actually discovered/served the same as an isoFolderPath one).
+  ###########################################################################
+  nixIsoName = "nix-sourced-test.iso";
+  nixIsoPackage = pkgs.runCommand nixIsoName { nativeBuildInputs = [ pkgs.xorriso ]; } ''
+    mkdir -p $out/iso
+    mkdir -p rhel-root/images/pxeboot
+    echo "Red Hat GPG Key" > rhel-root/RPM-GPG-KEY-redhat-release
+    echo "Mock RHEL kernel (nix-sourced)" > rhel-root/images/pxeboot/vmlinuz
+    echo "Mock RHEL initrd (nix-sourced)" > rhel-root/images/pxeboot/initrd.img
+    xorriso -as mkisofs \
+      -o "$out/iso/${nixIsoName}" \
+      -V "RHEL-9-6-0-NixSourced-x86_64" \
+      -r -J \
+      rhel-root/
+  '';
+
+  ###########################################################################
   # PXE client VM base: diskless, must boot from network
   ###########################################################################
   # useBootLoader forces QEMU through firmware (UEFI/BIOS) instead of
@@ -236,6 +258,18 @@ in
           pxe-boot = {
             enable = true;
             isoFolderPath = dummyIsoDir;
+            # B8: proves nixIsos is discovered/served exactly like an
+            # isoFolderPath-discovered ISO (see the "GRUB config includes
+            # all detected ISOs" subtest below).
+            nixIsos = [ nixIsoPackage ];
+            # Real routers typically have enough cores that nginx's
+            # bulk-ISO-transfer path never actually starves other
+            # clients' latency-sensitive requests (see
+            # isoDownloadRateLimit's option doc) -- but THIS test's
+            # router VM runs on a single vCPU, which reproduces exactly
+            # that contention against GRUB's legacy BIOS/SeaBIOS PXE
+            # driver (no transmit retry logic) unless capped.
+            isoDownloadRateLimit = "20m";
             autoinstall = {
               "ubuntu-24.04-live-server-amd64.iso" = [
                 {
@@ -600,6 +634,22 @@ in
                 assert keyword.lower() in grub_cfg.lower(), \
                     f"GRUB config missing '{keyword}'"
 
+        with subtest("nixIsos: Nix-store-sourced ISO is discovered and served (B8)"):
+            # GRUB entry titles are built from the ISO's FILENAME
+            # (see grub/entry.rs), not its internal volume label -- check
+            # for the actual filename, distinguishable from the OTHER
+            # (isoFolderPath-discovered) RHEL ISO's own filename
+            # ("rhel-9.6-x86_64-dvd.iso") by design, so this specifically
+            # proves the nixIsos symlink-farm path, not just that SOME
+            # RHEL-shaped ISO was found.
+            assert "${nixIsoName}" in grub_cfg, \
+                f"GRUB config missing the nixIsos-sourced ISO's entry ('${nixIsoName}'): {grub_cfg}"
+            router.succeed("test -e /run/pxe-boot/isos/${nixIsoName}")
+            router.succeed(
+                "readlink -f /run/pxe-boot/isos/${nixIsoName} | grep -q '^/nix/store/'"
+            )
+            router.succeed(f"curl -s -f http://${routerIp}:{HTTP_PORT}/isos/${nixIsoName} > /dev/null")
+
         with subtest("NixOS ISO is default boot entry"):
             default_match = re.search(r'set default=(\d+)', grub_cfg)
             assert default_match, "No 'set default=' in GRUB config"
@@ -620,7 +670,7 @@ in
             boot_contents = router.succeed("ls /run/pxe-boot/iso-mountpoint/${testIsoName}/boot/")
             assert "nix" in boot_contents or "bzImage" in boot_contents, \
                 f"Unexpected ISO boot dir contents: {boot_contents}"
-            router.succeed("curl -s -f http://${routerIp}:1338/${testIsoName} > /dev/null")
+            router.succeed(f"curl -s -f http://${routerIp}:{HTTP_PORT}/isos/${testIsoName} > /dev/null")
 
         with subtest("nginx per-interface binding: standalone-tftp-only eth3 is isolated"):
             # eth3 is a standalone-TFTP fixture with pxe-boot disabled, so it
@@ -1002,4 +1052,235 @@ in
   #     non-empty
   #   - `PathChanged` on the auto-refresh path unit includes nixIsosDir
   #   - the duplicate-`.name` assertion actually fires
+  nixIsosWiringCheck =
+    let
+      mkNixIsoFixture =
+        name: extra:
+        pkgs.runCommand name ({ passthru.isNixIsoFixture = true; } // extra) ''
+          mkdir -p "$out/iso"
+          touch "$out/iso/${name}"
+        '';
+      pkgA = mkNixIsoFixture "nixisos-fixture-a.iso" { };
+      pkgB = mkNixIsoFixture "nixisos-fixture-b.iso" { };
+      # Same `.name` as pkgA, but a DIFFERENT derivation (distinguished
+      # via an otherwise-inert env var) -- the dedup check in
+      # config-tftp.nix is keyed on `.name`, not derivation identity, so
+      # two textually-identical `runCommand` calls would just collapse
+      # to the same store path and never exercise the collision at all.
+      pkgDup = mkNixIsoFixture "nixisos-fixture-a.iso" { DISAMBIGUATE = "dup"; };
+
+      mkEvaluated =
+        nixIsos:
+        pkgs.nixos {
+          imports = [ nixosModule.nixosModules.default ];
+          my.router = {
+            enable = true;
+            pxe-boot = {
+              enable = true;
+              isoFolderPath = "/tmp/dummy-iso-dir";
+              inherit nixIsos;
+            };
+            configInterface.eth1 = {
+              mac = null;
+              dhcp.server = {
+                id = 930;
+                address = "192.168.93.1/24";
+                pxe-boot.enable = true;
+              };
+            };
+          };
+        };
+
+      evaluatedGood = mkEvaluated [
+        pkgA
+        pkgB
+      ];
+      nixIsosDir = evaluatedGood.config.my.router.pxe-boot.nixIsosDir;
+      tmpfilesRules = evaluatedGood.config.systemd.tmpfiles.rules;
+      hasLPlusRule = builtins.any (r: pkgs.lib.hasPrefix "L+ ${nixIsosDir} " r) tmpfilesRules;
+      pathChanged =
+        evaluatedGood.config.systemd.paths.pxe-boot-prepare-auto-refresh.pathConfig.PathChanged;
+      hasPathChangedEntry = builtins.elem nixIsosDir pathChanged;
+
+      evaluatedBad = mkEvaluated [
+        pkgA
+        pkgDup
+      ];
+      hasDuplicateAssertion = builtins.any (
+        a: !a.assertion && pkgs.lib.hasInfix "nixIsos" a.message
+      ) evaluatedBad.config.assertions;
+
+      checks = [
+        {
+          name = "systemd.tmpfiles.rules has an L+ entry for nixIsosDir";
+          ok = hasLPlusRule;
+        }
+        {
+          name = "auto-refresh path unit's PathChanged includes nixIsosDir";
+          ok = hasPathChangedEntry;
+        }
+        {
+          name = "duplicate nixIsos package name triggers an assertion";
+          ok = hasDuplicateAssertion;
+        }
+      ];
+      failures = builtins.filter (c: !c.ok) checks;
+    in
+    pkgs.runCommand "pxe-boot-nix-isos-wiring-check" { } (
+      if failures == [ ] then
+        "touch $out"
+      else
+        throw ''
+          nixIsos wiring check(s) failed: ${builtins.toJSON (map (f: f.name) failures)}
+
+          nixIsosDir: ${nixIsosDir}
+          tmpfiles.rules: ${builtins.toJSON tmpfilesRules}
+          PathChanged: ${builtins.toJSON pathChanged}
+          nixIsos-related assertions found: ${builtins.toJSON hasDuplicateAssertion}
+        ''
+    );
+
+  # Pure-eval check (no VM): `isoDownloadRateLimit` (B10) -- set, it must
+  # reach nginx's `/isos/` location as a `limit_rate` directive; unset
+  # (the default), that location must not emit a `limit_rate` at all
+  # (confirming the `mkIf` guard actually omits it, not just that the
+  # REAL E2E test's own fixture -- which always sets it -- happens to
+  # work).
+  isoDownloadRateLimitCheck =
+    let
+      mkEvaluated =
+        isoDownloadRateLimit:
+        pkgs.nixos {
+          imports = [ nixosModule.nixosModules.default ];
+          my.router = {
+            enable = true;
+            pxe-boot = {
+              enable = true;
+              isoFolderPath = "/tmp/dummy-iso-dir";
+            }
+            // pkgs.lib.optionalAttrs (isoDownloadRateLimit != null) {
+              inherit isoDownloadRateLimit;
+            };
+            configInterface.eth1 = {
+              mac = null;
+              dhcp.server = {
+                id = 940;
+                address = "192.168.94.1/24";
+                pxe-boot.enable = true;
+              };
+            };
+          };
+        };
+
+      isosLocationConfig =
+        evaluated: evaluated.config.services.nginx.virtualHosts."pxe-boot".locations."/isos/" or null;
+
+      withLimit = mkEvaluated "20m";
+      withLimitExtraConfig = (isosLocationConfig withLimit).extraConfig or "";
+
+      withoutLimit = mkEvaluated null;
+      withoutLimitLocation = isosLocationConfig withoutLimit;
+      withoutLimitExtraConfig = withoutLimitLocation.extraConfig or "";
+
+      checks = [
+        {
+          name = "isoDownloadRateLimit = \"20m\" reaches nginx as limit_rate 20m;";
+          ok = pkgs.lib.hasInfix "limit_rate 20m;" withLimitExtraConfig;
+        }
+        {
+          name = "isoDownloadRateLimit = null (default) emits no limit_rate directive";
+          ok = !(pkgs.lib.hasInfix "limit_rate" withoutLimitExtraConfig);
+        }
+      ];
+      failures = builtins.filter (c: !c.ok) checks;
+    in
+    pkgs.runCommand "pxe-boot-iso-download-rate-limit-check" { } (
+      if failures == [ ] then
+        "touch $out"
+      else
+        throw ''
+          isoDownloadRateLimit check(s) failed: ${builtins.toJSON (map (f: f.name) failures)}
+
+          with "20m" extraConfig: ${builtins.toJSON withLimitExtraConfig}
+          without limit extraConfig: ${builtins.toJSON withoutLimitExtraConfig}
+        ''
+    );
+
+  # Pure-eval check (no VM): full-disable state (B18) -- with
+  # `my.router.pxe-boot.enable = false` (the GLOBAL switch) and no
+  # interface opted into standalone TFTP, every pxe-boot-related
+  # service/vhost/tmpfiles-rule must be fully absent, not merely
+  # dormant. Also proves the inverse established earlier in this file
+  # (config-tftp.nix comment on `tftpServerInterfaces`): a standalone
+  # `tftpServer = true` interface with `pxe-boot.enable` left at its
+  # default (false) must still come up even while the GLOBAL
+  # `pxe-boot.enable` switch is off.
+  fullDisableCheck =
+    let
+      disabledEvaluated = pkgs.nixos {
+        imports = [ nixosModule.nixosModules.default ];
+        my.router = {
+          enable = true;
+          pxe-boot.enable = false;
+          configInterface.eth1 = {
+            mac = null;
+            dhcp.server = {
+              id = 950;
+              address = "192.168.95.1/24";
+            };
+          };
+        };
+      };
+
+      standaloneEvaluated = pkgs.nixos {
+        imports = [ nixosModule.nixosModules.default ];
+        my.router = {
+          enable = true;
+          pxe-boot.enable = false;
+          configInterface.eth1 = {
+            mac = null;
+            dhcp.server = {
+              id = 951;
+              address = "192.168.96.1/24";
+              tftpServer = true;
+            };
+          };
+        };
+      };
+
+      checks = [
+        {
+          name = "pxe-boot-prepare.service absent when pxe-boot.enable = false";
+          ok = !(disabledEvaluated.config.systemd.services ? "pxe-boot-prepare");
+        }
+        {
+          name = "pxe-boot-main-script.service absent when pxe-boot.enable = false";
+          ok = !(disabledEvaluated.config.systemd.services ? "pxe-boot-main-script");
+        }
+        {
+          name = "nginx pxe-boot vhost absent when pxe-boot.enable = false";
+          ok = !(disabledEvaluated.config.services.nginx.virtualHosts ? "pxe-boot");
+        }
+        {
+          name = "no TFTP unit created for an interface with no tftpServer/pxe-boot at all";
+          ok = !(disabledEvaluated.config.systemd.services ? "pxe-boot-tftp-server-for-interface-eth1");
+        }
+        {
+          name = "standalone tftpServer=true interface still gets a TFTP unit despite pxe-boot.enable=false";
+          ok = standaloneEvaluated.config.systemd.services ? "pxe-boot-tftp-server-for-interface-eth1";
+        }
+      ];
+      failures = builtins.filter (c: !c.ok) checks;
+    in
+    pkgs.runCommand "pxe-boot-full-disable-check" { } (
+      if failures == [ ] then
+        "touch $out"
+      else
+        throw ''
+          Full-disable check(s) failed: ${builtins.toJSON (map (f: f.name) failures)}
+
+          disabled systemd.services: ${builtins.toJSON (builtins.attrNames disabledEvaluated.config.systemd.services)}
+          standalone systemd.services: ${builtins.toJSON (builtins.attrNames standaloneEvaluated.config.systemd.services)}
+        ''
+    );
 }

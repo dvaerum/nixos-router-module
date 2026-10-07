@@ -989,6 +989,59 @@ in
           type = types.path;
           example = "/data/iso";
         };
+        nixIsos = mkOption {
+          description = ''
+            ISO images built by Nix (e.g. this project's own
+            `modules/iso-builder`) to serve for PXE boot, without needing
+            to manually copy them into `isoFolderPath`. Each package is
+            exposed via a `systemd.tmpfiles.rules "L+"` symlink farm --
+            atomic and generation-pinned: removing a package from this
+            list changes what the farm contains on the next switch, so no
+            manually-managed symlinks can be orphaned.
+
+            Inert unless `pxe-boot.enable` is also set -- the farm and
+            its `tmpfiles.rules` entry only exist inside that same
+            `lib.mkIf`.
+
+            `autoinstall` and each interface's `defaultIso` key by ISO
+            same as for `isoFolderPath`-discovered ISOs -- there is
+            nothing `nixIsos`-specific to configure on that side, just
+            use the same filename there too.
+          '';
+          default = [ ];
+          example = literalExpression "[ self.packages.x86_64-linux.iso-x86_64 ]";
+          type = types.listOf types.package;
+        };
+        nixIsosDir = mkOption {
+          description = ''
+            Where the `nixIsos` symlink farm is exposed via
+            `systemd.tmpfiles.rules "L+"` (added to `isoFolderPaths`
+            alongside the manually-managed `isoFolderPath` whenever
+            `nixIsos` is non-empty).
+          '';
+          type = types.path;
+          default = "/var/lib/pxe-boot/nix-isos";
+        };
+        isoDownloadRateLimit = mkOption {
+          description = ''
+            Caps the transfer rate of whole-ISO downloads served under
+            `/isos/` (nginx's `limit_rate`, e.g. a client's own
+            `findiso=` fetch). `null` (the default) means unlimited.
+
+            A bulk ISO transfer and other clients' latency-sensitive GRUB
+            kernel/initrd fetches share the same nginx worker process;
+            on a very weak/single-core router this can starve those
+            latency-sensitive requests enough to make GRUB's legacy
+            BIOS/SeaBIOS PXE network driver (which has no retry logic)
+            fail entirely. Real routers typically have enough cores that
+            this never actually contends -- this project's own E2E test
+            runs its router VM with a single vCPU and sets this
+            explicitly, which real deployments normally won't need to.
+          '';
+          default = null;
+          example = "20m";
+          type = types.nullOr types.str;
+        };
         shimPackage = mkOption {
           description = ''
             The signed shim + GRUB build served over TFTP as

@@ -132,7 +132,7 @@ mod tests {
             }],
         );
         PxeBootConfig {
-            iso_folder_path: PathBuf::from("/data/iso"),
+            iso_folder_paths: vec![PathBuf::from("/data/iso")],
             tftp_root: PathBuf::from("/srv/pxeboot"),
             runtime_root: runtime_root.to_path_buf(),
             dhcp_interfaces: vec![],

@@ -17,6 +17,45 @@ let
 
   iso_folder_path = cfg.pxe-boot.isoFolderPath;
 
+  # Nix-store-sourced ISOs (`cfg.pxe-boot.nixIsos`) are exposed via one
+  # `systemd.tmpfiles.rules "L+"` symlink pointing at a `linkFarm` of all
+  # of them -- atomic and generation-pinned: removing a package from the
+  # list just changes what the farm (and so this whole directory)
+  # contains on the next switch, so no per-ISO symlink can be orphaned.
+  nix_isos_dir = cfg.pxe-boot.nixIsosDir;
+  nix_isos_farm = pkgs.linkFarm "pxe-nix-isos" (
+    map (p: {
+      name = p.name;
+      # `p` is the ISO-builder derivation itself, whose output directory
+      # is `$out/iso/<isoName>` (hardcoded by nixpkgs'
+      # `make-iso9660-image.nix`/.sh) -- `p` alone points at that
+      # directory, not the `.iso` file inside it. `p.name` already equals
+      # `isoName` (this module sets `image.fileName = lib.mkForce "...";`,
+      # which becomes the derivation's plain `name`), so the real file is
+      # always `${p}/iso/${p.name}`.
+      #
+      # Caveat: this breaks if a `nixIsos` package has `isoImage.compressImage
+      # = true` -- the output file becomes `${p.name}.zst` while `p.name`
+      # (and this `path`) still points at the uncompressed name.
+      # `modules/iso-builder` (this project's own ISO builder, the
+      # intended/common source for `nixIsos` entries) asserts against this
+      # at evaluation time -- see its `assertions` list. An arbitrary
+      # THIRD-PARTY package not built via that module is NOT covered by
+      # that guard, since `nixIsos`'s type (`types.listOf types.package`)
+      # accepts any package.
+      path = "${p}/iso/${p.name}";
+    }) cfg.pxe-boot.nixIsos
+  );
+
+  # Every directory pxe-boot-prepare should scan for ISOs: the
+  # user-managed manual directory, plus the Nix-managed farm above when
+  # any nixIsos are actually configured (the farm/symlink only exists in
+  # that case -- see the `systemd.tmpfiles.rules` entry below).
+  iso_folder_paths = [
+    (builtins.toString iso_folder_path)
+  ]
+  ++ lib.optional (cfg.pxe-boot.nixIsos != [ ]) nix_isos_dir;
+
   pxe_boot_folder = cfg.tftpServer.root;
 
   # `dhcp.server.tftpServerRoot` overrides the global root for just that
@@ -84,7 +123,7 @@ let
   # Generate JSON configuration from NixOS options
   pxe-config = pkgs.writeText "pxe-boot-config.json" (
     builtins.toJSON {
-      iso_folder_path = builtins.toString iso_folder_path;
+      iso_folder_paths = iso_folder_paths;
       tftp_root = builtins.toString pxe_boot_folder;
       runtime_root = "/run/pxe-boot";
 

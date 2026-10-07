@@ -45,14 +45,31 @@ impl PxeBootService {
         tracing::info!("Discovered {} ISO files", iso_paths.len());
 
         if iso_paths.is_empty() {
-            tracing::warn!("No ISO files found in {}", self.config.iso_folder_path.display());
+            tracing::warn!(
+                "No ISO files found in {}",
+                self.config
+                    .iso_folder_paths
+                    .iter()
+                    .map(|p| p.display().to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
             return Ok(());
         }
 
-        // 2. Mount all ISOs (in parallel), skipping failures
-        let mut mount_tasks = Vec::new();
-        for path in &iso_paths {
-            mount_tasks.push(self.iso_mounter.mount(path));
+        // Rebuild the canonical raw-ISO serving directory from the full
+        // set of discovered ISOs -- independent of mount/detection
+        // success below, since a raw whole-file download (e.g. Ubuntu's
+        // `url=` fetch) doesn't need this router to have mounted the ISO
+        // at all. A failure here (e.g. the runtime_root filesystem is
+        // briefly unwritable) must not abort every other step of
+        // preparation -- mounting/detection/menu generation below are
+        // all independently useful even if raw-ISO serving is degraded.
+        if let Err(e) = self.iso_serve_tree.rebuild(&iso_paths).await {
+            tracing::warn!(
+                "Failed to rebuild raw-ISO serving tree: {}. Whole-ISO downloads (e.g. Ubuntu's url= fetch) will be unavailable until the next successful run.",
+                e
+            );
         }
 
         let mount_results = futures::future::join_all(mount_tasks).await;
@@ -506,7 +523,7 @@ mod tests {
 
     fn config_with(tftp_root: &std::path::Path, runtime_root: &std::path::Path) -> PxeBootConfig {
         PxeBootConfig {
-            iso_folder_path: std::path::PathBuf::from("/data/iso"),
+            iso_folder_paths: vec![std::path::PathBuf::from("/data/iso")],
             tftp_root: tftp_root.to_path_buf(),
             runtime_root: runtime_root.to_path_buf(),
             dhcp_interfaces: vec![],

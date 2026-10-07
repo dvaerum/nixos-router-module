@@ -15,8 +15,11 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PxeBootConfig {
-    /// Path to folder containing ISO files
-    pub iso_folder_path: PathBuf,
+    /// Directories to scan for ISO files. Typically a user-managed
+    /// manual directory plus, optionally, a Nix-managed
+    /// `systemd.tmpfiles.rules "L+"` symlink farm of store-built ISOs --
+    /// discovery merges results from all of them (see `IsoDiscovery`).
+    pub iso_folder_paths: Vec<PathBuf>,
 
     /// TFTP root folder (default: /srv/pxeboot)
     pub tftp_root: PathBuf,

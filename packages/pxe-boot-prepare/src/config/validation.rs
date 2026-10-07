@@ -5,8 +5,23 @@ use std::collections::HashSet;
 impl PxeBootConfig {
     /// Validate the configuration
     pub fn validate(&self) -> Result<()> {
-        // Validate ISO folder exists
-        if !self.iso_folder_path.exists() {
+        // Validate every ISO source directory exists
+        for path in &self.iso_folder_paths {
+            if !path.exists() {
+                return Err(PxeBootError::Config(format!(
+                    "ISO folder does not exist: {}",
+                    path.display()
+                )));
+            }
+        }
+
+        // Validate TFTP root exists. Not strictly required mechanically
+        // (generate_grub_menu's create_dir_all would silently create it),
+        // but a missing tftp_root is far more likely to mean "the
+        // intended mount/destination isn't there yet" than "please
+        // auto-create a fresh directory for me" -- fail fast instead of
+        // silently writing into the wrong place.
+        if !self.tftp_root.exists() {
             return Err(PxeBootError::Config(format!(
                 "TFTP root does not exist: {}",
                 self.tftp_root.display()

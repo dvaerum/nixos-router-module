@@ -211,6 +211,18 @@ in
         assertion = !cfg.enableNetworkDownload || config.boot.initrd.systemd.enable;
         message = "pxe-boot-iso.enableNetworkDownload requires boot.initrd.systemd.enable = true (the legacy scripted-stage-1 findiso= download path has been removed).";
       }
+      {
+        # nixosModule/config-tftp.nix's `nixIsos` option consumes a
+        # package built by THIS module as `${p}/iso/${p.name}` -- a
+        # hardcoded path that's only correct when the image is
+        # uncompressed (nixpkgs' own make-iso9660-image.nix emits
+        # `${p.name}.zst` instead when compressed). nixpkgs' own default
+        # for this option is already `false`, so this only fires if
+        # something explicitly overrides it -- fail loudly here rather
+        # than letting nixIsos silently point at a nonexistent file.
+        assertion = !config.isoImage.compressImage;
+        message = "pxe-boot-iso: isoImage.compressImage = true is not supported -- packages built by this module are consumed by nixosModule/config-tftp.nix's `nixIsos` option at the hardcoded uncompressed path `\${p}/iso/\${p.name}`, which does not exist when the image is compressed (`\${p.name}.zst` instead).";
+      }
     ];
 
     # Enable flakes for modern Nix workflow
