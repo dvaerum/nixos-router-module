@@ -5,12 +5,13 @@ pub mod error;
 pub mod grub;
 pub mod iso;
 
-use autoinstall::AutoinstallManager;
-use config::{BootInfo, DhcpInterface, DistroType, IsoInfo, PxeBootConfig};
+use autoinstall::{AutoinstallManager, AutoinstallPreparing};
+use config::{AutoinstallScript, BootInfo, DhcpInterface, DistroType, IsoInfo, PxeBootConfig};
 use distro::{DetectorRegistry, DistroDetector};
 use error::{IoResultExt, PxeBootError, Result};
 use fs4::tokio::AsyncFileExt;
 use grub::{GrubMenuBuilder, MenuEntryFactory};
+use iso::{IsoDiscovery, IsoDiscovering, IsoMounter, IsoMounting, ServeTree, ServeTreeRebuilding};
 use std::path::Path;
 
 /// Acquires an exclusive, non-blocking lock on `<runtime_root>/.prepare.lock`
@@ -52,23 +53,51 @@ async fn acquire_prepare_lock(runtime_root: &Path) -> Result<tokio::fs::File> {
 pub struct PxeBootService {
     config: PxeBootConfig,
     detector_registry: DetectorRegistry,
-    iso_discovery: IsoDiscovery,
-    iso_mounter: IsoMounter,
-    autoinstall_manager: AutoinstallManager,
+    iso_discovery: Box<dyn IsoDiscovering>,
+    iso_mounter: Box<dyn IsoMounting>,
+    iso_serve_tree: Box<dyn ServeTreeRebuilding>,
+    autoinstall_manager: Box<dyn AutoinstallPreparing>,
 }
 
 impl PxeBootService {
     pub fn new(config: PxeBootConfig) -> Self {
         let detector_registry = DetectorRegistry::new();
-        let iso_discovery = IsoDiscovery::new(config.iso_folder_path.clone());
+        let iso_discovery = IsoDiscovery::new(config.iso_folder_paths.clone());
         let iso_mounter = IsoMounter::new(config.runtime_root.clone());
+        let iso_serve_tree = ServeTree::new(config.runtime_root.clone());
         let autoinstall_manager = AutoinstallManager::new(config.runtime_root.clone());
 
+        Self::new_with_dependencies(
+            config,
+            detector_registry,
+            Box::new(iso_discovery),
+            Box::new(iso_mounter),
+            Box::new(iso_serve_tree),
+            Box::new(autoinstall_manager),
+        )
+    }
+
+    /// Fully-injectable constructor (C33) -- lets tests substitute a
+    /// `Fake*` for any collaborator while keeping real ones for the rest,
+    /// to get deterministic, fast coverage of `prepare()`/`status()`
+    /// orchestration that real I/O can't easily produce (e.g. partial
+    /// mount failure across multiple ISOs, or an autoinstall-write
+    /// failure in isolation). `new()` above is the normal production
+    /// entry point and just wires up the real collaborators through this.
+    pub fn new_with_dependencies(
+        config: PxeBootConfig,
+        detector_registry: DetectorRegistry,
+        iso_discovery: Box<dyn IsoDiscovering>,
+        iso_mounter: Box<dyn IsoMounting>,
+        iso_serve_tree: Box<dyn ServeTreeRebuilding>,
+        autoinstall_manager: Box<dyn AutoinstallPreparing>,
+    ) -> Self {
         Self {
             config,
             detector_registry,
             iso_discovery,
             iso_mounter,
+            iso_serve_tree,
             autoinstall_manager,
         }
     }
@@ -112,19 +141,29 @@ impl PxeBootService {
             );
         }
 
-        let mount_results = futures::future::join_all(mount_tasks).await;
-
-        // Collect successfully mounted ISOs
+        // 2. Mount all ISOs, skipping failures.
+        //
+        // Sequential, not concurrent: `mount -t iso9660 -o loop` relies
+        // on the kernel/util-linux to auto-select a free loop device
+        // (no pre-reserved device number) -- a well-known TOCTOU race
+        // when invoked concurrently across multiple `mount` processes
+        // (two mounts can both see the same device as "free" and race
+        // to attach to it). Confirmed empirically: a 4th concurrent
+        // mount (added for the findiso-download-failure-path E2E fixture,
+        // see tests/pxe-boot/default.nix) reproduced cross-contaminated
+        // mount content that 3 concurrent mounts never had. Mounting is a
+        // once-per-prepare()-run operation, not a hot path -- the lost
+        // parallelism is not a meaningful cost for correctness.
         let mut mounted_isos = Vec::new();
-        for (iso_path, mount_result) in iso_paths.iter().zip(mount_results.iter()) {
-            match mount_result {
+        for path in &iso_paths {
+            match self.iso_mounter.mount(path).await {
                 Ok(mount_path) => {
-                    mounted_isos.push((iso_path.clone(), mount_path.clone()));
+                    mounted_isos.push((path.clone(), mount_path));
                 }
                 Err(e) => {
                     tracing::warn!(
                         "Failed to mount {}: {}. Skipping this ISO.",
-                        iso_path.display(),
+                        path.display(),
                         e
                     );
                 }
@@ -990,4 +1029,103 @@ mod tests {
         assert!(report.is_empty());
     }
 
+    // C33: the two tests below use the new DI seam (`new_with_dependencies`
+    // + `Fake*` collaborators) to cover orchestration behavior the existing
+    // real-I/O tests structurally can't reach -- e.g. the unprivileged
+    // `mount` command above always fails the same way for every ISO, so
+    // there was previously no way to get *some* ISOs to mount successfully
+    // and others to fail in the same run.
+
+    #[tokio::test]
+    async fn status_reports_per_iso_results_independently_when_mounts_partially_succeed() {
+        let rt = tempfile::tempdir().unwrap();
+        let iso_dir = tempfile::tempdir().unwrap();
+        tokio::fs::write(iso_dir.path().join("good.iso"), b"x")
+            .await
+            .unwrap();
+        tokio::fs::write(iso_dir.path().join("bad.iso"), b"x")
+            .await
+            .unwrap();
+        // An empty dir stands in for "good.iso"'s mount point -- no real
+        // detector recognizes it, so it falls through to `UnknownDetector`
+        // (always matches, see distro/detector.rs), which is enough to
+        // prove mounting succeeded independent of distro detection.
+        let mount_target = tempfile::tempdir().unwrap();
+
+        let mut config = config_with(rt.path(), rt.path());
+        config.iso_folder_paths = vec![iso_dir.path().to_path_buf()];
+
+        let service = PxeBootService::new_with_dependencies(
+            config,
+            DetectorRegistry::new(),
+            Box::new(IsoDiscovery::new(vec![iso_dir.path().to_path_buf()])),
+            Box::new(
+                crate::iso::mount::FakeIsoMounter::new()
+                    .succeeding_for("good.iso", mount_target.path().to_path_buf())
+                    .failing_for("bad.iso", "simulated mount failure"),
+            ),
+            Box::new(ServeTree::new(rt.path().to_path_buf())),
+            Box::new(AutoinstallManager::new(rt.path().to_path_buf())),
+        );
+
+        let report = service.status().await.unwrap();
+
+        assert_eq!(report.len(), 2);
+        // An empty mount target has no real distro to find, so "good.iso"
+        // still fails -- but only at the NEXT stage (boot-info extraction,
+        // after `UnknownDetector` matches as the catch-all), proving it
+        // got past mounting independently of "bad.iso".
+        let good = report.iter().find(|r| r.file_name == "good.iso").unwrap();
+        let good_error = good
+            .error
+            .as_ref()
+            .expect("empty mount target has no real distro, so extraction should fail");
+        assert!(
+            good_error.contains("detected but failed to extract boot info"),
+            "good.iso should mount successfully and only fail at extraction, got: {good_error}"
+        );
+
+        let bad = report.iter().find(|r| r.file_name == "bad.iso").unwrap();
+        let bad_error = bad.error.as_ref().unwrap();
+        assert!(bad_error.contains("failed to mount"));
+        assert!(bad_error.contains("simulated mount failure"));
+    }
+
+    #[tokio::test]
+    async fn prepare_still_generates_grub_menus_when_autoinstall_preparation_fails() {
+        // The real AutoinstallManager only fails via filesystem-permission
+        // tricks that are fiddly to set up reliably across environments --
+        // a Fake makes this one-line and deterministic.
+        let rt = tempfile::tempdir().unwrap();
+        let global_root = rt.path().join("global");
+        let mut config = config_with(&global_root, rt.path());
+        config.dhcp_interfaces = vec![interface(7, None)];
+        // `prepare()` returns early when no ISOs are discovered at all, so
+        // at least one (mountable, even if not bootable) ISO is needed to
+        // reach the autoinstall/GRUB-generation stages this test targets.
+        let mount_target = tempfile::tempdir().unwrap();
+
+        let service = PxeBootService::new_with_dependencies(
+            config,
+            DetectorRegistry::new(),
+            Box::new(crate::iso::discovery::FakeIsoDiscovery::returning(vec![
+                std::path::PathBuf::from("/fake/whatever.iso"),
+            ])),
+            Box::new(
+                crate::iso::mount::FakeIsoMounter::new()
+                    .succeeding_for("whatever.iso", mount_target.path().to_path_buf()),
+            ),
+            Box::new(ServeTree::new(rt.path().to_path_buf())),
+            Box::new(crate::autoinstall::manager::FakeAutoinstallPreparing::failing_with(
+                "simulated autoinstall failure",
+            )),
+        );
+
+        service.prepare().await.unwrap();
+
+        assert!(
+            global_root.join("7").join("grub").join("grub.cfg").exists(),
+            "GRUB menu generation must still run even when autoinstall preparation fails"
+        );
+    }
 }

@@ -1,3 +1,3 @@
 pub mod manager;
 
-pub use manager::AutoinstallManager;
+pub use manager::{AutoinstallManager, AutoinstallPreparing};

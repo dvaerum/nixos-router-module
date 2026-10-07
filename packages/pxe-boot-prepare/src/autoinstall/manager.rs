@@ -1,7 +1,18 @@
 use crate::config::{DistroType, PxeBootConfig};
-use crate::error::Result;
+use crate::error::{PxeBootError, Result};
+use async_trait::async_trait;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+
+/// Seam for `PxeBootService` (C33).
+#[async_trait]
+pub trait AutoinstallPreparing: Send + Sync {
+    async fn prepare(
+        &self,
+        config: &PxeBootConfig,
+        distro_by_iso: &HashMap<String, DistroType>,
+    ) -> Result<()>;
+}
 
 pub struct AutoinstallManager {
     runtime_root: PathBuf,
@@ -25,45 +36,61 @@ impl AutoinstallManager {
     ) -> Result<()> {
         let autoinstall_root = self.runtime_root.join("unattented-install");
 
-        for (iso_name, scripts) in &config.autoinstall {
+        // C34: each (iso_name, script) pair writes to its own independent
+        // path -- different ISOs never share a directory, and multiple
+        // scripts for the same ISO each get their own subdir (Ubuntu) or
+        // file (other distros) -- so every write below can run
+        // concurrently. `ensure_dir` is idempotent (`create_dir_all`), so
+        // it's safe to call per-task instead of needing a separate
+        // sequential pre-pass to create each `iso_script_dir` first.
+        let tasks = config.autoinstall.iter().flat_map(|(iso_name, scripts)| {
             let iso_script_dir = autoinstall_root.join(iso_name);
-            Self::ensure_dir(&iso_script_dir).await?;
-
             let is_ubuntu = matches!(distro_by_iso.get(iso_name), Some(DistroType::Ubuntu));
 
-            for script in scripts {
-                if is_ubuntu {
-                    // cloud-init NoCloud requires a seed *directory* containing a
-                    // file named exactly `user-data` plus a (possibly empty)
-                    // `meta-data`. Give each script its own subdir so multiple
-                    // seeds never collide and the GRUB `s=<dir>/` URL points at
-                    // exactly this seed.
-                    let seed_dir = iso_script_dir.join(&script.name);
-                    Self::ensure_dir(&seed_dir).await?;
+            scripts.iter().cloned().map(move |script| {
+                let iso_script_dir = iso_script_dir.clone();
+                async move {
+                    Self::ensure_dir(&iso_script_dir).await?;
 
-                    let user_data = seed_dir.join("user-data");
-                    tracing::debug!(
-                        "Installing Ubuntu NoCloud user-data: {} -> {}",
-                        script.script_path.display(),
-                        user_data.display()
-                    );
-                    Self::install_file(&script.script_path, &user_data).await?;
+                    if is_ubuntu {
+                        // cloud-init NoCloud requires a seed *directory* containing a
+                        // file named exactly `user-data` plus a (possibly empty)
+                        // `meta-data`. Give each script its own subdir so multiple
+                        // seeds never collide and the GRUB `s=<dir>/` URL points at
+                        // exactly this seed.
+                        let seed_dir = iso_script_dir.join(&script.name);
+                        Self::ensure_dir(&seed_dir).await?;
 
-                    // NoCloud treats a missing meta-data as an invalid datasource,
-                    // so always write one (empty is fine).
-                    Self::write_fresh(&seed_dir.join("meta-data"), b"").await?;
-                } else {
-                    // Other distros (e.g. RHEL kickstart): serve the script
-                    // verbatim under its own name.
-                    let dest = iso_script_dir.join(&script.name);
-                    tracing::debug!(
-                        "Copying autoinstall script: {} -> {}",
-                        script.script_path.display(),
-                        dest.display()
-                    );
-                    Self::install_file(&script.script_path, &dest).await?;
+                        let user_data = seed_dir.join("user-data");
+                        tracing::debug!(
+                            "Installing Ubuntu NoCloud user-data: {} -> {}",
+                            script.script_path.display(),
+                            user_data.display()
+                        );
+                        Self::install_file(&script.script_path, &user_data).await?;
+
+                        // NoCloud treats a missing meta-data as an invalid datasource,
+                        // so always write one (empty is fine).
+                        Self::write_fresh(&seed_dir.join("meta-data"), b"").await?;
+                    } else {
+                        // Other distros (e.g. RHEL kickstart): serve the script
+                        // verbatim under its own name.
+                        let dest = iso_script_dir.join(&script.name);
+                        tracing::debug!(
+                            "Copying autoinstall script: {} -> {}",
+                            script.script_path.display(),
+                            dest.display()
+                        );
+                        Self::install_file(&script.script_path, &dest).await?;
+                    }
+
+                    Ok::<(), PxeBootError>(())
                 }
-            }
+            })
+        });
+
+        for result in futures::future::join_all(tasks).await {
+            result?;
         }
 
         tracing::info!("Prepared autoinstall scripts");
@@ -114,6 +141,52 @@ impl AutoinstallManager {
         }
         tokio::fs::create_dir_all(dir).await?;
         Ok(())
+    }
+}
+
+#[async_trait]
+impl AutoinstallPreparing for AutoinstallManager {
+    async fn prepare(
+        &self,
+        config: &PxeBootConfig,
+        distro_by_iso: &HashMap<String, DistroType>,
+    ) -> Result<()> {
+        AutoinstallManager::prepare(self, config, distro_by_iso).await
+    }
+}
+
+/// Test double for [`AutoinstallPreparing`] -- `pub` so `lib.rs`'s test
+/// module can use it too (see the note on `FakeIsoDiscovery`).
+#[cfg(test)]
+pub struct FakeAutoinstallPreparing {
+    fail_with: Option<String>,
+}
+
+#[cfg(test)]
+impl FakeAutoinstallPreparing {
+    pub fn always_succeeding() -> Self {
+        Self { fail_with: None }
+    }
+
+    pub fn failing_with(reason: &str) -> Self {
+        Self {
+            fail_with: Some(reason.to_string()),
+        }
+    }
+}
+
+#[cfg(test)]
+#[async_trait]
+impl AutoinstallPreparing for FakeAutoinstallPreparing {
+    async fn prepare(
+        &self,
+        _config: &PxeBootConfig,
+        _distro_by_iso: &HashMap<String, DistroType>,
+    ) -> Result<()> {
+        match &self.fail_with {
+            Some(reason) => Err(crate::error::PxeBootError::Config(reason.clone())),
+            None => Ok(()),
+        }
     }
 }
 
@@ -309,5 +382,57 @@ mod tests {
 
         let contents = tokio::fs::read_to_string(&meta_data).await.unwrap();
         assert_eq!(contents, "", "meta-data must be replaced with the fresh (empty) content");
+    }
+
+    #[tokio::test]
+    async fn one_scripts_failure_does_not_block_another_scripts_write() {
+        // C34: before concurrency, this loop used `?` per-iteration, so a
+        // failure on an EARLIER script would short-circuit and never even
+        // attempt a LATER one. Now every script's write is independently
+        // attempted regardless of the others -- this test would have
+        // failed under the old sequential code if "missing" sorted before
+        // "present" (HashMap/Vec iteration order placed it first).
+        let rt = tempfile::tempdir().unwrap();
+        let good_src = rt.path().join("good.yaml");
+        tokio::fs::write(&good_src, b"ok").await.unwrap();
+        let missing_src = rt.path().join("does-not-exist.yaml");
+
+        let iso = "rhel-9.6-x86_64-dvd.iso";
+        let mut autoinstall = HashMap::new();
+        autoinstall.insert(
+            iso.to_string(),
+            vec![
+                AutoinstallScript {
+                    name: "aaa-missing.ks".to_string(),
+                    script_path: missing_src,
+                },
+                AutoinstallScript {
+                    name: "zzz-present.ks".to_string(),
+                    script_path: good_src,
+                },
+            ],
+        );
+        let cfg = PxeBootConfig {
+            iso_folder_paths: vec![PathBuf::from("/data/iso")],
+            tftp_root: PathBuf::from("/srv/pxeboot"),
+            runtime_root: rt.path().to_path_buf(),
+            dhcp_interfaces: vec![],
+            autoinstall,
+            http: HttpConfig { port: 1337 },
+        };
+        let mgr = AutoinstallManager::new(rt.path().to_path_buf());
+
+        let result = mgr.prepare(&cfg, &HashMap::new()).await;
+
+        assert!(result.is_err(), "the missing source file must surface as an error");
+        let present_dest = rt
+            .path()
+            .join("unattented-install")
+            .join(iso)
+            .join("zzz-present.ks");
+        assert!(
+            present_dest.exists(),
+            "the OTHER script's write must still happen, independent of the missing one's failure"
+        );
     }
 }

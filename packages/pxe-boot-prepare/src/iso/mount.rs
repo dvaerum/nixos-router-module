@@ -1,7 +1,45 @@
-use crate::error::{PxeBootError, Result};
+use crate::error::{IoResultExt, PxeBootError, Result};
+use async_trait::async_trait;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use tokio::process::Command;
+
+/// Seam for `PxeBootService` (C33) -- lets tests inject a `FakeIsoMounter`
+/// to get deterministic per-ISO mount outcomes (including partial success
+/// across multiple ISOs), which the real `mount` command can't produce
+/// unprivileged in CI (it always fails the same way for every ISO).
+#[async_trait]
+pub trait IsoMounting: Send + Sync {
+    async fn mount(&self, iso_path: &Path) -> Result<PathBuf>;
+    async fn unmount_all(&self) -> Result<()>;
+}
+
+/// `/proc/mounts` octal-escapes space, tab, newline, and backslash in its
+/// whitespace-delimited fields (`\040` for a space, etc.) -- any path
+/// built in-process (never escaped this way) must have its own fields
+/// unescaped before comparison, or a mount point/backing file containing
+/// one of those characters silently never matches.
+fn unescape_mount_field(field: &str) -> String {
+    let bytes = field.as_bytes();
+    let mut result: Vec<u8> = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'\\'
+            && i + 3 < bytes.len()
+            && bytes[i + 1..i + 4].iter().all(|b| (b'0'..=b'7').contains(b))
+        {
+            let octal_str = std::str::from_utf8(&bytes[i + 1..i + 4]).unwrap();
+            let value = u8::from_str_radix(octal_str, 8).unwrap_or(bytes[i]);
+            result.push(value);
+            i += 4;
+        } else {
+            result.push(bytes[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8_lossy(&result).into_owned()
+}
+
 
 pub struct IsoMounter {
     runtime_root: PathBuf,
@@ -212,5 +250,121 @@ impl IsoMounter {
         }
 
         Ok(())
+    }
+}
+
+#[async_trait]
+impl IsoMounting for IsoMounter {
+    async fn mount(&self, iso_path: &Path) -> Result<PathBuf> {
+        IsoMounter::mount(self, iso_path).await
+    }
+
+    async fn unmount_all(&self) -> Result<()> {
+        IsoMounter::unmount_all(self).await
+    }
+}
+
+/// Test double for [`IsoMounting`] -- `pub` so `lib.rs`'s test module can
+/// use it (see the note on `FakeIsoDiscovery` in iso/discovery.rs).
+/// Keyed by ISO file name (not the full path), since that's the only part
+/// callers can predict without depending on a real discovered path.
+#[cfg(test)]
+pub struct FakeIsoMounter {
+    successes: std::collections::HashMap<String, PathBuf>,
+    failures: std::collections::HashMap<String, String>,
+}
+
+#[cfg(test)]
+impl Default for FakeIsoMounter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+impl FakeIsoMounter {
+    pub fn new() -> Self {
+        Self {
+            successes: Default::default(),
+            failures: Default::default(),
+        }
+    }
+
+    pub fn succeeding_for(mut self, iso_file_name: &str, mount_path: PathBuf) -> Self {
+        self.successes.insert(iso_file_name.to_string(), mount_path);
+        self
+    }
+
+    pub fn failing_for(mut self, iso_file_name: &str, reason: &str) -> Self {
+        self.failures
+            .insert(iso_file_name.to_string(), reason.to_string());
+        self
+    }
+}
+
+#[cfg(test)]
+#[async_trait]
+impl IsoMounting for FakeIsoMounter {
+    async fn mount(&self, iso_path: &Path) -> Result<PathBuf> {
+        let name = iso_path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+
+        if let Some(reason) = self.failures.get(&name) {
+            return Err(PxeBootError::MountFailed {
+                path: iso_path.to_path_buf(),
+                reason: reason.clone(),
+            });
+        }
+        if let Some(path) = self.successes.get(&name) {
+            return Ok(path.clone());
+        }
+        panic!("FakeIsoMounter: no configured result for '{name}' -- call .succeeding_for() or .failing_for() in the test setup");
+    }
+
+    async fn unmount_all(&self) -> Result<()> {
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn passes_through_a_clean_field_unchanged() {
+        assert_eq!(unescape_mount_field("/run/pxe-boot/iso-mountpoint/foo.iso"), "/run/pxe-boot/iso-mountpoint/foo.iso");
+    }
+
+    #[test]
+    fn unescapes_octal_space() {
+        // /proc/mounts escapes a literal space as \040.
+        assert_eq!(
+            unescape_mount_field("/run/pxe-boot/iso-mountpoint/Ubuntu\\040Server.iso"),
+            "/run/pxe-boot/iso-mountpoint/Ubuntu Server.iso"
+        );
+    }
+
+    #[test]
+    fn unescapes_octal_tab_newline_and_backslash() {
+        assert_eq!(unescape_mount_field("a\\011b"), "a\tb");
+        assert_eq!(unescape_mount_field("a\\012b"), "a\nb");
+        assert_eq!(unescape_mount_field("a\\134b"), "a\\b");
+    }
+
+    #[test]
+    fn leaves_a_trailing_backslash_with_no_room_for_an_escape_untouched() {
+        // Not a valid 3-digit octal escape (not enough bytes remain) --
+        // must not panic or silently drop the backslash.
+        assert_eq!(unescape_mount_field("foo\\"), "foo\\");
+    }
+
+    #[test]
+    fn leaves_a_non_octal_backslash_sequence_untouched() {
+        // "\04x" -- "x" is not an octal digit, so this isn't a valid
+        // escape sequence at all; pass it through byte-for-byte rather
+        // than guessing.
+        assert_eq!(unescape_mount_field("foo\\04xbar"), "foo\\04xbar");
     }
 }

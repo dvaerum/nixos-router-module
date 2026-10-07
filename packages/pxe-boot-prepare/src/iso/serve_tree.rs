@@ -1,6 +1,12 @@
 use crate::error::{IoResultExt, Result};
+use async_trait::async_trait;
 use std::path::PathBuf;
 
+/// Seam for `PxeBootService` (C33).
+#[async_trait]
+pub trait ServeTreeRebuilding: Send + Sync {
+    async fn rebuild(&self, iso_paths: &[PathBuf]) -> Result<()>;
+}
 
 /// Maintains `runtime_root/isos/` as a canonical, flat symlink tree: one
 /// symlink per discovered ISO, pointing back to wherever it was actually
@@ -78,6 +84,43 @@ impl ServeTree {
     }
 }
 
+#[async_trait]
+impl ServeTreeRebuilding for ServeTree {
+    async fn rebuild(&self, iso_paths: &[PathBuf]) -> Result<()> {
+        ServeTree::rebuild(self, iso_paths).await
+    }
+}
+
+/// Test double for [`ServeTreeRebuilding`] -- `pub` so `lib.rs`'s test
+/// module can use it too (see the note on `FakeIsoDiscovery`).
+#[cfg(test)]
+pub struct FakeServeTree {
+    fail_with: Option<String>,
+}
+
+#[cfg(test)]
+impl FakeServeTree {
+    pub fn always_succeeding() -> Self {
+        Self { fail_with: None }
+    }
+
+    pub fn failing_with(reason: &str) -> Self {
+        Self {
+            fail_with: Some(reason.to_string()),
+        }
+    }
+}
+
+#[cfg(test)]
+#[async_trait]
+impl ServeTreeRebuilding for FakeServeTree {
+    async fn rebuild(&self, _iso_paths: &[PathBuf]) -> Result<()> {
+        match &self.fail_with {
+            Some(reason) => Err(crate::error::PxeBootError::Config(reason.clone())),
+            None => Ok(()),
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {

@@ -6,6 +6,11 @@ edition = "2021"
 [dependencies]
 # Async runtime
 tokio = { version = "1.53", features = ["full"] }
+# Used for join_all -- see C34 in docs/plans/pxe-boot-plan-v3.md: ISO
+# mounting itself stays sequential (a real kernel-level loop-device TOCTOU
+# race, see lib.rs's `prepare()`), but autoinstall writes, serve-tree
+# rebuild, and per-interface GRUB generation don't touch that shared
+# state, so those run concurrently.
 futures = "0.3"
 
 # CLI

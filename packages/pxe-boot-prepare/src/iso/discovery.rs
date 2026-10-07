@@ -4,6 +4,13 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use walkdir::WalkDir;
 
+/// Seam for `PxeBootService` (C33) -- lets tests inject a `FakeIsoDiscovery`
+/// instead of scanning a real directory tree.
+#[async_trait]
+pub trait IsoDiscovering: Send + Sync {
+    async fn discover(&self) -> Result<Vec<PathBuf>>;
+}
+
 pub struct IsoDiscovery {
     iso_folders: Vec<PathBuf>,
 }
@@ -110,6 +117,36 @@ impl IsoDiscovery {
         Ok(isos)
     }
 }
+
+#[async_trait]
+impl IsoDiscovering for IsoDiscovery {
+    async fn discover(&self) -> Result<Vec<PathBuf>> {
+        IsoDiscovery::discover(self).await
+    }
+}
+
+/// Test double for [`IsoDiscovering`] -- `pub` (not nested in `mod tests`)
+/// so `lib.rs`'s own test module can use it too, unlike `FakeDetector`
+/// (distro/detector.rs), which only ever needed to be used from its own
+/// file.
+#[cfg(test)]
+pub struct FakeIsoDiscovery {
+    isos: Vec<PathBuf>,
+}
+
+#[cfg(test)]
+impl FakeIsoDiscovery {
+    pub fn returning(isos: Vec<PathBuf>) -> Self {
+        Self { isos }
+    }
+}
+
+#[cfg(test)]
+#[async_trait]
+impl IsoDiscovering for FakeIsoDiscovery {
+    async fn discover(&self) -> Result<Vec<PathBuf>> {
+        Ok(self.isos.clone())
+    }
 }
 
 #[cfg(test)]
