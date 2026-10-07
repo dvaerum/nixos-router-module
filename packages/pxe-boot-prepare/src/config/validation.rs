@@ -154,6 +154,7 @@ mod tests {
             default_iso: None,
             default_script: None,
             tftp_root: Some(std::path::PathBuf::from("/does/not/exist")),
+            reservations: Vec::new(),
         }];
 
         let err = config.validate().unwrap_err().to_string();
@@ -178,6 +179,7 @@ mod tests {
             default_iso: None,
             default_script: None,
             tftp_root: Some(override_dir.path().to_path_buf()),
+            reservations: Vec::new(),
         }];
 
         assert!(config.validate().is_ok());
@@ -206,6 +208,7 @@ mod tests {
                 default_iso: None,
                 default_script: None,
                 tftp_root: None,
+                reservations: Vec::new(),
             },
             DhcpInterface {
                 id: 1,
@@ -214,6 +217,7 @@ mod tests {
                 default_iso: None,
                 default_script: None,
                 tftp_root: None,
+                reservations: Vec::new(),
             },
         ];
 

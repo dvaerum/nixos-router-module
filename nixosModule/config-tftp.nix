@@ -144,6 +144,22 @@ let
               dhcp_server.pxe-boot.defaultScriptName
             else
               null;
+          # D35: one entry per reservation that actually sets its own
+          # default -- a reservation that overrides neither field has
+          # nothing for pxe-boot-prepare to act on, so it's omitted
+          # rather than emitting a no-op override file per MAC.
+          reservations =
+            lib.mapAttrsToList
+              (mac: value: {
+                inherit mac;
+                default_iso = if value.defaultIso != "" then value.defaultIso else null;
+                default_script = if value.defaultScriptName != "" then value.defaultScriptName else null;
+              })
+              (
+                lib.filterAttrs (
+                  _mac: value: value.defaultIso != "" || value.defaultScriptName != ""
+                ) dhcp_server.reservations
+              );
         }
         // lib.attrsets.optionalAttrs (dhcp_server.tftpServerRoot != null) {
           tftp_root = builtins.toString dhcp_server.tftpServerRoot;

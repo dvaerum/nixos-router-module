@@ -68,7 +68,7 @@ let
     FQDN = mkOptionType {
       name = "FQDN";
       description = "FQDN (Fully Qualified Domain Name)";
-      # To-do: This regex for matching FQDN my not be perfect and have bugs
+      # To-do: This regex for matching FQDN may not be perfect and have bugs
       check = (
         domain:
         builtins.match "^((xn--)?[a-z0-9][a-z0-9-]{0,61}[a-z0-9]{0,1}[.](xn--)?([a-z0-9-]{1,61}|[a-z0-9-]{1,30}[.][a-z]){2,})$" domain
@@ -220,7 +220,7 @@ let
     default = null;
     type = nullOr (attrTag {
       static = mkOption {
-        description = "To-do: make description (Note static IP is put here, but there may be a better location in the structure)";
+        description = "Assign a static IP to this interface, instead of running a DHCP client or server on it.";
         type = submodule {
           options = {
             ip-address = mkOption {
@@ -250,12 +250,12 @@ let
         default = { };
       };
       client = mkOption {
-        description = "To-do: make description";
+        description = "Configure this interface as a DHCP client.";
         type = bool;
         default = true;
       };
       server = mkOption {
-        description = "To-do: make description";
+        description = "Configure this interface as a DHCP server (reservations, pools, PXE boot, etc. -- see the options below).";
         type = submodule {
           options = {
             id = mkOption {
@@ -365,6 +365,35 @@ let
                     type = nullOr str;
                     default = null;
                     example = "nas";
+                  };
+                  defaultIso = mkOption {
+                    description = ''
+                      Per-MAC override of `pxe-boot.defaultIso`: which ISO
+                      this specific reservation's client should PXE boot
+                      by default, instead of the interface-wide default.
+
+                      Only takes effect when `pxe-boot.enable` is also
+                      true for this interface. Leave unset (empty string)
+                      to inherit the interface-wide `defaultIso`.
+                    '';
+                    type = str;
+                    default = "";
+                    example = "rhel-9.6-x86_64-dvd.iso";
+                  };
+                  defaultScriptName = mkOption {
+                    description = ''
+                      Per-MAC override of `pxe-boot.defaultScriptName`:
+                      which autoinstall script this specific reservation's
+                      client should use by default, instead of the
+                      interface-wide default.
+
+                      Only takes effect when `pxe-boot.enable` is also
+                      true for this interface. Leave unset (empty string)
+                      to inherit the interface-wide `defaultScriptName`.
+                    '';
+                    type = str;
+                    default = "";
+                    example = "minimal-environment.kstart";
                   };
                 };
               });

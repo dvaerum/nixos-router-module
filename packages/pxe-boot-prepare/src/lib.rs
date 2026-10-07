@@ -6,7 +6,7 @@ pub mod grub;
 pub mod iso;
 
 use autoinstall::{AutoinstallManager, AutoinstallPreparing};
-use config::{AutoinstallScript, BootInfo, DhcpInterface, DistroType, IsoInfo, PxeBootConfig};
+use config::{AutoinstallScript, BootInfo, DhcpInterface, DistroType, IsoInfo, MenuEntry, PxeBootConfig};
 use distro::{DetectorRegistry, DistroDetector};
 use error::{IoResultExt, PxeBootError, Result};
 use fs4::tokio::AsyncFileExt;
@@ -327,12 +327,13 @@ impl PxeBootService {
         iso_infos: &[(IsoInfo, BootInfo, &dyn DistroDetector)],
         failed_isos: &[(String, String)],
     ) -> Result<()> {
-        let mut builder = GrubMenuBuilder::new()?;
-        
         let factory = MenuEntryFactory::new(interface.gateway, self.config.http.port);
 
+        // Built once, then reused for both the interface's own grub.cfg
+        // and any per-MAC override (D35) -- the menu CONTENT never
+        // differs, only which position `set default=N` points at.
+        let mut entries: Vec<(MenuEntry, String, Option<String>)> = Vec::new();
         let mut position = 0;
-        let mut default_position = None;
 
         for (iso_info, boot_info, detector) in iso_infos {
             // Base entry (no autoinstall). A single bad entry (e.g. an
@@ -351,17 +352,7 @@ impl PxeBootService {
                 }
             };
 
-            // Check if base entry (no script) should be the default
-            if let Some(default_iso) = &interface.default_iso {
-                if default_iso == &iso_info.file_name {
-                    // If default_script is empty or None, this base entry is the default
-                    if interface.default_script.is_none() || interface.default_script.as_ref().map(|s| s.is_empty()).unwrap_or(true) {
-                        default_position = Some(position);
-                    }
-                }
-            }
-
-            builder.add_entry(entry);
+            entries.push((entry, iso_info.file_name.clone(), None));
             position += 1;
 
             // Autoinstall entries
@@ -390,35 +381,11 @@ impl PxeBootService {
                         }
                     };
 
-                    // Check if this autoinstall entry should be the default
-                    if let (Some(default_iso), Some(default_script)) =
-                        (&interface.default_iso, &interface.default_script)
-                    {
-                        if !default_script.is_empty() && default_iso == &iso_info.file_name && default_script == &script.name {
-                            default_position = Some(position);
-                        }
-                    }
-
-                    builder.add_entry(entry);
+                    entries.push((entry, iso_info.file_name.clone(), Some(script.name.clone())));
                     position += 1;
                 }
             }
         }
-
-        if let Some(pos) = default_position {
-            builder.set_default(pos);
-        }
-
-        // D41: every interface's menu shows the same set of failed ISOs
-        // -- detection/extraction happens once, globally, not per
-        // interface (unlike the real bootable entries above, which ARE
-        // per-interface since their URLs embed this interface's own
-        // gateway).
-        for (file_name, reason) in failed_isos {
-            builder.add_placeholder_entry(file_name, reason);
-        }
-
-        let grub_cfg = builder.build()?;
 
         // Write to TFTP directory -- an interface-level `tftp_root` override
         // takes precedence over the global one, so this must match whatever
@@ -435,19 +402,103 @@ impl PxeBootService {
             })?;
 
         let grub_cfg_path = grub_dir.join("grub.cfg");
-        tokio::fs::write(&grub_cfg_path, grub_cfg)
-            .await
-            .map_err(|source| PxeBootError::GrubWrite {
-                path: grub_cfg_path,
-                source,
-            })?;
+        self.write_grub_cfg(
+            &grub_cfg_path,
+            &entries,
+            failed_isos,
+            interface.default_iso.as_deref(),
+            interface.default_script.as_deref(),
+        )
+        .await?;
+
+        // D35: one override file per reservation that configured its own
+        // default -- same entries/placeholders, only `set default=N`
+        // differs. GRUB's generated grub.cfg (see grub/menu.rs) tests
+        // for `grub.cfg-override-${net_default_mac}` right after
+        // net_bootp and `configfile`s into it when present, falling
+        // through to this interface's own default otherwise.
+        for reservation in &interface.reservations {
+            // Nothing configured on this reservation -- nothing to
+            // override (the Nix side already omits these, but guard
+            // directly here too for anything constructing config JSON
+            // by hand).
+            if reservation.default_iso.is_none() && reservation.default_script.is_none() {
+                continue;
+            }
+
+            let default_iso = reservation
+                .default_iso
+                .as_deref()
+                .or(interface.default_iso.as_deref());
+            let default_script = reservation
+                .default_script
+                .as_deref()
+                .or(interface.default_script.as_deref());
+
+            let override_path = grub_dir.join(format!(
+                "grub.cfg-override-{}",
+                reservation.mac.to_lowercase()
+            ));
+            self.write_grub_cfg(
+                &override_path,
+                &entries,
+                failed_isos,
+                default_iso,
+                default_script,
+            )
+            .await?;
+        }
 
         tracing::info!(
-            "Generated GRUB menu for interface {} (ID: {}) with {} entries",
+            "Generated GRUB menu for interface {} (ID: {}) with {} entries ({} per-MAC overrides)",
             interface.name,
             interface.id,
-            position
+            position,
+            interface.reservations.len()
         );
+
+        Ok(())
+    }
+
+    /// Renders and writes one grub.cfg variant (the interface's own, or
+    /// a per-MAC override, D35) from an already-built entry list --
+    /// shared so the two variants can never drift in content, only in
+    /// which entry is default.
+    async fn write_grub_cfg(
+        &self,
+        path: &Path,
+        entries: &[(MenuEntry, String, Option<String>)],
+        failed_isos: &[(String, String)],
+        default_iso: Option<&str>,
+        default_script: Option<&str>,
+    ) -> Result<()> {
+        let mut builder = GrubMenuBuilder::new()?;
+
+        for (entry, _, _) in entries {
+            builder.add_entry(entry.clone());
+        }
+
+        if let Some(pos) = resolve_default_position(entries, default_iso, default_script) {
+            builder.set_default(pos);
+        }
+
+        // D41: every interface's menu shows the same set of failed ISOs
+        // -- detection/extraction happens once, globally, not per
+        // interface (unlike the real bootable entries above, which ARE
+        // per-interface since their URLs embed this interface's own
+        // gateway).
+        for (file_name, reason) in failed_isos {
+            builder.add_placeholder_entry(file_name, reason);
+        }
+
+        let grub_cfg = builder.build()?;
+
+        tokio::fs::write(path, grub_cfg)
+            .await
+            .map_err(|source| PxeBootError::GrubWrite {
+                path: path.to_path_buf(),
+                source,
+            })?;
 
         Ok(())
     }
@@ -562,6 +613,32 @@ pub struct IsoStatus {
     pub error: Option<String>,
 }
 
+/// Finds the menu position matching a (default_iso, default_script)
+/// pair -- shared between the interface-level default and any per-MAC
+/// override (D35), so both apply the exact same matching rule: an
+/// absent or empty `default_script` means "the base entry" (no
+/// autoinstall), never a script literally named `""`.
+fn resolve_default_position(
+    entries: &[(MenuEntry, String, Option<String>)],
+    default_iso: Option<&str>,
+    default_script: Option<&str>,
+) -> Option<usize> {
+    let default_iso = default_iso?;
+    let script_is_empty = default_script.map(|s| s.is_empty()).unwrap_or(true);
+
+    entries.iter().find_map(|(entry, iso_name, script_name)| {
+        if iso_name != default_iso {
+            return None;
+        }
+        let matches = if script_is_empty {
+            script_name.is_none()
+        } else {
+            script_name.as_deref() == default_script
+        };
+        matches.then_some(entry.position)
+    })
+}
+
 /// Soft-validates each interface's `default_iso`/`default_script` against
 /// what was actually discovered, returning one warning string per
 /// mismatch (empty if everything lines up). A mismatch is never fatal --
@@ -577,44 +654,94 @@ fn check_default_entry_warnings(
     let mut warnings = Vec::new();
 
     for interface in dhcp_interfaces {
-        let Some(default_iso) = &interface.default_iso else {
-            continue;
-        };
+        push_default_pair_warnings(
+            &mut warnings,
+            &format!("Interface {} (ID: {})", interface.name, interface.id),
+            interface.default_iso.as_deref(),
+            interface.default_script.as_deref(),
+            discovered_iso_names,
+            autoinstall,
+        );
 
-        if !discovered_iso_names.contains(default_iso) {
-            warnings.push(format!(
-                "Interface {} (ID: {}): default_iso '{}' does not match any discovered ISO -- it will have no effect.",
-                interface.name, interface.id, default_iso
-            ));
-            continue;
-        }
+        // D35: same validation, per reservation that actually configures
+        // its own override -- effective values fall back to the
+        // interface's own default per-field, mirroring the precedence
+        // `generate_grub_menu` applies when it builds the override file.
+        // Skipping reservations with neither field set avoids re-warning
+        // about the interface's own default once per uninvolved
+        // reservation.
+        for reservation in &interface.reservations {
+            if reservation.default_iso.is_none() && reservation.default_script.is_none() {
+                continue;
+            }
 
-        let Some(default_script) = &interface.default_script else {
-            continue;
-        };
-        if default_script.is_empty() {
-            continue;
-        }
+            let default_iso = reservation
+                .default_iso
+                .as_deref()
+                .or(interface.default_iso.as_deref());
+            let default_script = reservation
+                .default_script
+                .as_deref()
+                .or(interface.default_script.as_deref());
 
-        let script_known = autoinstall
-            .get(default_iso)
-            .map(|scripts| scripts.iter().any(|s| &s.name == default_script))
-            .unwrap_or(false);
-        if !script_known {
-            warnings.push(format!(
-                "Interface {} (ID: {}): default_script '{}' does not match any autoinstall script for ISO '{}' -- it will have no effect.",
-                interface.name, interface.id, default_script, default_iso
-            ));
+            push_default_pair_warnings(
+                &mut warnings,
+                &format!(
+                    "Interface {} (ID: {}), reservation {}",
+                    interface.name, interface.id, reservation.mac
+                ),
+                default_iso,
+                default_script,
+                discovered_iso_names,
+                autoinstall,
+            );
         }
     }
 
     warnings
 }
 
+fn push_default_pair_warnings(
+    warnings: &mut Vec<String>,
+    label: &str,
+    default_iso: Option<&str>,
+    default_script: Option<&str>,
+    discovered_iso_names: &std::collections::HashSet<String>,
+    autoinstall: &std::collections::HashMap<String, Vec<AutoinstallScript>>,
+) {
+    let Some(default_iso) = default_iso else {
+        return;
+    };
+
+    if !discovered_iso_names.contains(default_iso) {
+        warnings.push(format!(
+            "{label}: default_iso '{default_iso}' does not match any discovered ISO -- it will have no effect."
+        ));
+        return;
+    }
+
+    let Some(default_script) = default_script else {
+        return;
+    };
+    if default_script.is_empty() {
+        return;
+    }
+
+    let script_known = autoinstall
+        .get(default_iso)
+        .map(|scripts| scripts.iter().any(|s| s.name == default_script))
+        .unwrap_or(false);
+    if !script_known {
+        warnings.push(format!(
+            "{label}: default_script '{default_script}' does not match any autoinstall script for ISO '{default_iso}' -- it will have no effect."
+        ));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use config::HttpConfig;
+    use config::{HttpConfig, ReservationOverride};
     use distro::unknown::UnknownDetector;
     use std::collections::HashMap;
 
@@ -678,6 +805,7 @@ mod tests {
             default_iso: None,
             default_script: None,
             tftp_root,
+            reservations: Vec::new(),
         }
     }
 
@@ -748,6 +876,127 @@ mod tests {
 
         assert!(override_root.join("7").join("grub").join("grub.cfg").exists());
         assert!(!global_root.join("7").join("grub").join("grub.cfg").exists());
+    }
+
+    #[tokio::test]
+    async fn per_mac_override_gets_same_entries_but_a_different_default() {
+        let rt = tempfile::tempdir().unwrap();
+        let global_root = rt.path().join("global");
+        let config = config_with(&global_root, rt.path());
+        let service = PxeBootService::new(config);
+
+        let mount_path = rt.path().join("mnt");
+        let (alpha_iso, alpha_boot) = iso_info_and_boot(&mount_path, true, "alpha.iso");
+        let (beta_iso, beta_boot) = iso_info_and_boot(&mount_path, true, "beta.iso");
+        let detector: Box<dyn DistroDetector> = Box::new(UnknownDetector::new());
+
+        let iso_infos: Vec<(IsoInfo, BootInfo, &dyn DistroDetector)> = vec![
+            (alpha_iso, alpha_boot, detector.as_ref()),
+            (beta_iso, beta_boot, detector.as_ref()),
+        ];
+
+        let mut iface = interface(7, None);
+        iface.default_iso = Some("alpha.iso".to_string());
+        // Uppercase on purpose -- the override filename must still come
+        // out lowercase to match GRUB's own ${net_default_mac} format.
+        iface.reservations = vec![ReservationOverride {
+            mac: "AA:BB:CC:DD:EE:FF".to_string(),
+            default_iso: Some("beta.iso".to_string()),
+            default_script: None,
+        }];
+
+        service
+            .generate_grub_menu(&iface, &iso_infos, &[])
+            .await
+            .unwrap();
+
+        let grub_dir = global_root.join("7").join("grub");
+        let base_cfg = std::fs::read_to_string(grub_dir.join("grub.cfg")).unwrap();
+        let override_path = grub_dir.join("grub.cfg-override-aa:bb:cc:dd:ee:ff");
+        let override_cfg = std::fs::read_to_string(&override_path).unwrap();
+
+        // Same menu content in both...
+        for cfg in [&base_cfg, &override_cfg] {
+            assert!(cfg.contains("alpha.iso"));
+            assert!(cfg.contains("beta.iso"));
+        }
+        // ...only the default differs: alpha is entry 0, beta is entry 1.
+        assert!(base_cfg.contains("\nset default=0\n"));
+        assert!(override_cfg.contains("\nset default=1\n"));
+    }
+
+    #[tokio::test]
+    async fn reservation_with_neither_field_set_produces_no_override_file() {
+        let rt = tempfile::tempdir().unwrap();
+        let global_root = rt.path().join("global");
+        let config = config_with(&global_root, rt.path());
+        let service = PxeBootService::new(config);
+
+        let mut iface = interface(7, None);
+        iface.reservations = vec![ReservationOverride {
+            mac: "00:11:22:33:44:55".to_string(),
+            default_iso: None,
+            default_script: None,
+        }];
+
+        service
+            .generate_grub_menu(&iface, &[], &[])
+            .await
+            .unwrap();
+
+        let grub_dir = global_root.join("7").join("grub");
+        assert!(grub_dir.join("grub.cfg").exists());
+        // Nothing configured on this reservation -- nothing to write.
+        assert!(!grub_dir.join("grub.cfg-override-00:11:22:33:44:55").exists());
+    }
+
+    #[tokio::test]
+    async fn reservation_override_falls_back_to_interface_default_script() {
+        // A reservation that sets only `default_iso` inherits the
+        // interface's own `default_script` for that field -- per-field
+        // override, not all-or-nothing (D35 design doc's "Precedence").
+        let rt = tempfile::tempdir().unwrap();
+        let global_root = rt.path().join("global");
+        let mut autoinstall = HashMap::new();
+        autoinstall.insert(
+            "alpha.iso".to_string(),
+            vec![AutoinstallScript {
+                name: "minimal.ks".to_string(),
+                script_path: std::path::PathBuf::from("/nix/store/xxx-minimal.ks"),
+            }],
+        );
+        let mut config = config_with(&global_root, rt.path());
+        config.autoinstall = autoinstall;
+        let service = PxeBootService::new(config);
+
+        let mount_path = rt.path().join("mnt");
+        let (alpha_iso, alpha_boot) = iso_info_and_boot(&mount_path, true, "alpha.iso");
+        let detector: Box<dyn DistroDetector> = Box::new(UnknownDetector::new());
+        let iso_infos: Vec<(IsoInfo, BootInfo, &dyn DistroDetector)> =
+            vec![(alpha_iso, alpha_boot, detector.as_ref())];
+
+        let mut iface = interface(7, None);
+        iface.default_iso = Some("alpha.iso".to_string());
+        iface.default_script = Some("minimal.ks".to_string());
+        iface.reservations = vec![ReservationOverride {
+            mac: "00:11:22:33:44:55".to_string(),
+            default_iso: Some("alpha.iso".to_string()),
+            default_script: None,
+        }];
+
+        service
+            .generate_grub_menu(&iface, &iso_infos, &[])
+            .await
+            .unwrap();
+
+        let grub_dir = global_root.join("7").join("grub");
+        let override_cfg =
+            std::fs::read_to_string(grub_dir.join("grub.cfg-override-00:11:22:33:44:55")).unwrap();
+
+        // Entry 0 is the base alpha.iso entry, entry 1 is alpha.iso +
+        // minimal.ks -- the reservation's missing default_script must
+        // resolve to the interface's, landing on entry 1, not entry 0.
+        assert!(override_cfg.contains("\nset default=1\n"));
     }
 
     #[tokio::test]
@@ -855,6 +1104,7 @@ mod tests {
             default_iso: default_iso.map(|s| s.to_string()),
             default_script: default_script.map(|s| s.to_string()),
             tftp_root: None,
+            reservations: Vec::new(),
         }
     }
 
@@ -965,6 +1215,60 @@ mod tests {
             check_default_entry_warnings(&interfaces, &known_isos(&["ubuntu.iso"]), &HashMap::new());
         assert_eq!(warnings.len(), 1);
         assert!(warnings[0].contains("default_iso"));
+    }
+
+    #[test]
+    fn warns_on_reservation_with_its_own_typo_d_default_iso() {
+        let mut iface = interface_with_default(1, Some("nixos.iso"), None);
+        iface.reservations = vec![ReservationOverride {
+            mac: "aa:bb:cc:dd:ee:ff".to_string(),
+            default_iso: Some("typo.iso".to_string()),
+            default_script: None,
+        }];
+        let warnings =
+            check_default_entry_warnings(&[iface], &known_isos(&["nixos.iso"]), &HashMap::new());
+
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("aa:bb:cc:dd:ee:ff"));
+        assert!(warnings[0].contains("typo.iso"));
+    }
+
+    #[test]
+    fn reservation_inherits_interface_default_iso_for_warning_purposes() {
+        // The reservation only overrides default_script -- the
+        // (inherited) default_iso it resolves to is a typo, and that
+        // must still be caught even though the reservation itself never
+        // named it.
+        let mut iface = interface_with_default(1, Some("typo.iso"), None);
+        iface.reservations = vec![ReservationOverride {
+            mac: "aa:bb:cc:dd:ee:ff".to_string(),
+            default_iso: None,
+            default_script: Some("minimal.ks".to_string()),
+        }];
+        let warnings =
+            check_default_entry_warnings(&[iface], &known_isos(&["nixos.iso"]), &HashMap::new());
+
+        // One for the interface's own default_iso, one for the
+        // reservation inheriting that same bad value.
+        assert_eq!(warnings.len(), 2);
+        assert!(warnings.iter().any(|w| w.contains("aa:bb:cc:dd:ee:ff")));
+    }
+
+    #[test]
+    fn reservation_with_neither_field_set_produces_no_warning() {
+        let mut iface = interface_with_default(1, Some("typo.iso"), None);
+        iface.reservations = vec![ReservationOverride {
+            mac: "aa:bb:cc:dd:ee:ff".to_string(),
+            default_iso: None,
+            default_script: None,
+        }];
+        let warnings =
+            check_default_entry_warnings(&[iface], &known_isos(&["nixos.iso"]), &HashMap::new());
+
+        // Only the interface-level warning -- the uninvolved reservation
+        // must not generate a second, redundant one.
+        assert_eq!(warnings.len(), 1);
+        assert!(!warnings[0].contains("reservation"));
     }
 
     #[tokio::test]

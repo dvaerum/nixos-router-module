@@ -97,7 +97,7 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -135,7 +135,7 @@ attribute set of (submodule)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -160,7 +160,7 @@ null
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -168,7 +168,7 @@ null
 
 
 
-To-do: make description
+Configure this interface as a DHCP client\.
 
 
 
@@ -184,7 +184,7 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -192,7 +192,7 @@ true
 
 
 
-To-do: make description
+Configure this interface as a DHCP server (reservations, pools, PXE boot, etc\. – see the options below)\.
 
 
 
@@ -208,7 +208,7 @@ submodule
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -235,7 +235,7 @@ CIDR (IP and Subnet\. Example: 192\.168\.1\.4/24)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -268,7 +268,80 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.server\.clientClasses
+
+
+
+Define Kea client classes
+(see https://kea\.readthedocs\.io/en/latest/arm/classify\.html)
+scoped to this subnet\.
+
+Each class is forced into evaluation for this subnet only
+(Kea’s ` require-client-classes `), and its Kea class name is
+this attribute’s name suffixed with this subnet’s ` id `
+(e\.g\. ` my-class-204 `), guaranteeing global uniqueness
+across interfaces – the same convention the built-in
+PXE-boot classes already use\.
+
+` test ` (Kea’s classification expression) is required;
+every other field (` option-data `, ` next-server `,
+` boot-file-name `, etc\.) is passed through to Kea verbatim
+in Kea’s own JSON shape – see the docs above for the full
+set of fields a class can carry\.
+
+
+
+*Type:*
+attribute set of (open submodule of attribute set of anything)
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+
+
+*Example:*
+
+```nix
+{
+  dect-setup-1 = {
+    option-data = [
+      {
+        data = "dect-setup-1.efi";
+        name = "boot-file-name";
+      }
+    ];
+    test = "substring(option[60].hex,0,8) == 'dect-dev'";
+  };
+}
+```
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.server\.clientClasses\.\<name>\.test
+
+
+
+Kea classification test expression\.
+
+
+
+*Type:*
+string
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -301,7 +374,7 @@ false
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -337,7 +410,7 @@ false
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -380,7 +453,7 @@ one of “lan”, “forward-only”
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -420,7 +493,7 @@ null
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -444,7 +517,7 @@ list of (FQDN (Fully Qualified Domain Name))
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -470,7 +543,7 @@ signed integer
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -506,7 +579,7 @@ null
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -530,7 +603,7 @@ integer between 1 and 4294967294 (both inclusive)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -582,7 +655,7 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -614,7 +687,7 @@ string
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -646,7 +719,7 @@ string
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -680,7 +753,7 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -719,7 +792,84 @@ attribute set of (submodule)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.server\.reservations\.\<name>\.defaultIso
+
+
+
+Per-MAC override of ` pxe-boot.defaultIso `: which ISO
+this specific reservation’s client should PXE boot
+by default, instead of the interface-wide default\.
+
+Only takes effect when ` pxe-boot.enable ` is also
+true for this interface\. Leave unset (empty string)
+to inherit the interface-wide ` defaultIso `\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+
+```nix
+""
+```
+
+
+
+*Example:*
+
+```nix
+"rhel-9.6-x86_64-dvd.iso"
+```
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.server\.reservations\.\<name>\.defaultScriptName
+
+
+
+Per-MAC override of ` pxe-boot.defaultScriptName `:
+which autoinstall script this specific reservation’s
+client should use by default, instead of the
+interface-wide default\.
+
+Only takes effect when ` pxe-boot.enable ` is also
+true for this interface\. Leave unset (empty string)
+to inherit the interface-wide ` defaultScriptName `\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+
+```nix
+""
+```
+
+
+
+*Example:*
+
+```nix
+"minimal-environment.kstart"
+```
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -757,7 +907,7 @@ null
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -781,7 +931,7 @@ null
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -813,7 +963,7 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -867,7 +1017,7 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -902,7 +1052,7 @@ null
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -910,7 +1060,7 @@ null
 
 
 
-To-do: make description (Note static IP is put here, but there may be a better location in the structure)
+Assign a static IP to this interface, instead of running a DHCP client or server on it\.
 
 
 
@@ -926,7 +1076,7 @@ submodule
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -961,7 +1111,7 @@ list of (IP address)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -993,7 +1143,7 @@ null
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1019,7 +1169,7 @@ CIDR (IP and Subnet\. Example: 192\.168\.1\.4/24)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1043,7 +1193,7 @@ false
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1067,7 +1217,7 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1093,7 +1243,7 @@ false
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1113,7 +1263,7 @@ false
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1129,7 +1279,7 @@ Set the name of the network interface
 Network Interface Name ()
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1173,7 +1323,7 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1210,7 +1360,7 @@ list of (Subnet)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1250,7 +1400,7 @@ attribute set of (submodule)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1274,7 +1424,7 @@ list of (submodule)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1306,7 +1456,7 @@ null
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1331,7 +1481,7 @@ null
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1339,7 +1489,7 @@ null
 
 
 
-To-do: make description
+Configure this interface as a DHCP client\.
 
 
 
@@ -1355,7 +1505,7 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1363,7 +1513,7 @@ true
 
 
 
-To-do: make description
+Configure this interface as a DHCP server (reservations, pools, PXE boot, etc\. – see the options below)\.
 
 
 
@@ -1379,7 +1529,7 @@ submodule
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1406,7 +1556,7 @@ CIDR (IP and Subnet\. Example: 192\.168\.1\.4/24)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1439,7 +1589,80 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.configInterface\.\<name>\.dhcp\.server\.clientClasses
+
+
+
+Define Kea client classes
+(see https://kea\.readthedocs\.io/en/latest/arm/classify\.html)
+scoped to this subnet\.
+
+Each class is forced into evaluation for this subnet only
+(Kea’s ` require-client-classes `), and its Kea class name is
+this attribute’s name suffixed with this subnet’s ` id `
+(e\.g\. ` my-class-204 `), guaranteeing global uniqueness
+across interfaces – the same convention the built-in
+PXE-boot classes already use\.
+
+` test ` (Kea’s classification expression) is required;
+every other field (` option-data `, ` next-server `,
+` boot-file-name `, etc\.) is passed through to Kea verbatim
+in Kea’s own JSON shape – see the docs above for the full
+set of fields a class can carry\.
+
+
+
+*Type:*
+attribute set of (open submodule of attribute set of anything)
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+
+
+*Example:*
+
+```nix
+{
+  dect-setup-1 = {
+    option-data = [
+      {
+        data = "dect-setup-1.efi";
+        name = "boot-file-name";
+      }
+    ];
+    test = "substring(option[60].hex,0,8) == 'dect-dev'";
+  };
+}
+```
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.configInterface\.\<name>\.dhcp\.server\.clientClasses\.\<name>\.test
+
+
+
+Kea classification test expression\.
+
+
+
+*Type:*
+string
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1472,7 +1695,7 @@ false
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1508,7 +1731,7 @@ false
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1551,7 +1774,7 @@ one of “lan”, “forward-only”
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1591,7 +1814,7 @@ null
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1615,7 +1838,7 @@ list of (FQDN (Fully Qualified Domain Name))
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1641,7 +1864,7 @@ signed integer
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1677,7 +1900,7 @@ null
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1701,7 +1924,7 @@ integer between 1 and 4294967294 (both inclusive)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1753,7 +1976,7 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1785,7 +2008,7 @@ string
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1817,7 +2040,7 @@ string
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1851,7 +2074,7 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1890,7 +2113,84 @@ attribute set of (submodule)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.configInterface\.\<name>\.dhcp\.server\.reservations\.\<name>\.defaultIso
+
+
+
+Per-MAC override of ` pxe-boot.defaultIso `: which ISO
+this specific reservation’s client should PXE boot
+by default, instead of the interface-wide default\.
+
+Only takes effect when ` pxe-boot.enable ` is also
+true for this interface\. Leave unset (empty string)
+to inherit the interface-wide ` defaultIso `\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+
+```nix
+""
+```
+
+
+
+*Example:*
+
+```nix
+"rhel-9.6-x86_64-dvd.iso"
+```
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.configInterface\.\<name>\.dhcp\.server\.reservations\.\<name>\.defaultScriptName
+
+
+
+Per-MAC override of ` pxe-boot.defaultScriptName `:
+which autoinstall script this specific reservation’s
+client should use by default, instead of the
+interface-wide default\.
+
+Only takes effect when ` pxe-boot.enable ` is also
+true for this interface\. Leave unset (empty string)
+to inherit the interface-wide ` defaultScriptName `\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+
+```nix
+""
+```
+
+
+
+*Example:*
+
+```nix
+"minimal-environment.kstart"
+```
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1928,7 +2228,7 @@ null
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1952,7 +2252,7 @@ null
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -1984,7 +2284,7 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -2038,7 +2338,7 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -2073,7 +2373,7 @@ null
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -2081,7 +2381,7 @@ null
 
 
 
-To-do: make description (Note static IP is put here, but there may be a better location in the structure)
+Assign a static IP to this interface, instead of running a DHCP client or server on it\.
 
 
 
@@ -2097,7 +2397,7 @@ submodule
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -2132,7 +2432,7 @@ list of (IP address)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -2164,7 +2464,7 @@ null
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -2190,7 +2490,7 @@ CIDR (IP and Subnet\. Example: 192\.168\.1\.4/24)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -2214,7 +2514,7 @@ false
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -2238,7 +2538,7 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -2264,7 +2564,7 @@ false
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -2290,7 +2590,7 @@ attribute set
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -2320,7 +2620,7 @@ null
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -2340,7 +2640,7 @@ false
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -2356,7 +2656,7 @@ Set the name of the network interface
 Network Interface Name ()
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -2400,7 +2700,7 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -2437,7 +2737,7 @@ list of (Subnet)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -2461,7 +2761,7 @@ list of (submodule)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -2485,7 +2785,7 @@ list of (submodule)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -2517,7 +2817,7 @@ null
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -2542,7 +2842,7 @@ null
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -2550,7 +2850,7 @@ null
 
 
 
-To-do: make description
+Configure this interface as a DHCP client\.
 
 
 
@@ -2566,7 +2866,7 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -2574,7 +2874,7 @@ true
 
 
 
-To-do: make description
+Configure this interface as a DHCP server (reservations, pools, PXE boot, etc\. – see the options below)\.
 
 
 
@@ -2590,7 +2890,7 @@ submodule
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -2617,7 +2917,7 @@ CIDR (IP and Subnet\. Example: 192\.168\.1\.4/24)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -2650,7 +2950,80 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.clientClasses
+
+
+
+Define Kea client classes
+(see https://kea\.readthedocs\.io/en/latest/arm/classify\.html)
+scoped to this subnet\.
+
+Each class is forced into evaluation for this subnet only
+(Kea’s ` require-client-classes `), and its Kea class name is
+this attribute’s name suffixed with this subnet’s ` id `
+(e\.g\. ` my-class-204 `), guaranteeing global uniqueness
+across interfaces – the same convention the built-in
+PXE-boot classes already use\.
+
+` test ` (Kea’s classification expression) is required;
+every other field (` option-data `, ` next-server `,
+` boot-file-name `, etc\.) is passed through to Kea verbatim
+in Kea’s own JSON shape – see the docs above for the full
+set of fields a class can carry\.
+
+
+
+*Type:*
+attribute set of (open submodule of attribute set of anything)
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+
+
+*Example:*
+
+```nix
+{
+  dect-setup-1 = {
+    option-data = [
+      {
+        data = "dect-setup-1.efi";
+        name = "boot-file-name";
+      }
+    ];
+    test = "substring(option[60].hex,0,8) == 'dect-dev'";
+  };
+}
+```
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.clientClasses\.\<name>\.test
+
+
+
+Kea classification test expression\.
+
+
+
+*Type:*
+string
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -2683,7 +3056,7 @@ false
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -2719,7 +3092,7 @@ false
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -2762,7 +3135,7 @@ one of “lan”, “forward-only”
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -2802,7 +3175,7 @@ null
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -2826,7 +3199,7 @@ list of (FQDN (Fully Qualified Domain Name))
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -2852,7 +3225,7 @@ signed integer
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -2888,13 +3261,11 @@ null
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
 ## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.id
-
-
 
 Subnet IDs must be greater than zero and less than 4294967295
 
@@ -2912,7 +3283,7 @@ integer between 1 and 4294967294 (both inclusive)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -2964,7 +3335,7 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -2996,7 +3367,7 @@ string
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -3028,7 +3399,7 @@ string
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -3062,7 +3433,7 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -3101,7 +3472,84 @@ attribute set of (submodule)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.reservations\.\<name>\.defaultIso
+
+
+
+Per-MAC override of ` pxe-boot.defaultIso `: which ISO
+this specific reservation’s client should PXE boot
+by default, instead of the interface-wide default\.
+
+Only takes effect when ` pxe-boot.enable ` is also
+true for this interface\. Leave unset (empty string)
+to inherit the interface-wide ` defaultIso `\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+
+```nix
+""
+```
+
+
+
+*Example:*
+
+```nix
+"rhel-9.6-x86_64-dvd.iso"
+```
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.reservations\.\<name>\.defaultScriptName
+
+
+
+Per-MAC override of ` pxe-boot.defaultScriptName `:
+which autoinstall script this specific reservation’s
+client should use by default, instead of the
+interface-wide default\.
+
+Only takes effect when ` pxe-boot.enable ` is also
+true for this interface\. Leave unset (empty string)
+to inherit the interface-wide ` defaultScriptName `\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+
+```nix
+""
+```
+
+
+
+*Example:*
+
+```nix
+"minimal-environment.kstart"
+```
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -3139,7 +3587,7 @@ null
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -3163,7 +3611,7 @@ null
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -3195,7 +3643,7 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -3249,11 +3697,13 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
 ## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.tftpServerRoot
+
+
 
 Override ` my.router.tftpServer.root ` for just this
 interface – it still gets its own ` <root>/<id> `
@@ -3282,7 +3732,7 @@ null
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -3290,7 +3740,7 @@ null
 
 
 
-To-do: make description (Note static IP is put here, but there may be a better location in the structure)
+Assign a static IP to this interface, instead of running a DHCP client or server on it\.
 
 
 
@@ -3306,7 +3756,7 @@ submodule
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -3341,7 +3791,7 @@ list of (IP address)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -3373,7 +3823,7 @@ null
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -3399,7 +3849,7 @@ CIDR (IP and Subnet\. Example: 192\.168\.1\.4/24)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -3423,7 +3873,7 @@ false
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -3447,7 +3897,7 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -3471,7 +3921,7 @@ integer between 1 and 4096 (both inclusive)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -3497,7 +3947,7 @@ false
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -3517,7 +3967,7 @@ false
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -3542,7 +3992,7 @@ null
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -3586,7 +4036,7 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -3623,7 +4073,7 @@ list of (Subnet)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -3647,7 +4097,7 @@ Network Interface Name ()
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -3680,7 +4130,7 @@ signed integer
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -3704,7 +4154,7 @@ submodule
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -3728,7 +4178,7 @@ list of (FQDN (Fully Qualified Domain Name))
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -3752,7 +4202,7 @@ signed integer
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -3776,7 +4226,7 @@ signed integer
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -3800,7 +4250,7 @@ signed integer
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -3824,7 +4274,7 @@ submodule
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -3882,7 +4332,7 @@ attribute set of (submodule)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -3910,7 +4360,7 @@ attribute set of string
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -3926,7 +4376,7 @@ Path to the script to invoke\.
 string
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -3957,7 +4407,7 @@ list of (one of “leases4_committed”, “lease4_expire”, “lease4_release�
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -3981,7 +4431,7 @@ submodule
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -4005,7 +4455,7 @@ absolute path
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -4029,7 +4479,7 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -4053,7 +4503,7 @@ value “memfile” (singular enum)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -4090,7 +4540,7 @@ false
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -4133,7 +4583,7 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -4168,7 +4618,7 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -4201,7 +4651,7 @@ string
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -4239,7 +4689,7 @@ list of string
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -4279,7 +4729,7 @@ attribute set of ((list of (IP address)) or (IP address) convertible to it)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -4314,7 +4764,7 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -4344,14 +4794,14 @@ attribute set of list of (submodule)
 ```nix
 {
   "rhel-9.6-x86_64-dvd.iso" = {
-    script = /home/runner/work/nixos-router-module/nixos-router-module/nixosModule/path/to/script.kstart;
+    script = /home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/path/to/script.kstart;
     scriptName = "minimal-environment.kstart";
   };
 }
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -4359,7 +4809,18 @@ attribute set of list of (submodule)
 
 
 
-Provide the content of the script or the path to the script
+Provide the content of the script or the path to the script\.
+
+SECURITY: a literal string value here is written to
+the world-readable Nix store (/nix/store) and served
+completely unauthenticated over plain HTTP on the
+LAN (anyone who can reach this router’s network can
+download it)\. Do not put secrets – passwords, API
+keys, private keys – directly in this value\. Use a
+path to a file managed by a proper secrets mechanism
+(e\.g\. sops-nix) if the script needs to reference a
+secret, and have the installer itself fetch/decrypt
+it at install time instead\.
 
 
 
@@ -4371,11 +4832,11 @@ absolute path or string
 *Example:*
 
 ```nix
-/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/path/to/script.kstart
+/home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/path/to/script.kstart
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -4399,7 +4860,51 @@ string
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.pxe-boot\.isoDownloadRateLimit
+
+
+
+Caps the transfer rate of whole-ISO downloads served under
+` /isos/ ` (nginx’s ` limit_rate `, e\.g\. a client’s own
+` findiso= ` fetch)\. ` null ` (the default) means unlimited\.
+
+A bulk ISO transfer and other clients’ latency-sensitive GRUB
+kernel/initrd fetches share the same nginx worker process;
+on a very weak/single-core router this can starve those
+latency-sensitive requests enough to make GRUB’s legacy
+BIOS/SeaBIOS PXE network driver (which has no retry logic)
+fail entirely\. Real routers typically have enough cores that
+this never actually contends – this project’s own E2E test
+runs its router VM with a single vCPU and sets this
+explicitly, which real deployments normally won’t need to\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+"20m"
+```
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -4423,7 +4928,126 @@ absolute path
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.pxe-boot\.nixIsos
+
+
+
+ISO images built by Nix (e\.g\. this project’s own
+` modules/iso-builder `) to serve for PXE boot, without needing
+to manually copy them into ` isoFolderPath `\. Each package is
+exposed via a ` systemd.tmpfiles.rules "L+" ` symlink farm –
+atomic and generation-pinned: removing a package from this
+list changes what the farm contains on the next switch, so no
+manually-managed symlinks can be orphaned\.
+
+Inert unless ` pxe-boot.enable ` is also set – the farm and
+its ` tmpfiles.rules ` entry only exist inside that same
+` lib.mkIf `\.
+
+` autoinstall ` and each interface’s ` defaultIso ` key by ISO
+*filename* (the package’s ` image.fileName `/` p.name `), the
+same as for ` isoFolderPath `-discovered ISOs – there is
+nothing ` nixIsos `-specific to configure on that side, just
+use the same filename there too\.
+
+
+
+*Type:*
+list of package
+
+
+
+*Default:*
+
+```nix
+[ ]
+```
+
+
+
+*Example:*
+
+```nix
+[ self.packages.x86_64-linux.iso-x86_64 ]
+```
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.pxe-boot\.nixIsosDir
+
+
+
+Where the ` nixIsos ` symlink farm is exposed via
+` systemd.tmpfiles.rules "L+" ` (added to ` isoFolderPaths `
+alongside the manually-managed ` isoFolderPath ` whenever
+` nixIsos ` is non-empty)\.
+
+
+
+*Type:*
+absolute path
+
+
+
+*Default:*
+
+```nix
+"/var/lib/pxe-boot/nix-isos"
+```
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.pxe-boot\.shimPackage
+
+
+
+The signed shim + GRUB build served over TFTP as
+` bootx64.efi `/` bootaa64.efi ` for UEFI Secure Boot clients
+(see ` tests/pxe-boot/secure-boot.nix `)\. Overridable so an
+operator can supply their own MOK-enrolled shim, pin a
+different Ubuntu netboot release than this module’s own
+auto-bumped default, or substitute a signed build obtained
+through a different trust chain entirely – without forking
+this module\.
+
+Defaults to this project’s own ` pxe-boot-grub-signed `
+package (` packages/pxe-boot-grub-signed/package.nix `),
+Canonical/Microsoft-signed shim + GRUB repackaged from
+Ubuntu’s netboot tarball\.
+
+
+
+*Type:*
+package
+
+
+
+*Default:*
+
+```nix
+pkgs.callPackage ../packages/pxe-boot-grub-signed/package.nix { }
+```
+
+
+
+*Example:*
+
+```nix
+pkgs.my-custom-signed-grub
+```
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -4462,7 +5086,7 @@ absolute path
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -4504,7 +5128,7 @@ attribute set of (submodule)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -4528,7 +5152,7 @@ list of (submodule)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -4560,7 +5184,7 @@ null
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -4587,7 +5211,7 @@ non-Linux VXLAN peers\.
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -4612,7 +5236,7 @@ null
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -4620,7 +5244,7 @@ null
 
 
 
-To-do: make description
+Configure this interface as a DHCP client\.
 
 
 
@@ -4636,7 +5260,7 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -4644,7 +5268,7 @@ true
 
 
 
-To-do: make description
+Configure this interface as a DHCP server (reservations, pools, PXE boot, etc\. – see the options below)\.
 
 
 
@@ -4660,7 +5284,7 @@ submodule
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -4687,7 +5311,7 @@ CIDR (IP and Subnet\. Example: 192\.168\.1\.4/24)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -4720,7 +5344,80 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.vxlanInterfaces\.\<name>\.dhcp\.server\.clientClasses
+
+
+
+Define Kea client classes
+(see https://kea\.readthedocs\.io/en/latest/arm/classify\.html)
+scoped to this subnet\.
+
+Each class is forced into evaluation for this subnet only
+(Kea’s ` require-client-classes `), and its Kea class name is
+this attribute’s name suffixed with this subnet’s ` id `
+(e\.g\. ` my-class-204 `), guaranteeing global uniqueness
+across interfaces – the same convention the built-in
+PXE-boot classes already use\.
+
+` test ` (Kea’s classification expression) is required;
+every other field (` option-data `, ` next-server `,
+` boot-file-name `, etc\.) is passed through to Kea verbatim
+in Kea’s own JSON shape – see the docs above for the full
+set of fields a class can carry\.
+
+
+
+*Type:*
+attribute set of (open submodule of attribute set of anything)
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+
+
+*Example:*
+
+```nix
+{
+  dect-setup-1 = {
+    option-data = [
+      {
+        data = "dect-setup-1.efi";
+        name = "boot-file-name";
+      }
+    ];
+    test = "substring(option[60].hex,0,8) == 'dect-dev'";
+  };
+}
+```
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.vxlanInterfaces\.\<name>\.dhcp\.server\.clientClasses\.\<name>\.test
+
+
+
+Kea classification test expression\.
+
+
+
+*Type:*
+string
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -4753,7 +5450,7 @@ false
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -4789,7 +5486,7 @@ false
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -4832,7 +5529,7 @@ one of “lan”, “forward-only”
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -4872,7 +5569,7 @@ null
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -4896,7 +5593,7 @@ list of (FQDN (Fully Qualified Domain Name))
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -4922,7 +5619,7 @@ signed integer
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -4958,7 +5655,7 @@ null
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -4982,7 +5679,7 @@ integer between 1 and 4294967294 (both inclusive)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -5034,7 +5731,7 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -5066,7 +5763,7 @@ string
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -5098,7 +5795,7 @@ string
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -5132,7 +5829,7 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -5171,7 +5868,84 @@ attribute set of (submodule)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.vxlanInterfaces\.\<name>\.dhcp\.server\.reservations\.\<name>\.defaultIso
+
+
+
+Per-MAC override of ` pxe-boot.defaultIso `: which ISO
+this specific reservation’s client should PXE boot
+by default, instead of the interface-wide default\.
+
+Only takes effect when ` pxe-boot.enable ` is also
+true for this interface\. Leave unset (empty string)
+to inherit the interface-wide ` defaultIso `\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+
+```nix
+""
+```
+
+
+
+*Example:*
+
+```nix
+"rhel-9.6-x86_64-dvd.iso"
+```
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.vxlanInterfaces\.\<name>\.dhcp\.server\.reservations\.\<name>\.defaultScriptName
+
+
+
+Per-MAC override of ` pxe-boot.defaultScriptName `:
+which autoinstall script this specific reservation’s
+client should use by default, instead of the
+interface-wide default\.
+
+Only takes effect when ` pxe-boot.enable ` is also
+true for this interface\. Leave unset (empty string)
+to inherit the interface-wide ` defaultScriptName `\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+
+```nix
+""
+```
+
+
+
+*Example:*
+
+```nix
+"minimal-environment.kstart"
+```
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -5209,7 +5983,7 @@ null
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -5233,7 +6007,7 @@ null
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -5265,7 +6039,7 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -5319,7 +6093,7 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -5354,7 +6128,7 @@ null
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -5362,7 +6136,7 @@ null
 
 
 
-To-do: make description (Note static IP is put here, but there may be a better location in the structure)
+Assign a static IP to this interface, instead of running a DHCP client or server on it\.
 
 
 
@@ -5378,7 +6152,7 @@ submodule
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -5413,7 +6187,7 @@ list of (IP address)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -5445,7 +6219,7 @@ null
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -5471,7 +6245,7 @@ CIDR (IP and Subnet\. Example: 192\.168\.1\.4/24)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -5495,7 +6269,7 @@ false
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -5519,7 +6293,7 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -5545,7 +6319,7 @@ false
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -5571,7 +6345,7 @@ null
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -5591,7 +6365,7 @@ false
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -5607,7 +6381,7 @@ Set the name of the network interface
 Network Interface Name ()
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -5636,13 +6410,11 @@ IP address
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
 ## my\.router\.vxlanInterfaces\.\<name>\.requiredForOnline
-
-
 
 When configured to ` null ` (which is the default)\.
 
@@ -5680,7 +6452,7 @@ true
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -5717,7 +6489,7 @@ list of (Subnet)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
 
 
 
@@ -5741,6 +6513,517 @@ integer between 0 and 16777215 (both inclusive)
 ```
 
 *Declared by:*
- - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/nixosModule/options\.nix](file:///home/dvv/github.com/dvaerum/nixos-router-module/nixosModule/options.nix)
+
+
+
+## pxe-boot-iso (modules/iso-builder)
+
+## pxe-boot-iso\.enable
+
+Whether to enable PXE-bootable ISO configuration\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+
+
+*Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/modules/iso-builder](file:///home/dvv/github.com/dvaerum/nixos-router-module/modules/iso-builder)
+
+
+
+## pxe-boot-iso\.enableNetworkDownload
+
+
+
+Enable downloading ISO via network during initrd\.
+This allows using findiso=http://… kernel parameter to download the ISO over network\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/modules/iso-builder](file:///home/dvv/github.com/dvaerum/nixos-router-module/modules/iso-builder)
+
+
+
+## pxe-boot-iso\.extraPackages
+
+
+
+Additional packages to include in the ISO
+
+
+
+*Type:*
+list of package
+
+
+
+*Default:*
+
+```nix
+[ ]
+```
+
+
+
+*Example:*
+
+```nix
+[ pkgs.vim pkgs.git ]
+```
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/modules/iso-builder](file:///home/dvv/github.com/dvaerum/nixos-router-module/modules/iso-builder)
+
+
+
+## pxe-boot-iso\.includeDiskTools
+
+
+
+Include disk utilities (parted, gparted, etc\.)
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/modules/iso-builder](file:///home/dvv/github.com/dvaerum/nixos-router-module/modules/iso-builder)
+
+
+
+## pxe-boot-iso\.includeHardwareTools
+
+
+
+Include hardware testing tools (lshw, hwinfo, etc\.)
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/modules/iso-builder](file:///home/dvv/github.com/dvaerum/nixos-router-module/modules/iso-builder)
+
+
+
+## pxe-boot-iso\.includeNetworkTools
+
+
+
+Include network troubleshooting tools (tcpdump, nmap, etc\.)
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/modules/iso-builder](file:///home/dvv/github.com/dvaerum/nixos-router-module/modules/iso-builder)
+
+
+
+## pxe-boot-iso\.kernelPackage
+
+
+
+Kernel packages to use (linuxPackages_\* attrset)
+
+
+
+*Type:*
+raw value
+
+
+
+*Default:*
+
+```nix
+pkgs.linuxPackages_latest
+```
+
+
+
+*Example:*
+
+```nix
+pkgs.linuxPackages_6_12
+```
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/modules/iso-builder](file:///home/dvv/github.com/dvaerum/nixos-router-module/modules/iso-builder)
+
+
+
+## pxe-boot-iso\.networkDownloadStallTimeoutSec
+
+
+
+Abort the network ISO download if no data has been received for
+this many seconds (passed to wget as ` --read-timeout `)\. This is a
+STALL timeout, not a total-duration cap: it resets on every byte
+received, so a large ISO on a slow-but-working link can take as
+long as it needs – only genuine inactivity triggers it\.
+
+Design note: the systemd stage-1 ` findiso-download.service ` unit
+itself has no total-duration timeout either (no
+` JobRunningTimeoutSec= `) – this STALL timeout is the only
+safety net against an unbounded hang\. On expiry, wget exits
+non-zero, which the service’s ` OnFailure=emergency.target `
+catches, rather than leaving the boot waiting forever for a
+download that will never finish\.
+
+
+
+*Type:*
+signed integer
+
+
+
+*Default:*
+
+```nix
+60
+```
+
+
+
+*Example:*
+
+```nix
+120
+```
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/modules/iso-builder](file:///home/dvv/github.com/dvaerum/nixos-router-module/modules/iso-builder)
+
+
+
+## pxe-boot-iso\.networkDownloadTmpfsSize
+
+
+
+Size of the tmpfs used to stage the network-downloaded ISO during
+initrd (passed as ` mount -t tmpfs -o size=... `)\. Must be large
+enough to hold the whole ISO in RAM\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+
+```nix
+"2G"
+```
+
+
+
+*Example:*
+
+```nix
+"4G"
+```
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/modules/iso-builder](file:///home/dvv/github.com/dvaerum/nixos-router-module/modules/iso-builder)
+
+
+
+## pxe-boot-iso\.ssh\.enable
+
+
+
+Whether to enable SSH server
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/modules/iso-builder](file:///home/dvv/github.com/dvaerum/nixos-router-module/modules/iso-builder)
+
+
+
+## pxe-boot-iso\.ssh\.passwordAuthentication
+
+
+
+Whether to allow SSH password authentication\.
+
+ - null: Automatically set to false if sshAuthorizedKeys is provided, true otherwise - DEFAULT
+ - true: Allow password authentication
+ - false: Disable password authentication (keys only)
+
+
+
+*Type:*
+null or boolean
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/modules/iso-builder](file:///home/dvv/github.com/dvaerum/nixos-router-module/modules/iso-builder)
+
+
+
+## pxe-boot-iso\.ssh\.permitRootLogin
+
+
+
+Whether to allow root login via SSH
+
+
+
+*Type:*
+one of “yes”, “no”, “prohibit-password”, “forced-commands-only”
+
+
+
+*Default:*
+
+```nix
+"yes"
+```
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/modules/iso-builder](file:///home/dvv/github.com/dvaerum/nixos-router-module/modules/iso-builder)
+
+
+
+## pxe-boot-iso\.sshAuthorizedKeys
+
+
+
+SSH authorized keys for the nixos user
+
+
+
+*Type:*
+list of string
+
+
+
+*Default:*
+
+```nix
+[ ]
+```
+
+
+
+*Example:*
+
+```nix
+[
+  "ssh-ed25519 AAAAC3Nz... user@host"
+]
+```
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/modules/iso-builder](file:///home/dvv/github.com/dvaerum/nixos-router-module/modules/iso-builder)
+
+
+
+## pxe-boot-iso\.users\.nixos\.allowSudoWithoutPassword
+
+
+
+Allow nixos user to use sudo without password
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/modules/iso-builder](file:///home/dvv/github.com/dvaerum/nixos-router-module/modules/iso-builder)
+
+
+
+## pxe-boot-iso\.users\.nixos\.hashedPassword
+
+
+
+Hashed password for the nixos user (e\.g\., from mkpasswd)\.
+Cannot be used together with password\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/modules/iso-builder](file:///home/dvv/github.com/dvaerum/nixos-router-module/modules/iso-builder)
+
+
+
+## pxe-boot-iso\.users\.nixos\.password
+
+
+
+Plain text password for the nixos user\.
+
+ - null: Empty password (login without password) - DEFAULT
+ - “somepassword”: Sets this password
+   Cannot be used together with hashedPassword\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/modules/iso-builder](file:///home/dvv/github.com/dvaerum/nixos-router-module/modules/iso-builder)
+
+
+
+## pxe-boot-iso\.users\.root\.hashedPassword
+
+
+
+Hashed password for the root user (e\.g\., from mkpasswd)\.
+Cannot be used together with password\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/modules/iso-builder](file:///home/dvv/github.com/dvaerum/nixos-router-module/modules/iso-builder)
+
+
+
+## pxe-boot-iso\.users\.root\.password
+
+
+
+Plain text password for the root user\.
+
+ - null: Empty password (login without password) - DEFAULT
+ - “somepassword”: Sets this password
+   Cannot be used together with hashedPassword\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+*Declared by:*
+ - [/home/dvv/github\.com/dvaerum/nixos-router-module/modules/iso-builder](file:///home/dvv/github.com/dvaerum/nixos-router-module/modules/iso-builder)
 
 

@@ -26,7 +26,7 @@ multiple times).
 | 6 | B11, B16 | ✅ done, package-build-verified |
 | 7 | C23, C24 | ✅ done, E2E-verified |
 | 8 | D41, D38, D36 | ✅ done, E2E-verified |
-| 8 | D35 | 🛑 blocked — needs a design decision (see below) |
+| 8 | D35 | ✅ done, E2E-verified |
 | 9 | C30 | ✅ done |
 | 10 | B20 | ✅ done — CI workflow added, heavy E2E gated to manual |
 | 11 | C33, C34 | ✅ done, E2E-verified |
@@ -38,28 +38,87 @@ Flake checks went from 10 to 14 over the course of this plan (new:
 count went from 89 (session start) to 122 (119 lib + 6 bin, excludes the
 3 pre-existing from before this plan).
 
-## Open blocker: D35 design decision
+## D35 design (resolved via `/grill-me`)
 
-**D35** (per-client/per-MAC default ISO/script) needs one of:
+**D35** (per-client/per-MAC default ISO/script) was originally framed as
+a choice between "Option A" (GRUB-side, needs iPXE in front of GRUB) and
+"Option B" (Nix/Rust-side, new per-MAC Kea client-classes) — both bigger
+than necessary. A `/grill-me` session worked through the actual
+motivating scale (a small, static set of specifically-cared-about
+machines — not a dynamic fleet) and converged on something simpler than
+either original option:
 
-- **Option A — GRUB-side selection**: expose the client's MAC as a GRUB
-  variable at boot time. Requires chaining iPXE in front of GRUB (a new
-  boot-chain dependency this project doesn't currently have for native
-  BIOS/UEFI PXE). Keeps the Nix/Rust side simple — one shared `grub.cfg`
-  per interface, GRUB itself branches on MAC.
-- **Option B — Nix/Rust-side selection**: generate N per-MAC-keyed Kea
-  DHCP client-classes (one per pinned MAC) plus N per-MAC `grub.cfg`
-  variants, served per-client. A meaningfully bigger change (touches DHCP
-  config generation, the Rust GRUB-writing path, and TFTP serving), but
-  no new boot-chain dependency — consistent with how per-interface
-  `defaultIso`/`defaultScriptName` already work today, just keyed by MAC
-  too.
-- **Skip for now** — defer to a separate piece of work, move on to
-  Batches 9–11 instead.
+- **Mechanism (corrected after verification — see below)**: the
+  original design picked Kea reservation-level `boot-file-name` because
+  it needs no new client-class and no iPXE dependency. That was wrong:
+  `boot-file-name` is DHCP's bootloader-*binary* selector (siaddr/sname/
+  file), already used today in this project's existing client-classes to
+  pick `grub.pxe`/`bootx64.efi`/`bootaa64.efi` — it cannot select which
+  *GRUB config* loads. A follow-up E2E experiment also ruled out relying
+  on GRUB's own undocumented automatic `grub.cfg-01-<mac>` search (the
+  behavior `grub-mknetdir` bakes in by default): on this project's
+  Ubuntu-netboot-sourced GRUB build, that search never fires — the
+  client falls straight through to the plain `grub.cfg`.
+  The verified mechanism instead: every generated `grub.cfg` already
+  calls `net_bootp` unconditionally before building its menu
+  (`grub/menu.rs`), which populates GRUB's own `${net_default_mac}`
+  variable — already relied on in production via the
+  `BOOTIF=${"$"}{net_default_mac}` kernel param in `distro/ubuntu.rs`. A
+  live E2E run confirmed this variable resolves exactly to
+  `52:54:00:aa:01:03` form (lowercase, colon-separated — identical to
+  how MACs are written everywhere else in this project). Add, right
+  after `net_bootp` and before the timeout/default/menu-entries section:
+  ```
+  if [ -f /grub/grub.cfg-override-${"$"}{net_default_mac} ]; then
+      configfile /grub/grub.cfg-override-${"$"}{net_default_mac}
+  fi
+  ```
+  `configfile` with a plain relative path is also already proven on this
+  exact TFTP root (the existing "Reload Grub" menu entry does
+  `configfile /grub/grub.cfg`). `generate_grub_menu` writes
+  `grub.cfg-override-<mac>` alongside the normal `grub.cfg`, for any
+  reservation with its own default — same builder, called again with a
+  different `set_default` index. No Kea changes, no iPXE dependency.
+  (Investigation during the original interview also found the plan's
+  claim that "chaining iPXE in front of GRUB" would be a *new*
+  dependency was only half true — iPXE is already in this project's boot
+  chain today for legacy BIOS clients, `config-tftp.nix`'s `main.ipxe`;
+  only UEFI avoids it. Moot now that the mechanism doesn't touch iPXE at
+  all, but worth keeping on record.)
+- **Scope**: `dhcp.server.reservations."<mac>"` (already exists, today
+  just `ip-address`/`hostname`) gains optional `defaultIso`/
+  `defaultScriptName` fields, mirroring the existing per-interface
+  `defaultIso`/`defaultScriptName` exactly (same names, so the Nix-side
+  precedence/override logic reads identically at both levels). Requires
+  the MAC to already
+  have a reservation (i.e. a pinned IP) — "a reservation without a fixed
+  IP" is a cheap, decoupled future addition if ever needed (Kea doesn't
+  require `ip-address` on a reservation), not a blocker now.
+- **Content**: the per-MAC override is the SAME shared menu every client
+  on that interface gets — it only changes which entry `set default=N`
+  points at, exactly like the existing per-interface default. It never
+  restricts or hides entries.
+- **Precedence**: a MAC-level `defaultIso`/`defaultScriptName` overrides
+  the interface-level one when both are set, per field (more specific
+  wins; a reservation setting only one field inherits the other from the
+  interface).
+- **Validation**: `check_default_entry_warnings` (already validates
+  interface-level defaults) extends to walk reservations too, naming the
+  specific MAC/reservation and field that doesn't match — never a silent
+  no-op.
 
-Asked the user once already (dismissed without an answer). Re-ask before
-starting D35, or proceed to Batch 9 first if the user wants to come back
-to it later.
+**Implemented and E2E-verified.** `generate_grub_menu` (`lib.rs`) builds
+the shared entry list once, then calls a shared `write_grub_cfg` helper
+twice per reservation-with-an-override: once for the interface's own
+`grub.cfg`, once per override (`grub.cfg-override-<mac>`, MAC
+lowercased to match `${net_default_mac}`'s runtime format). The override
+check itself lives in `grub/menu.rs`'s `build()`, unconditional for
+every generated grub.cfg (a no-op `[ -f ... ]` miss when nothing
+overrides). `check_default_entry_warnings` walks reservations the same
+way, skipping ones with neither field set. `tests/pxe-boot/default.nix`
+carries a real E2E regression (`"D35: per-MAC override grub.cfg..."`)
+asserting the override file has the identical menu but a different
+`set default=N`.
 
 ## Full item list
 
@@ -284,8 +343,8 @@ to it later.
 
 ### Section D — new features
 
-- **D35** 🛑 blocked — per-client (per-MAC) default ISO/script. See
-  "Open blocker" above.
+- **D35** ✅ done, E2E-verified — per-client (per-MAC) default ISO/script.
+  See "D35 design" above.
 - **D36** ✅ `findiso=` download resume — `wget --continue` added;
   idempotent tmpfs-mount guard (`grep -q ' /run/findiso ' /proc/mounts`
   before mounting) prevents a second script invocation from stacking a
@@ -364,8 +423,8 @@ sufficient).
 
 ## Next step
 
-Every item except **D35** is done and E2E-verified, including the final
-full-suite + both-E2E-green checkpoint. D35 (per-client/per-MAC default
-ISO/script) is still an open design conversation with the user — the only
-remaining work on this plan. Nothing is committed/pushed yet (explicit
-user hold on this repo this session).
+All 41 items are done and E2E-verified. The first 40 are committed (15
+commits, one per batch/item-group, `main` branch). **D35 is implemented
+and E2E-verified** (see "D35 design" above) but not yet committed —
+awaiting the usual explicit per-action go-ahead for this repo this
+session. Nothing is pushed yet.

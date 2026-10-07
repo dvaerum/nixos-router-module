@@ -87,6 +87,11 @@ let
   reservedPxeMac = "52:54:00:12:01:09";
   reservedPxeIp = "192.168.75.5"; # < firstIP (.10) => outside the pool
 
+  # D35: a reservation purely to exercise the per-MAC default-entry
+  # override's Nix-to-JSON-to-Rust wiring -- no VM uses this MAC.
+  d35OverrideMac = "52:54:00:aa:01:05";
+  d35OverrideIp = "192.168.75.6";
+
   ###########################################################################
   # Test ISO: custom NixOS that sends a beacon HTTP request after booting
   ###########################################################################
@@ -391,6 +396,20 @@ in
                   reservations = {
                     "${reservedPxeMac}" = {
                       ip-address = reservedPxeIp;
+                    };
+                    # D35: per-MAC default-entry override -- this
+                    # reservation never PXE-boots a real VM in this test
+                    # (that would require a 4th bootable ISO fixture just
+                    # to prove index selection); it only has to exist so
+                    # generate_grub_menu writes its override file, which
+                    # the "D35" subtest below reads directly off the
+                    # router. The GRUB-side consumption of that file
+                    # (${"$"}{net_default_mac} + configfile) was verified
+                    # separately via a live E2E probe -- see
+                    # pxe-boot-plan-v3.md's D35 design section.
+                    "${d35OverrideMac}" = {
+                      ip-address = d35OverrideIp;
+                      defaultIso = "rhel-9.6-x86_64-dvd.iso";
                     };
                   };
                   pxe-boot = {
@@ -789,6 +808,22 @@ in
             for i, entry in enumerate(menu_entries):
                 marker = " <-- DEFAULT" if i == default_idx else ""
                 router.log(f"  [{i}] {entry}{marker}")
+
+        with subtest("D35: per-MAC override grub.cfg has the same menu but a different default"):
+            override_cfg = router.succeed(
+                "cat /srv/pxeboot/200/grub/grub.cfg-override-${d35OverrideMac}"
+            )
+            override_entries = re.findall(r'menuentry\s+"([^"]+)"', override_cfg)
+            assert override_entries == menu_entries, \
+                f"Override menu must list the exact same entries as the base grub.cfg: {override_entries} vs {menu_entries}"
+
+            override_default_match = re.search(r'set default=(\d+)', override_cfg)
+            assert override_default_match, "No 'set default=' in override GRUB config"
+            override_default_idx = int(override_default_match.group(1))
+            assert "rhel" in override_entries[override_default_idx].lower(), \
+                f"Override default entry is '{override_entries[override_default_idx]}', expected the reservation's RHEL override"
+            assert override_default_idx != default_idx, \
+                "Override default must differ from the interface-level default -- otherwise this test can't tell the override apart from a no-op"
 
         with subtest("NixOS ISO is mounted and served via HTTP"):
             router.succeed("test -d /run/pxe-boot/iso-mountpoint/${testIsoName}")

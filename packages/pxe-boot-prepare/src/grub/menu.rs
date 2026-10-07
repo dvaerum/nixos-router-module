@@ -91,6 +91,20 @@ impl<'a> GrubMenuBuilder<'a> {
         output.push_str("fi\n");
         output.push('\n');
 
+        // D35: per-MAC default override. Written by `generate_grub_menu`
+        // only for reservations with their own default configured;
+        // `[ -f ... ]` makes this a no-op for everyone else. Must run
+        // after net_bootp (above) so ${net_default_mac} is populated --
+        // confirmed live in this exact boot chain by a dedicated E2E
+        // probe (see pxe-boot-plan-v3.md's D35 design section), since
+        // GRUB's own undocumented automatic grub.cfg-01-<mac> search
+        // (grub-mknetdir's default) does not fire on this project's
+        // Ubuntu-netboot-sourced GRUB build.
+        output.push_str("if [ -f /grub/grub.cfg-override-${net_default_mac} ]; then\n");
+        output.push_str("  configfile /grub/grub.cfg-override-${net_default_mac}\n");
+        output.push_str("fi\n");
+        output.push('\n');
+
         // Header
         output.push_str("if [ x$feature_timeout_style = xy ] ; then\n");
         if let Some(timeout) = self.timeout {
@@ -363,6 +377,29 @@ mod tests {
         assert!(!cfg.contains("\nset default="));
         assert!(cfg.contains(r#"menuentry "Reload Grub" {"#));
         assert!(cfg.contains("configfile /grub/grub.cfg"));
+    }
+
+    #[test]
+    fn build_includes_per_mac_override_check_after_net_bootp() {
+        // D35: every generated grub.cfg must test for a per-MAC override
+        // file using GRUB's own ${net_default_mac}, and that check must
+        // come after net_bootp runs (otherwise the variable isn't
+        // populated yet) -- see this file's own build() comment and
+        // pxe-boot-plan-v3.md's D35 design section for why.
+        let builder = GrubMenuBuilder::new().unwrap();
+        let cfg = builder.build().unwrap();
+
+        assert!(cfg.contains("if [ -f /grub/grub.cfg-override-${net_default_mac} ]; then"));
+        assert!(cfg.contains("configfile /grub/grub.cfg-override-${net_default_mac}"));
+
+        let bootp_pos = cfg.find("net_bootp").expect("net_bootp must be present");
+        let override_pos = cfg
+            .find("grub.cfg-override-${net_default_mac}")
+            .expect("override check must be present");
+        assert!(
+            override_pos > bootp_pos,
+            "override check must come after net_bootp"
+        );
     }
 
     #[test]
