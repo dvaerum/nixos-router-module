@@ -134,6 +134,18 @@ pub struct BootInfo {
     pub distro_type: DistroType,
     pub version: Option<String>,
     pub architecture: Option<String>,
+
+    /// `init=` kernel parameter value (e.g. a NixOS toplevel's
+    /// `/nix/store/<hash>-nixos-system-.../init`), when the detector was
+    /// able to discover one. Distro-specific: NixOS's systemd-stage-1
+    /// `initrd-find-nixos-closure.service` requires `init=` on the kernel
+    /// command line to know which closure to switch-root into -- a normal
+    /// (non-network) ISO boot gets this "for free" from the ISO's own
+    /// self-contained GRUB config, which PXE boot bypasses entirely by
+    /// constructing its own command line. `None` for distros that don't
+    /// need or support this (e.g. Ubuntu/casper, RHEL/anaconda use their
+    /// own init mechanisms).
+    pub init_path: Option<String>,
 }
 
 /// GRUB menu entry
@@ -144,6 +156,15 @@ pub struct MenuEntry {
     pub kernel_params: Vec<String>,
     pub initrd_url: String,
     pub position: usize,
+    /// Detected ISO architecture (Linux/Nix convention, e.g. "x86_64",
+    /// "aarch64" -- see `distro::arch`), `None` when undetermined.
+    /// Consumed by `GrubMenuBuilder` to wrap the rendered entry in a
+    /// `$grub_cpu` conditional (A6) so an aarch64-only ISO doesn't show
+    /// up as a non-working boot option on an x86_64 client's menu, and
+    /// vice versa. `None` fails OPEN (entry always shown, unfiltered) --
+    /// hiding a perfectly good ISO because detection failed would be a
+    /// worse failure mode than showing one that might not work.
+    pub architecture: Option<String>,
 }
 
 #[cfg(test)]

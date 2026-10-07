@@ -1,5 +1,6 @@
 use crate::config::{AutoinstallScript, BootInfo, DistroType, IsoInfo};
-use crate::distro::detector::DistroDetector;
+use crate::distro::arch::detect_architecture_from_file_name;
+use crate::distro::detector::{DistroDetector, AUTOINSTALL_DIR_URL_PLACEHOLDER};
 use crate::error::Result;
 use crate::iso::find_file;
 use async_trait::async_trait;
@@ -43,7 +44,8 @@ impl DistroDetector for UbuntuDetector {
             initrd_path: initrd,
             distro_type: DistroType::Ubuntu,
             version: None,
-            architecture: Some("amd64".to_string()),
+            architecture: detect_architecture_from_file_name(&iso_info.file_name),
+            init_path: None,
         })
     }
 
@@ -51,6 +53,7 @@ impl DistroDetector for UbuntuDetector {
         &self,
         iso_url: &str,
         _mounted_url: &str,
+        _boot_info: &BootInfo,
         autoinstall: Option<&AutoinstallScript>,
     ) -> Vec<String> {
         // Boot by downloading the whole ISO into RAM (`url=`). This is casper's
@@ -90,7 +93,7 @@ impl DistroDetector for UbuntuDetector {
         // by MenuEntryFactory.
         if autoinstall.is_some() {
             params.push("autoinstall".to_string());
-            params.push("ds=nocloud-net\\;s={autoinstall_dir_url}".to_string());
+            params.push(format!("ds=nocloud-net\\;s={AUTOINSTALL_DIR_URL_PLACEHOLDER}"));
         }
 
         params
@@ -100,6 +103,7 @@ impl DistroDetector for UbuntuDetector {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     use std::path::PathBuf;
 
     fn script() -> AutoinstallScript {
@@ -109,12 +113,24 @@ mod tests {
         }
     }
 
+    fn boot_info() -> BootInfo {
+        BootInfo {
+            kernel_path: PathBuf::from("/mnt/casper/vmlinuz"),
+            initrd_path: PathBuf::from("/mnt/casper/initrd"),
+            distro_type: DistroType::Ubuntu,
+            version: None,
+            architecture: Some("amd64".to_string()),
+            init_path: None,
+        }
+    }
+
     #[test]
     fn boots_from_iso_url() {
         let d = UbuntuDetector::new();
         let params = d.generate_boot_params(
             "http://gw:1338/ubuntu.iso",
             "http://gw:1337/iso-mountpoint/ubuntu.iso",
+            &boot_info(),
             None,
         );
         assert!(params.contains(&"ip=dhcp".to_string()));
@@ -132,6 +148,7 @@ mod tests {
         let params = d.generate_boot_params(
             "http://gw:1338/ubuntu.iso",
             "http://gw:1337/iso-mountpoint/ubuntu.iso",
+            &boot_info(),
             None,
         );
         assert!(params.contains(&"BOOTIF=${net_default_mac}".to_string()));
@@ -142,19 +159,96 @@ mod tests {
     fn adds_autoinstall_and_nocloud_when_script_present() {
         let d = UbuntuDetector::new();
         let s = script();
-        let params = d.generate_boot_params("http://gw:1338/ubuntu.iso", "http://m", Some(&s));
+        let params = d.generate_boot_params(
+            "http://gw:1338/ubuntu.iso",
+            "http://m",
+            &boot_info(),
+            Some(&s),
+        );
         assert!(params.contains(&"url=http://gw:1338/ubuntu.iso".to_string()));
         assert!(params.contains(&"autoinstall".to_string()));
         // The dir-URL placeholder is substituted later by MenuEntryFactory; the
         // semicolon is escaped so GRUB keeps it as a single argument.
-        assert!(params.contains(&"ds=nocloud-net\\;s={autoinstall_dir_url}".to_string()));
+        assert!(params.contains(&format!("ds=nocloud-net\\;s={AUTOINSTALL_DIR_URL_PLACEHOLDER}")));
     }
 
     #[test]
     fn no_autoinstall_args_when_script_absent() {
         let d = UbuntuDetector::new();
-        let params = d.generate_boot_params("http://i", "http://m", None);
+        let params = d.generate_boot_params("http://i", "http://m", &boot_info(), None);
         assert!(!params.contains(&"autoinstall".to_string()));
         assert!(!params.iter().any(|p| p.starts_with("ds=")));
+    }
+
+    #[tokio::test]
+    async fn can_handle_detects_casper_squashfs() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("casper")).unwrap();
+        fs::write(
+            dir.path().join("casper/ubuntu-server-minimal.squashfs"),
+            b"fake",
+        )
+        .unwrap();
+
+        let d = UbuntuDetector::new();
+        assert!(d.can_handle(dir.path()).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn can_handle_rejects_missing_squashfs() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("casper")).unwrap();
+
+        let d = UbuntuDetector::new();
+        assert!(!d.can_handle(dir.path()).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn extract_boot_info_finds_casper_kernel_and_initrd() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("casper")).unwrap();
+        fs::write(dir.path().join("casper/vmlinuz"), b"fake-kernel").unwrap();
+        fs::write(dir.path().join("casper/initrd"), b"fake-initrd").unwrap();
+
+        let iso_info = IsoInfo {
+            file_name: "ubuntu-24.04-live-server-amd64.iso".to_string(),
+            file_path: dir.path().join("ubuntu-24.04-live-server-amd64.iso"),
+            mount_path: dir.path().to_path_buf(),
+            distro_type: DistroType::Ubuntu,
+            kernel_path: PathBuf::new(),
+            initrd_path: PathBuf::new(),
+        };
+
+        let d = UbuntuDetector::new();
+        let boot_info = d.extract_boot_info(&iso_info).await.unwrap();
+
+        assert_eq!(boot_info.kernel_path, dir.path().join("casper/vmlinuz"));
+        assert_eq!(boot_info.initrd_path, dir.path().join("casper/initrd"));
+        assert_eq!(boot_info.distro_type, DistroType::Ubuntu);
+        // Normalized to "x86_64" (GRUB's own $grub_cpu convention, see
+        // distro::arch), not Ubuntu's native "amd64" naming.
+        assert_eq!(boot_info.architecture.as_deref(), Some("x86_64"));
+    }
+
+    #[tokio::test]
+    async fn extract_boot_info_detects_arm64_as_aarch64() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("casper")).unwrap();
+        fs::write(dir.path().join("casper/vmlinuz"), b"fake-kernel").unwrap();
+        fs::write(dir.path().join("casper/initrd"), b"fake-initrd").unwrap();
+
+        let iso_info = IsoInfo {
+            file_name: "ubuntu-24.04-live-server-arm64.iso".to_string(),
+            file_path: dir.path().join("ubuntu-24.04-live-server-arm64.iso"),
+            mount_path: dir.path().to_path_buf(),
+            distro_type: DistroType::Ubuntu,
+            kernel_path: PathBuf::new(),
+            initrd_path: PathBuf::new(),
+        };
+
+        let d = UbuntuDetector::new();
+        let boot_info = d.extract_boot_info(&iso_info).await.unwrap();
+
+        assert_eq!(boot_info.architecture.as_deref(), Some("aarch64"));
     }
 }

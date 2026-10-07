@@ -38,6 +38,7 @@ impl DistroDetector for UnknownDetector {
         &self,
         _iso_url: &str,
         _mounted_url: &str,
+        _boot_info: &BootInfo,
         _autoinstall: Option<&AutoinstallScript>,
     ) -> Vec<String> {
         vec![]

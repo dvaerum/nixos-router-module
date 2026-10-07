@@ -1,4 +1,5 @@
 use crate::config::MenuEntry;
+use crate::distro::arch::to_grub_cpu;
 use crate::error::Result;
 use handlebars::Handlebars;
 use serde_json::json;

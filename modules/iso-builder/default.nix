@@ -225,6 +225,22 @@ in
       }
     ];
 
+    # Expose RFC-0125 "bootspec" (https://github.com/NixOS/rfcs/pull/125) at
+    # the ISO's top level, the same way nixpkgs' own iso-image.nix already
+    # exposes the kernel/initrd under /boot/ for GRUB's benefit (it can't
+    # easily read inside nix-store.squashfs without a nested mount). This
+    # file already exists at `${toplevel}/boot.json` as part of every NixOS
+    # closure -- "a stable API depended upon by external tooling" per
+    # nixpkgs' own bootspec.nix comment -- so this just makes that existing,
+    # authoritative source reachable by tools (like pxe-boot-prepare) that
+    # only mount the ISO9660 filesystem directly, not the nested squashfs.
+    isoImage.contents = [
+      {
+        source = "${config.system.build.toplevel}/boot.json";
+        target = "/boot.json";
+      }
+    ];
+
     # Enable flakes for modern Nix workflow
     nix.settings.experimental-features = [
       "nix-command"

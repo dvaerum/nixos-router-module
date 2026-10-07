@@ -1,3 +1,4 @@
+pub mod arch;
 pub mod detector;
 pub mod nixos;
 pub mod rhel;

@@ -91,7 +91,7 @@ impl MenuEntryFactory {
         };
 
         let mut kernel_params =
-            detector.generate_boot_params(&iso_url, &mounted_url, autoinstall);
+            detector.generate_boot_params(&iso_url, &mounted_url, boot_info, autoinstall);
 
         // Replace autoinstall URL placeholders if present.
         // - `{autoinstall_url}`     → the seed *file* (e.g. RHEL `inst.ks=`).
@@ -124,6 +124,7 @@ impl MenuEntryFactory {
             kernel_params,
             initrd_url,
             position,
+            architecture: boot_info.architecture.clone(),
         })
     }
 

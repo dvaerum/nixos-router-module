@@ -3,6 +3,18 @@ use crate::error::{PxeBootError, Result};
 use async_trait::async_trait;
 use std::path::Path;
 
+/// Kernel-param placeholder for the autoinstall seed *file* URL (e.g.
+/// RHEL's `inst.ks=`). Substituted by `MenuEntryFactory::create_entry`;
+/// kept as a single shared constant so the producer side (each
+/// `DistroDetector::generate_boot_params` impl) and the consumer side
+/// (`MenuEntryFactory`) can never drift apart by retyping the literal.
+pub const AUTOINSTALL_URL_PLACEHOLDER: &str = "{autoinstall_url}";
+
+/// Kernel-param placeholder for the autoinstall seed *directory* URL,
+/// ending in `/` (e.g. Ubuntu NoCloud's `ds=nocloud-net;s=`). See
+/// `AUTOINSTALL_URL_PLACEHOLDER` above.
+pub const AUTOINSTALL_DIR_URL_PLACEHOLDER: &str = "{autoinstall_dir_url}";
+
 /// Trait for distribution detection and boot configuration
 #[async_trait]
 pub trait DistroDetector: Send + Sync {
@@ -28,6 +40,7 @@ pub trait DistroDetector: Send + Sync {
         &self,
         iso_url: &str,
         mounted_url: &str,
+        boot_info: &BootInfo,
         autoinstall: Option<&AutoinstallScript>,
     ) -> Vec<String>;
 
