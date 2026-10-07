@@ -176,7 +176,6 @@ pkgs.testers.nixosTest {
     # python
     ''
       import json
-      import re
 
       start_all()
 
@@ -286,10 +285,11 @@ pkgs.testers.nixosTest {
           assert "192.168.50" in leases, "Lease database should contain entries for 192.168.50 network"
 
       with subtest("clientClasses: same local name on two subnets gets distinct, id-suffixed Kea names"):
-          service_info = router.succeed("systemctl cat kea-dhcp4-server.service")
-          config_match = re.search(r'-c\s+([^\s]+)', service_info)
-          config_path = config_match.group(1) if config_match else "/etc/kea/dhcp4-server.conf"
-          kea_json = json.loads(router.succeed(f"cat {config_path}"))
+          # Fixed by nixpkgs' own services.kea module (not a user-facing
+          # option here), so a literal beats parsing it out of
+          # `systemctl cat` -- which is also fragile against ExecStart
+          # quoting/formatting changes across systemd versions.
+          kea_json = json.loads(router.succeed("cat /etc/kea/dhcp4-server.conf"))
 
           classes_by_name = {c["name"]: c for c in kea_json["Dhcp4"]["client-classes"]}
           assert "shared-class-400" in classes_by_name, \
