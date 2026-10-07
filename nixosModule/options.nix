@@ -690,7 +690,7 @@ let
       description = ''
         Select the name of the bridge interface
       '';
-      type = nullOr networkTypes.interfaceName;
+      type = networkTypes.interfaceName;
       example = "br0";
     };
   };
