@@ -100,18 +100,12 @@
             );
         };
 
-        # Expose packages for building
-        packages = {
-          # Test packages
-          basic-routing-test = tests.basic-routing;
-          dhcp-server-test = tests.dhcp-server;
-          pxe-boot-test = tests.pxe-boot;
-          pxe-boot-tftp-warnings-test = tests.pxe-boot-tftp-warnings;
-          vxlan-test = tests.vxlan;
-          dns-server-test = tests.dns-server;
-          dns-server-disabled-test = tests.dns-server-disabled;
-        }
-        // pkgs.lib.optionalAttrs isLinux (
+        # Expose packages for building. Deliberately NOT mirroring `checks.*`
+        # here (that was the pre-existing checks/packages drift: 13 `-test`
+        # aliases with no content of their own) -- `nix build .#checks.<sys>.<name>`
+        # already builds any check directly, so `packages` instead exposes the
+        # project's actual standalone artifacts.
+        packages = pkgs.lib.optionalAttrs isLinux (
           let
             # Explicitly named ISOs for cross-platform clarity
             archSuffix =
@@ -126,6 +120,11 @@
             # ISO images (only for Linux systems)
             iso = buildIso ./modules/iso-builder/basic.nix;
             iso-example = buildIso ./modules/iso-builder/example.nix;
+
+            # Linux-only: calls `mount`/`umount` directly, same gate as the ISOs above.
+            pxe-boot-prepare = pkgs.callPackage ./packages/pxe-boot-prepare/package.nix { };
+
+            pxe-boot-grub-signed = import ./packages/pxe-boot-grub-signed/package.nix { inherit pkgs; };
           }
           // {
             # Architecture-specific names
