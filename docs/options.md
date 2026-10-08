@@ -6488,7 +6488,7 @@ Multicast mode: the multicast group every peer joins
 the same group\. Set exactly one of ` remote `, ` group ` or ` listen `\.
 Needs ` device `\.
 
-See ` docs/vxlan-multicast.md ` for how to set this up by hand\.
+See ` docs/vxlan-modes-and-dhcp.md ` for how to set this up by hand\.
 
 
 
@@ -6554,7 +6554,7 @@ of ` remote `, ` group ` or ` listen `\.
 
 The hub cannot start talking to a client it has not heard from
 yet, and forgets idle clients after a few minutes\. See
-` docs/vxlan-listen.md ` (also covers clients behind NAT)\.
+` docs/vxlan-modes-and-dhcp.md ` (also covers clients behind NAT)\.
 
 
 
