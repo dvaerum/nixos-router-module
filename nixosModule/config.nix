@@ -77,8 +77,15 @@ in
 (lib.mkIf cfg.enable {
   assertions = lib.lists.concatMap (vxlan_conf: [
     {
-      assertion = (vxlan_conf.remote == null) != (vxlan_conf.group == null);
-      message = "my.router.vxlanInterfaces.${vxlan_conf.name}: set exactly one of `remote` (unicast) or `group` (multicast).";
+      assertion =
+        lib.length (
+          lib.filter (x: x) [
+            (vxlan_conf.remote != null)
+            (vxlan_conf.group != null)
+            vxlan_conf.listen
+          ]
+        ) == 1;
+      message = "my.router.vxlanInterfaces.${vxlan_conf.name}: set exactly one of `remote` (unicast), `group` (multicast) or `listen` (hub).";
     }
     {
       assertion = (vxlan_conf.group == null) == (vxlan_conf.device == null);
@@ -232,6 +239,10 @@ in
               }
               // lib.attrsets.optionalAttrs (vxlan_conf.group != null) {
                 Group = vxlan_conf.group;
+              }
+              // lib.attrsets.optionalAttrs vxlan_conf.listen {
+                # No fixed peer: learn each client's address from its frames.
+                MacLearning = true;
               }
               // lib.attrsets.optionalAttrs (vxlan_conf.local != null) {
                 Local = vxlan_conf.local;

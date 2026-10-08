@@ -13,7 +13,7 @@ also wanted to have a deeper understanding for how everything works.
 ## Current features:
 
 - VLANs
-- VXLAN (unicast point-to-point, or multicast: [docs](./docs/vxlan-multicast.md))
+- VXLAN (unicast point-to-point, [multicast](./docs/vxlan-multicast.md), or [listening hub](./docs/vxlan-listen.md))
 - Multi-cast
 - DHCP server
 - PXE Boot (beta)

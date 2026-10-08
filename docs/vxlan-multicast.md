@@ -85,3 +85,6 @@ does not enable that for you.
   (see `networkctl cat <device>`).
 - No traffic between peers: check `ip maddr show dev <device>` on both sides, and that
   the underlay passes multicast (switch IGMP snooping needs a querier).
+
+For a hub that clients connect to (no fixed peer, works across routed networks), see
+[vxlan-listen.md](./vxlan-listen.md).

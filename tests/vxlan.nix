@@ -64,6 +64,12 @@ pkgs.testers.nixosTest {
             device = "eth1";
             dhcp.static.ip-address = "10.101.0.1/30";
           };
+          vxlan4000 = {
+            vni = 4000;
+            listen = true;
+            local = "10.0.1.1";
+            dhcp.static.ip-address = "10.102.0.1/30";
+          };
         };
       };
     };
@@ -110,6 +116,11 @@ pkgs.testers.nixosTest {
             group = "239.1.1.1";
             device = "eth1";
             dhcp.static.ip-address = "10.101.0.2/30";
+          };
+          vxlan4000 = {
+            vni = 4000;
+            remote = "10.0.1.1";
+            dhcp.static.ip-address = "10.102.0.2/30";
           };
         };
       };
@@ -201,6 +212,17 @@ pkgs.testers.nixosTest {
       with subtest("multicast mode: routers can ping each other across the group-based tunnel"):
           router1.wait_until_succeeds("ping -c 1 10.101.0.2")
           router2.succeed("ping -c 3 10.101.0.1")
+
+      with subtest("listen mode: the hub vxlan4000 has no remote and no group"):
+          details = json.loads(router1.succeed("ip --json -details link show vxlan4000"))
+          vxlan_info = details[0]["linkinfo"]["info_data"]
+          assert vxlan_info["id"] == 4000, f"expected VNI 4000, got {vxlan_info.get('id')}"
+          assert "remote" not in vxlan_info and "group" not in vxlan_info, f"hub must have no remote/group, got {vxlan_info}"
+
+      with subtest("listen mode: the client reaches the hub, then the hub reaches the client"):
+          # The client's first packet teaches the hub the client's address.
+          router2.wait_until_succeeds("ping -c 1 10.102.0.1")
+          router1.succeed("ping -c 3 10.102.0.2")
 
       with subtest("bridge mode: clients behind different routers reach each other over the stretched L2 segment"):
           client1.wait_until_succeeds("ping -c 1 192.168.99.20")

@@ -734,7 +734,8 @@ let
       description = ''
         Source IP to bind/send from. `null` (the default) lets the kernel
         pick the address the routing table would use to reach `remote`
-        (or, in multicast mode, an address on `device`).
+        (in multicast mode, an address on `device`; in `listen` mode,
+        all addresses).
       '';
       type = nullOr networkTypes.ipAddress;
       default = null;
@@ -742,8 +743,8 @@ let
 
     remote = mkOption {
       description = ''
-        Unicast mode: the other tunnel endpoint's IP address. Set this
-        or `group`, not both.
+        Unicast mode: the other tunnel endpoint's IP address. Set exactly
+        one of `remote`, `group` or `listen`.
 
         Must be a static, routable IP (not a hostname, and not usable
         across NAT or a dynamic WAN IP).
@@ -757,7 +758,8 @@ let
       description = ''
         Multicast mode: the multicast group every peer joins
         (224.0.0.0 - 239.255.255.255). All peers of one VXLAN must use
-        the same group. Set this or `remote`, not both. Needs `device`.
+        the same group. Set exactly one of `remote`, `group` or `listen`.
+        Needs `device`.
 
         See `docs/vxlan-multicast.md` for how to set this up by hand.
       '';
@@ -775,6 +777,22 @@ let
       type = nullOr networkTypes.interfaceName;
       default = null;
       example = "eth1";
+    };
+
+    listen = mkOption {
+      description = ''
+        Listen mode: act as a hub that clients connect to. The interface
+        has no fixed peer; it learns each client's address from the
+        frames the client sends, and replies to it. Clients are normal
+        unicast VXLANs with `remote` set to this host. Set exactly one
+        of `remote`, `group` or `listen`.
+
+        The hub cannot start talking to a client it has not heard from
+        yet, and forgets idle clients after a few minutes. See
+        `docs/vxlan-listen.md` (also covers clients behind NAT).
+      '';
+      type = bool;
+      default = false;
     };
 
     destinationPort = mkOption {
@@ -938,7 +956,7 @@ in
       };
 
       vxlanInterfaces = mkOption {
-        description = "Config all VXLAN interfaces (unicast with `remote`, or multicast with `group` and `device`)";
+        description = "Config all VXLAN interfaces (unicast with `remote`, multicast with `group` and `device`, or hub with `listen`)";
         type = attrsOf (
           submodule (
             { name, ... }: {
@@ -959,6 +977,11 @@ in
             group = "239.1.1.1";
             device = "eth1";
             dhcp.client = { };
+          };
+          vxlan4000 = {
+            vni = 4000;
+            listen = true;
+            dhcp.server.address = "10.102.0.1/24";
           };
         };
       };
