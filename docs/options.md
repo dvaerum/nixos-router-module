@@ -5201,7 +5201,7 @@ absolute path
 
 
 
-Config all VXLAN interfaces (unicast with ` remote `, or multicast with ` group ` and ` device `)
+Config all VXLAN interfaces (unicast with ` remote `, multicast with ` group ` and ` device `, or hub with ` listen `)
 
 
 
@@ -5238,6 +5238,15 @@ attribute set of (submodule)
     };
     group = "239.1.1.1";
     vni = 3000;
+  };
+  vxlan4000 = {
+    dhcp = {
+      server = {
+        address = "10.102.0.1/24";
+      };
+    };
+    listen = true;
+    vni = 4000;
   };
 }
 ```
@@ -6476,7 +6485,8 @@ true
 
 Multicast mode: the multicast group every peer joins
 (224\.0\.0\.0 - 239\.255\.255\.255)\. All peers of one VXLAN must use
-the same group\. Set this or ` remote `, not both\. Needs ` device `\.
+the same group\. Set exactly one of ` remote `, ` group ` or ` listen `\.
+Needs ` device `\.
 
 See ` docs/vxlan-multicast.md ` for how to set this up by hand\.
 
@@ -6532,13 +6542,46 @@ false
 
 
 
+## my\.router\.vxlanInterfaces\.\<name>\.listen
+
+
+
+Listen mode: act as a hub that clients connect to\. The interface
+has no fixed peer; it learns each client’s address from the
+frames the client sends, and replies to it\. Clients are normal
+unicast VXLANs with ` remote ` set to this host\. Set exactly one
+of ` remote `, ` group ` or ` listen `\.
+
+The hub cannot start talking to a client it has not heard from
+yet, and forgets idle clients after a few minutes\. See
+` docs/vxlan-listen.md ` (also covers clients behind NAT)\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
 ## my\.router\.vxlanInterfaces\.\<name>\.local
 
 
 
 Source IP to bind/send from\. ` null ` (the default) lets the kernel
 pick the address the routing table would use to reach ` remote `
-(or, in multicast mode, an address on ` device `)\.
+(in multicast mode, an address on ` device `; in ` listen ` mode,
+all addresses)\.
 
 
 
@@ -6603,8 +6646,8 @@ Network Interface Name (letters, digits, \`\.\`, \`_\`, \`-\`; max 15 characters
 
 
 
-Unicast mode: the other tunnel endpoint’s IP address\. Set this
-or ` group `, not both\.
+Unicast mode: the other tunnel endpoint’s IP address\. Set exactly
+one of ` remote `, ` group ` or ` listen `\.
 
 Must be a static, routable IP (not a hostname, and not usable
 across NAT or a dynamic WAN IP)\.
