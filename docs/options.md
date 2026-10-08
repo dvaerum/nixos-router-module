@@ -5201,7 +5201,7 @@ absolute path
 
 
 
-Config all VXLAN (unicast point-to-point) interfaces
+Config all VXLAN interfaces (unicast with ` remote `, or multicast with ` group ` and ` device `)
 
 
 
@@ -5230,6 +5230,14 @@ attribute set of (submodule)
     };
     remote = "172.20.1.1";
     vni = 1000;
+  };
+  vxlan3000 = {
+    device = "eth1";
+    dhcp = {
+      client = { };
+    };
+    group = "239.1.1.1";
+    vni = 3000;
   };
 }
 ```
@@ -5307,6 +5315,40 @@ non-Linux VXLAN peers\.
 
 ```nix
 4789
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.vxlanInterfaces\.\<name>\.device
+
+
+
+Multicast mode: name of the underlay interface (a
+` configInterface ` or ` bridgeInterfaces ` entry) that joins ` group `\.
+Required with ` group `; must be ` null ` otherwise\.
+
+
+
+*Type:*
+null or (Network Interface Name (letters, digits, \`\.\`, \`_\`, \`-\`; max 15 characters))
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+"eth1"
 ```
 
 *Declared by:*
@@ -6430,6 +6472,40 @@ true
 
 
 
+## my\.router\.vxlanInterfaces\.\<name>\.group
+
+Multicast mode: the multicast group every peer joins
+(224\.0\.0\.0 - 239\.255\.255\.255)\. All peers of one VXLAN must use
+the same group\. Set this or ` remote `, not both\. Needs ` device `\.
+
+See ` docs/vxlan-multicast.md ` for how to set this up by hand\.
+
+
+
+*Type:*
+null or (Multicast Address (224\.0\.0\.0 - 239\.255\.255\.255))
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+"239.1.1.1"
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
 ## my\.router\.vxlanInterfaces\.\<name>\.ipMasquerade
 
 
@@ -6458,9 +6534,11 @@ false
 
 ## my\.router\.vxlanInterfaces\.\<name>\.local
 
+
+
 Source IP to bind/send from\. ` null ` (the default) lets the kernel
-pick whatever address the routing table would use to reach
-` remote `\.
+pick the address the routing table would use to reach ` remote `
+(or, in multicast mode, an address on ` device `)\.
 
 
 
@@ -6525,17 +6603,24 @@ Network Interface Name (letters, digits, \`\.\`, \`_\`, \`-\`; max 15 characters
 
 
 
-The other tunnel endpoint’s IP address (unicast point-to-point
-only, no multicast/BUM-flood mode in this module yet)\. Must be
-a static, currently-correct, routable IP: NOT a hostname, and NOT
-usable directly across NAT or a dynamic WAN IP on either end\.
-This assumes both ends already sit on stable, mutually-routable
-infrastructure\.
+Unicast mode: the other tunnel endpoint’s IP address\. Set this
+or ` group `, not both\.
+
+Must be a static, routable IP (not a hostname, and not usable
+across NAT or a dynamic WAN IP)\.
 
 
 
 *Type:*
-IP address
+null or (IP address)
+
+
+
+*Default:*
+
+```nix
+null
+```
 
 
 
