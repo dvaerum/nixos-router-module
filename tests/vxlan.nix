@@ -58,6 +58,12 @@ pkgs.testers.nixosTest {
             remote = "10.0.1.2";
             bridges = [ { name = "br-lan"; } ];
           };
+          vxlan3000 = {
+            vni = 3000;
+            group = "239.1.1.1";
+            device = "eth1";
+            dhcp.static.ip-address = "10.101.0.1/30";
+          };
         };
       };
     };
@@ -98,6 +104,12 @@ pkgs.testers.nixosTest {
             vni = 2000;
             remote = "10.0.1.1";
             bridges = [ { name = "br-lan"; } ];
+          };
+          vxlan3000 = {
+            vni = 3000;
+            group = "239.1.1.1";
+            device = "eth1";
+            dhcp.static.ip-address = "10.101.0.2/30";
           };
         };
       };
@@ -172,6 +184,23 @@ pkgs.testers.nixosTest {
               master = router.succeed("cat /sys/class/net/vxlan2000/master/ifindex").strip()
               eth2_master = router.succeed("cat /sys/class/net/eth2/master/ifindex").strip()
               assert master == eth2_master, "vxlan2000 and eth2 should share the same bridge master"
+
+      with subtest("multicast mode: vxlan3000 uses the group on the eth1 underlay"):
+          for router in [router1, router2]:
+              details = json.loads(router.succeed("ip --json -details link show vxlan3000"))
+              vxlan_info = details[0]["linkinfo"]["info_data"]
+              assert vxlan_info["id"] == 3000, f"expected VNI 3000, got {vxlan_info.get('id')}"
+              assert vxlan_info.get("group") == "239.1.1.1", f"expected group 239.1.1.1, got {vxlan_info}"
+              assert "remote" not in vxlan_info, f"multicast mode must not have a remote, got {vxlan_info}"
+
+      with subtest("multicast mode: the underlay interface joined the group"):
+          for router in [router1, router2]:
+              maddr = router.succeed("ip maddr show dev eth1")
+              assert "239.1.1.1" in maddr, f"eth1 should have joined 239.1.1.1, got: {maddr}"
+
+      with subtest("multicast mode: routers can ping each other across the group-based tunnel"):
+          router1.wait_until_succeeds("ping -c 1 10.101.0.2")
+          router2.succeed("ping -c 3 10.101.0.1")
 
       with subtest("bridge mode: clients behind different routers reach each other over the stretched L2 segment"):
           client1.wait_until_succeeds("ping -c 1 192.168.99.20")

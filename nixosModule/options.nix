@@ -721,10 +721,8 @@ let
     };
   };
 
-  # Unicast (point-to-point) only; multicast `Group=`/BUM-flood mode would
-  # touch the `pimd` wiring below, not needed for a two-router tunnel. Uses
-  # the full `interfaceSharedOptions` (unlike bridges) so a VXLAN interface
-  # can join a bridge OR carry its own `dhcp.static/client/server`.
+  # Uses the full `interfaceSharedOptions` (unlike bridges) so a VXLAN
+  # interface can join a bridge OR carry its own `dhcp.static/client/server`.
   setVxlanOptions = {
     vni = mkOption {
       description = "VXLAN Network Identifier (VNI), 0-16777215.";
@@ -735,8 +733,8 @@ let
     local = mkOption {
       description = ''
         Source IP to bind/send from. `null` (the default) lets the kernel
-        pick whatever address the routing table would use to reach
-        `remote`.
+        pick the address the routing table would use to reach `remote`
+        (or, in multicast mode, an address on `device`).
       '';
       type = nullOr networkTypes.ipAddress;
       default = null;
@@ -744,15 +742,39 @@ let
 
     remote = mkOption {
       description = ''
-        The other tunnel endpoint's IP address (unicast point-to-point
-        only, no multicast/BUM-flood mode in this module yet). Must be
-        a static, currently-correct, routable IP: NOT a hostname, and NOT
-        usable directly across NAT or a dynamic WAN IP on either end.
-        This assumes both ends already sit on stable, mutually-routable
-        infrastructure.
+        Unicast mode: the other tunnel endpoint's IP address. Set this
+        or `group`, not both.
+
+        Must be a static, routable IP (not a hostname, and not usable
+        across NAT or a dynamic WAN IP).
       '';
-      type = networkTypes.ipAddress;
+      type = nullOr networkTypes.ipAddress;
+      default = null;
       example = "172.20.1.1";
+    };
+
+    group = mkOption {
+      description = ''
+        Multicast mode: the multicast group every peer joins
+        (224.0.0.0 - 239.255.255.255). All peers of one VXLAN must use
+        the same group. Set this or `remote`, not both. Needs `device`.
+
+        See `docs/vxlan-multicast.md` for how to set this up by hand.
+      '';
+      type = nullOr networkTypes.multicastAddress;
+      default = null;
+      example = "239.1.1.1";
+    };
+
+    device = mkOption {
+      description = ''
+        Multicast mode: name of the underlay interface (a
+        `configInterface` or `bridgeInterfaces` entry) that joins `group`.
+        Required with `group`; must be `null` otherwise.
+      '';
+      type = nullOr networkTypes.interfaceName;
+      default = null;
+      example = "eth1";
     };
 
     destinationPort = mkOption {
@@ -916,7 +938,7 @@ in
       };
 
       vxlanInterfaces = mkOption {
-        description = "Config all VXLAN (unicast point-to-point) interfaces";
+        description = "Config all VXLAN interfaces (unicast with `remote`, or multicast with `group` and `device`)";
         type = attrsOf (
           submodule (
             { name, ... }: {
@@ -931,6 +953,12 @@ in
             vni = 1000;
             remote = "172.20.1.1";
             dhcp.static.ip-address = "10.100.0.2/30";
+          };
+          vxlan3000 = {
+            vni = 3000;
+            group = "239.1.1.1";
+            device = "eth1";
+            dhcp.client = { };
           };
         };
       };

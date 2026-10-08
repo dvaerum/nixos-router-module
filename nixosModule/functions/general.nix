@@ -271,4 +271,9 @@ rec {
   vlanFilename = vlan_conf: "20-${vlanName (vlan_conf // { name = null; })}";
   bridgeFilename = bridge_conf: "30-${bridge_conf.name}";
   vxlanFilename = vxlan_conf: "40-${vxlan_conf.name}";
+  vxlansOnDevice =
+    deviceName:
+    lib.lists.forEach (lib.lists.filter (
+      vxlan_conf: vxlan_conf.group != null && vxlan_conf.device == deviceName
+    ) (lib.attrsets.attrValues cfgVxlanInterface)) (vxlan_conf: vxlan_conf.name);
 }

@@ -28,6 +28,7 @@ let
     vlanFilename
     bridgeFilename
     vxlanFilename
+    vxlansOnDevice
     interfaceFilename
     allInterfaces
     systemdNetworkDHCP
@@ -74,6 +75,25 @@ let
   );
 in
 (lib.mkIf cfg.enable {
+  assertions = lib.lists.concatMap (vxlan_conf: [
+    {
+      assertion = (vxlan_conf.remote == null) != (vxlan_conf.group == null);
+      message = "my.router.vxlanInterfaces.${vxlan_conf.name}: set exactly one of `remote` (unicast) or `group` (multicast).";
+    }
+    {
+      assertion = (vxlan_conf.group == null) == (vxlan_conf.device == null);
+      message = "my.router.vxlanInterfaces.${vxlan_conf.name}: `group` and `device` must be set together (multicast mode needs the underlay `device`).";
+    }
+    {
+      assertion =
+        vxlan_conf.device == null
+        || lib.any (i: i.name == vxlan_conf.device) (
+          lib.attrsets.attrValues cfgConfigInterface ++ lib.attrsets.attrValues cfg.bridgeInterfaces
+        );
+      message = "my.router.vxlanInterfaces.${vxlan_conf.name}: `device = \"${toString vxlan_conf.device}\"` is not a `configInterface` or `bridgeInterfaces` entry.";
+    }
+  ]) (lib.attrsets.attrValues cfg.vxlanInterfaces);
+
   warnings =
     lib.forEach
       (lib.lists.filter (
@@ -111,6 +131,7 @@ in
               matchConfig.Name = interface_conf.name;
               vlan = lib.lists.forEach interface_conf.vlans (vlan_conf: vlanName vlan_conf);
               bridge = lib.lists.forEach interface_conf.bridges (bridge_conf: bridge_conf.name);
+              vxlan = vxlansOnDevice interface_conf.name;
             }
             // systemdNetworkDHCP {
               interfaceName = interface_conf.name;
@@ -180,6 +201,7 @@ in
             "${bridgeFilename bridge_conf}" = {
               enable = true;
               matchConfig.Name = bridge_conf.name;
+              vxlan = vxlansOnDevice bridge_conf.name;
             }
             // systemdNetworkDHCP {
               interfaceName = bridge_conf.name;
@@ -198,13 +220,18 @@ in
                 Name = vxlan_conf.name;
               };
               vxlanConfig = {
-                # Required: no `.network` binds this tunnel to an
-                # underlying link via `VXLAN=`, so without this the
-                # device waits forever for a link that never comes.
-                Independent = true;
+                # Unicast has no underlying link bound via `VXLAN=`, so
+                # without this the device waits forever for one. Multicast
+                # mode is bound to `device` (see `vxlansOnDevice`).
+                Independent = vxlan_conf.group == null;
                 VNI = vxlan_conf.vni;
-                Remote = vxlan_conf.remote;
                 DestinationPort = vxlan_conf.destinationPort;
+              }
+              // lib.attrsets.optionalAttrs (vxlan_conf.remote != null) {
+                Remote = vxlan_conf.remote;
+              }
+              // lib.attrsets.optionalAttrs (vxlan_conf.group != null) {
+                Group = vxlan_conf.group;
               }
               // lib.attrsets.optionalAttrs (vxlan_conf.local != null) {
                 Local = vxlan_conf.local;
