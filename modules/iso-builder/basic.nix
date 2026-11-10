@@ -19,8 +19,10 @@
   # Enable network ISO download feature
   pxe-boot-iso.enableNetworkDownload = true;
 
-  # Use latest stable kernel
-  pxe-boot-iso.kernelPackage = pkgs.linuxPackages_latest;
+  # Kernel: left unset on purpose. The default is the newest kernel the ZFS
+  # package supports (see docs/zfs-kernel-selection.md); pinning
+  # `linuxPackages_latest` here would break the ISO build whenever nixpkgs gets a
+  # kernel ZFS does not support yet.
 
   # ISO metadata
   image.fileName = lib.mkForce "nixos-pxe-boot-${pkgs.stdenv.hostPlatform.system}.iso";

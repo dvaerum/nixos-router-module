@@ -31,7 +31,24 @@ let
     pxe-boot-iso.kernel.exclude = [ ".*" ];
   };
 
+  # The shipped ISO definitions (what `nix build .#iso` / `.#iso-example` use) must
+  # not pin a kernel, or they bypass the selection and break on a nixpkgs bump.
+  # An unpinned option has exactly the module's own default definition, whose
+  # location is the module directory; a pin adds a definition from another file.
+  shippedPinsKernel =
+    file:
+    lib.any (d: toString d.file != toString ../modules/iso-builder)
+      (pkgs.nixos file).options.pxe-boot-iso.kernelPackage.definitionsWithLocations;
+
   checks = [
+    {
+      name = "shipped basic.nix does not pin a kernel";
+      ok = !(shippedPinsKernel ../modules/iso-builder/basic.nix);
+    }
+    {
+      name = "shipped example.nix does not pin a kernel";
+      ok = !(shippedPinsKernel ../modules/iso-builder/example.nix);
+    }
     {
       name = "default: the ZFS kernel module is buildable (not meta.broken)";
       ok = !(default.boot.zfs.modulePackage.meta.broken or false);

@@ -35,8 +35,8 @@
       # "ssh-ed25519 AAAAC3Nz... user@host"
     ];
 
-    # Use a specific kernel version
-    kernelPackage = pkgs.linuxPackages_latest;
+    # Kernel: unset, so the newest one the ZFS package supports is used.
+    # To pin one instead: kernelPackage = pkgs.linuxPackages_6_12;
 
     # Enable network download feature
     enableNetworkDownload = true;
