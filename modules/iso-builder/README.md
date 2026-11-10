@@ -8,7 +8,7 @@ This module provides an easy way to build custom PXE-bootable NixOS ISO images w
 - **Disk Utilities**: parted, gparted, testdisk, smartmontools, nvme-cli
 - **Hardware Testing**: lshw, hwinfo, dmidecode, stress-ng
 - **Network Boot Support**: Download ISO over network during boot with `findiso=http://...` kernel parameter
-- **ZFS Support**: Pre-configured for ZFS installations
+- **ZFS Support**: Pre-configured for ZFS installations. The default kernel is the newest one the ZFS package supports ([details](../../docs/zfs-kernel-selection.md))
 - **SSH Access**: Easy remote access with authorized keys
 - **Multi-architecture target**: build attributes exist for both x86_64
   and aarch64 (see "Architecture Notes" below for the real support level
@@ -85,8 +85,8 @@ Create a custom configuration file (e.g., `my-iso.nix`):
       "ssh-ed25519 AAAAC3Nz... user@host"
     ];
 
-    # Choose kernel version
-    kernelPackage = pkgs.linuxPackages_latest;
+    # Kernel: by default the newest one the ZFS package supports.
+    # To pin one instead: kernelPackage = pkgs.linuxPackages_6_12;
   };
 
   # Set system state version
@@ -144,7 +144,9 @@ You can add any NixOS configuration to your custom ISO:
 | `includeDiskTools` | bool | `true` | Include disk utilities |
 | `includeHardwareTools` | bool | `true` | Include hardware testing tools |
 | `sshAuthorizedKeys` | list | `[]` | SSH keys for nixos/root users |
-| `kernelPackage` | package | `linuxPackages_latest` | Kernel package to use |
+| `kernelPackage` | package | newest kernel the ZFS package supports | Kernel package to use (setting it pins a kernel) |
+| `kernel.include` | list of regex | `[]` | Only consider kernel sets whose name matches (whole name) |
+| `kernel.exclude` | list of regex | `[]` | Never consider kernel sets whose name matches; wins over `include` |
 | `enableNetworkDownload` | bool | `true` | Enable ISO download via network |
 | `networkDownloadTmpfsSize` | str | `"2G"` | tmpfs size for staging the network-downloaded ISO |
 | `networkDownloadStallTimeoutSec` | int | `60` | Abort the download if stalled this many seconds |

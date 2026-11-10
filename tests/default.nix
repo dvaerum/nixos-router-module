@@ -23,4 +23,5 @@ in
   iso-builder-network-download-options = import ./iso-builder-network-download-options.nix {
     inherit pkgs;
   };
+  iso-builder-kernel-selection = import ./iso-builder-kernel-selection.nix { inherit pkgs; };
 }

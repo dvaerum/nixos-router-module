@@ -35,6 +35,9 @@
       # To-do: Figure out how to make nested overlays
       overlays.default = pimd.overlays.default;
 
+      # Reusable helpers for other flakes: `inputs.<this>.lib.zfsKernel.select { pkgs; zfs; }`.
+      lib.zfsKernel = import ./lib/zfs-kernel.nix;
+
       nixosModules = {
         default = { ... }: {
           imports = [
@@ -81,9 +84,51 @@
           pxe-boot-full-disable = tests.pxe-boot-full-disable;
           pxe-boot-secure-boot = tests.pxe-boot-secure-boot;
           iso-builder-network-download-options = tests.iso-builder-network-download-options;
+          iso-builder-kernel-selection = tests.iso-builder-kernel-selection;
           vxlan = tests.vxlan;
           dns-server = tests.dns-server;
           dns-server-disabled = tests.dns-server-disabled;
+
+          # Pure `lib.runTests` for the ZFS kernel selector, against a fake `pkgs`.
+          zfs-kernel-lib =
+            let
+              failures = import ./lib/zfs-kernel_tests.nix { inherit pkgs; };
+            in
+            pkgs.runCommand "zfs-kernel-lib-tests" { } (
+              if failures == [ ] then
+                "touch $out"
+              else
+                throw "zfs-kernel lib tests failed:\n${builtins.toJSON failures}"
+            );
+
+          # The selector against the REAL nixpkgs: for the stable and the unstable ZFS
+          # package it must pick a kernel whose ZFS module is not `meta.broken` and
+          # that is not older than nixpkgs' default kernel. Catches nixpkgs API drift.
+          zfs-kernel-real =
+            if isLinux then
+              let
+                selector = import ./lib/zfs-kernel.nix;
+                ok =
+                  zfs:
+                  let
+                    kp = selector.select { inherit pkgs zfs; };
+                  in
+                  !(kp.${zfs.kernelModuleAttribute}.meta.broken or true)
+                  && builtins.compareVersions kp.kernel.version pkgs.linuxPackages.kernel.version >= 0;
+              in
+              pkgs.runCommand "zfs-kernel-real" { } (
+                if
+                  builtins.all ok [
+                    pkgs.zfs
+                    pkgs.zfs_unstable
+                  ]
+                then
+                  "touch $out"
+                else
+                  throw "zfs-kernel: selection against real nixpkgs gave an unsupported or too-old kernel"
+              )
+            else
+              pkgs.runCommand "zfs-kernel-real-skipped" { } "touch $out";
 
           # Pure `lib.runTests` for the IPv4 helpers (returns [] when all pass).
           ipv4-lib =

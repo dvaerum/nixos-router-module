@@ -17,4 +17,5 @@ also wanted to have a deeper understanding for how everything works.
 - Multi-cast
 - DHCP server
 - PXE Boot (beta)
+- Reusable Nix helper: [newest kernel a ZFS package supports](./docs/zfs-kernel-selection.md)
 

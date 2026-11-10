@@ -9,6 +9,7 @@
 with lib;
 let
   cfg = config.pxe-boot-iso;
+  zfsKernel = import ../../lib/zfs-kernel.nix;
 in
 {
   imports = [ (modulesPath + "/installer/cd-dvd/installation-cd-minimal.nix") ];
@@ -48,18 +49,53 @@ in
       example = [ "ssh-ed25519 AAAAC3Nz... user@host" ];
     };
 
+    kernel = {
+      include = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        example = [ "linux_6_.*" ];
+        description = ''
+          Only consider kernel sets whose attribute name matches one of these
+          regular expressions (the whole name must match). Empty means every
+          kernel set. Used by the default of `kernelPackage`; see
+          `docs/zfs-kernel-selection.md`.
+        '';
+      };
+
+      exclude = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        example = [ "linux_zen" ];
+        description = ''
+          Never consider kernel sets whose attribute name matches one of these
+          regular expressions (the whole name must match). Wins over `include`.
+          Used by the default of `kernelPackage`.
+        '';
+      };
+    };
+
     kernelPackage = mkOption {
       type = types.raw; # Accept linuxPackages attrset
-      default = pkgs.linuxPackages_latest;
+      default = zfsKernel.select {
+        inherit pkgs;
+        zfs = config.boot.zfs.package;
+        inherit (cfg.kernel) include exclude;
+      };
       # Without this, `nixosOptionsDoc` tries to deeply evaluate the
-      # default VALUE itself (the whole linuxPackages_latest attrset) to
+      # default VALUE itself (the whole linuxPackages attrset) to
       # render it as markdown -- which pulls in unrelated, unmaintained
       # packages elsewhere in that attrset that may simply not evaluate
       # on a given nixpkgs revision (confirmed: `amdgpu-pro was removed
       # due to lack of maintenance` surfaced this way, nothing to do with
       # this option itself).
-      defaultText = literalExpression "pkgs.linuxPackages_latest";
-      description = "Kernel packages to use (linuxPackages_* attrset)";
+      defaultText = literalExpression "zfsKernel.select { inherit pkgs; zfs = config.boot.zfs.package; inherit (cfg.kernel) include exclude; }";
+      description = ''
+        Kernel packages to use (a `linuxPackages_*` set). The default is the
+        newest kernel the selected ZFS package (`boot.zfs.package`) supports,
+        so a nixpkgs update that brings a kernel ZFS does not support yet does
+        not break the ISO build. Narrow the choice with `kernel.include` and
+        `kernel.exclude`, or set this option to pin a kernel.
+      '';
       example = literalExpression "pkgs.linuxPackages_6_12";
     };
 
