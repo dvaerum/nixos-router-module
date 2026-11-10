@@ -238,17 +238,6 @@ in
         message = "pxe-boot-iso.users.root: Cannot set both 'password' and 'hashedPassword'. Please choose one.";
       }
       {
-        # The legacy (scripted) stage-1 `findiso=` download path was
-        # removed (confirmed via NixOS Discourse: nixpkgs already
-        # defaults `boot.initrd.systemd.enable` to true, with the
-        # non-systemd stage-1 on a deprecation path) -- this module's
-        # network-download ISO boot now only has a systemd-stage-1
-        # implementation. Fail loudly instead of silently producing an
-        # ISO whose `findiso=` boot simply does nothing.
-        assertion = !cfg.enableNetworkDownload || config.boot.initrd.systemd.enable;
-        message = "pxe-boot-iso.enableNetworkDownload requires boot.initrd.systemd.enable = true (the legacy scripted-stage-1 findiso= download path has been removed).";
-      }
-      {
         # nixosModule/config-tftp.nix's `nixIsos` option consumes a
         # package built by THIS module as `${p}/iso/${p.name}` -- a
         # hardcoded path that's only correct when the image is
