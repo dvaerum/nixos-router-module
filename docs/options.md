@@ -6944,11 +6944,88 @@ true
 
 
 
+## pxe-boot-iso\.kernel\.exclude
+
+
+
+Never consider kernel sets whose attribute name matches one of these
+regular expressions (the whole name must match)\. Wins over ` include `\.
+Used by the default of ` kernelPackage `\.
+
+
+
+*Type:*
+list of string
+
+
+
+*Default:*
+
+```nix
+[ ]
+```
+
+
+
+*Example:*
+
+```nix
+[
+  "linux_zen"
+]
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/modules/iso-builder](file:///home/runner/work/nixos-router-module/nixos-router-module/modules/iso-builder)
+
+
+
+## pxe-boot-iso\.kernel\.include
+
+
+
+Only consider kernel sets whose attribute name matches one of these
+regular expressions (the whole name must match)\. Empty means every
+kernel set\. Used by the default of ` kernelPackage `; see
+` docs/zfs-kernel-selection.md `\.
+
+
+
+*Type:*
+list of string
+
+
+
+*Default:*
+
+```nix
+[ ]
+```
+
+
+
+*Example:*
+
+```nix
+[
+  "linux_6_.*"
+]
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/modules/iso-builder](file:///home/runner/work/nixos-router-module/nixos-router-module/modules/iso-builder)
+
+
+
 ## pxe-boot-iso\.kernelPackage
 
 
 
-Kernel packages to use (linuxPackages_\* attrset)
+Kernel packages to use (a ` linuxPackages_* ` set)\. The default is the
+newest kernel the selected ZFS package (` boot.zfs.package `) supports,
+so a nixpkgs update that brings a kernel ZFS does not support yet does
+not break the ISO build\. Narrow the choice with ` kernel.include ` and
+` kernel.exclude `, or set this option to pin a kernel\.
 
 
 
@@ -6960,7 +7037,7 @@ raw value
 *Default:*
 
 ```nix
-pkgs.linuxPackages_latest
+zfsKernel.select { inherit pkgs; zfs = config.boot.zfs.package; inherit (cfg.kernel) include exclude; }
 ```
 
 
