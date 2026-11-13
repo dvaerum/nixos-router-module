@@ -18,13 +18,13 @@ pub struct GrubMenuBuilder<'a> {
     default_entry: Option<usize>,
     timeout: Option<u32>,
     /// True when this builder renders a `grub.cfg-override-<mac>` file
-    /// rather than an interface's own `grub.cfg`. The override-check block
-    /// (`if [ -f .../grub.cfg-override-${net_default_mac} ]; then configfile
-    /// ...`) must be skipped in that case -- it exists so the BASE file can
-    /// redirect into a MAC's override; emitting it in the override file
-    /// itself made it `configfile` into its own path, which GRUB executes
-    /// as unbounded self-recursion (confirmed live: the menu never reaches
-    /// its own `set default=`/timeout, so it never auto-boots).
+    /// rather than an interface's own `grub.cfg`. The redirect line
+    /// (`configfile /grub/grub.cfg-override-${net_default_mac}`) must be
+    /// skipped in that case -- it exists so the BASE file can redirect into
+    /// a MAC's override; emitting it in the override file itself made it
+    /// `configfile` into its own path, which GRUB executes as unbounded
+    /// self-recursion (confirmed live: the menu never reaches its own
+    /// `set default=`/timeout, so it never auto-boots).
     is_override_file: bool,
     handlebars: Handlebars<'a>,
 }
@@ -106,38 +106,27 @@ impl<'a> GrubMenuBuilder<'a> {
         output.push_str("fi\n");
         output.push('\n');
 
-        // D35: per-MAC default override. Written by `generate_grub_menu`
-        // only for reservations with their own default configured;
-        // `[ -f ... ]` makes this a no-op for everyone else. Must run
-        // after net_bootp (above) so ${net_default_mac} is populated --
-        // confirmed live in this exact boot chain by a dedicated E2E
-        // probe, since GRUB's own undocumented automatic
-        // grub.cfg-01-<mac> search (grub-mknetdir's default) does not
-        // fire on this project's Ubuntu-netboot-sourced GRUB build.
+        // D35/D36: per-MAC default override. Written by `generate_grub_menu`
+        // only for reservations with their own default configured. Must run
+        // after net_bootp (above) so ${net_default_mac} is populated (set
+        // synchronously inside net_bootp's own BOOTP-reply handling, not a
+        // timing race). GRUB's own undocumented automatic grub.cfg-01-<mac>
+        // search (grub-mknetdir's default) does not fire on this project's
+        // Ubuntu-netboot-sourced GRUB build, so this is done by hand.
+        //
+        // Deliberately NOT gated behind `[ -f ... ]`: for a net/tftp device,
+        // GRUB's own `-f`/`-e`/`-d` test is a stub that always returns false
+        // without ever opening a connection (`grub_net_fs_dir()` in
+        // grub-core/net/net.c never invokes its directory-iteration hook --
+        // confirmed identical in both upstream GRUB and Ubuntu's exact
+        // packaged source, 2.14-2ubuntu3; still unfixed upstream as of
+        // 2026-11). `configfile` itself calls `grub_file_open()` directly,
+        // so it works correctly on its own. A failed `configfile` against a
+        // nonexistent per-MAC override (harmless for every client with no
+        // override configured) is non-fatal: GRUB prints one error line and
+        // continues executing the rest of this file.
         if !self.is_override_file {
-            // D36: on at least one piece of real hardware, both pieces of
-            // this check work perfectly fine in isolation at an
-            // interactive grub> prompt (${net_default_mac} reads back
-            // correctly, and `configfile` against the exact resulting
-            // path succeeds) -- yet the automatic `-f` test right after
-            // net_bootp never even issues the TFTP request (confirmed via
-            // packet capture: zero RRQs). A flat `sleep N` before a single
-            // attempt did not help either. The most likely explanation is
-            // a transient first-packet loss right as the link comes up
-            // (classic ARP-not-yet-resolved drop with no built-in GRUB
-            // retry) -- a human retrying the same command by hand doesn't
-            // hit it twice, a one-shot script does. The project's own
-            // E2E probe (a VM, near-instant DHCP) never exercised this.
-            // Retrying the whole check a few times, spaced out, is the
-            // bounded, pragmatic fix: harmless (~3s) for every other
-            // client whose MAC has no override at all, and gives this
-            // one enough attempts to get past a one-off dropped packet.
-            output.push_str("for _pxe_override_attempt in 1 2 3; do\n");
-            output.push_str("  sleep 1\n");
-            output.push_str("  if [ -f /grub/grub.cfg-override-${net_default_mac} ]; then\n");
-            output.push_str("    configfile /grub/grub.cfg-override-${net_default_mac}\n");
-            output.push_str("  fi\n");
-            output.push_str("done\n");
+            output.push_str("configfile /grub/grub.cfg-override-${net_default_mac}\n");
             output.push('\n');
         }
 
@@ -416,50 +405,39 @@ mod tests {
     }
 
     #[test]
-    fn build_includes_per_mac_override_check_after_net_bootp() {
-        // D35: every generated grub.cfg must test for a per-MAC override
-        // file using GRUB's own ${net_default_mac}, and that check must
-        // come after net_bootp runs (otherwise the variable isn't
-        // populated yet) -- see this file's own build() comment for why.
+    fn build_includes_per_mac_override_redirect_after_net_bootp() {
+        // D35/D36: every generated grub.cfg must unconditionally attempt a
+        // per-MAC override file using GRUB's own ${net_default_mac}, after
+        // net_bootp runs (so the variable is populated) -- NOT gated behind
+        // `[ -f ... ]`, which is a no-op stub for network devices in GRUB
+        // itself (grub_net_fs_dir() never calls its hook) and would make
+        // this redirect never fire at all. See this file's own build()
+        // comment for the confirmed root cause.
         let builder = GrubMenuBuilder::new().unwrap();
         let cfg = builder.build().unwrap();
 
-        assert!(cfg.contains("if [ -f /grub/grub.cfg-override-${net_default_mac} ]; then"));
+        assert!(!cfg.contains("if [ -f /grub/grub.cfg-override-${net_default_mac} ]"));
         assert!(cfg.contains("configfile /grub/grub.cfg-override-${net_default_mac}"));
 
         let bootp_pos = cfg.find("net_bootp").expect("net_bootp must be present");
         let override_pos = cfg
             .find("grub.cfg-override-${net_default_mac}")
-            .expect("override check must be present");
+            .expect("override redirect must be present");
         assert!(
             override_pos > bootp_pos,
-            "override check must come after net_bootp"
-        );
-
-        // D36: the check must be retried a few times, spaced out, between
-        // net_bootp and the check -- real hardware doesn't reliably get
-        // past the `-f` test on the very first attempt (transient
-        // first-packet loss right as the link comes up).
-        assert!(cfg.contains("for _pxe_override_attempt in 1 2 3; do"));
-        let sleep_pos = cfg.find("sleep 1").expect("retry delay must be present");
-        assert!(
-            bootp_pos < sleep_pos && sleep_pos < override_pos,
-            "retry loop must sit between net_bootp and the override check"
+            "override redirect must come after net_bootp"
         );
     }
 
     #[test]
-    fn override_file_has_no_retry_loop_or_redirect() {
-        // D36: the retry loop exists only to protect the override-check
-        // `-f` test, which is itself skipped entirely for an override file
-        // (see is_override_file) -- so it has nothing to protect there and
-        // would just add up to 3 pointless seconds of boot time.
+    fn override_file_has_no_redirect_of_its_own() {
+        // D36: an override file must not try to redirect into itself (see
+        // is_override_file) -- that would make GRUB configfile its own
+        // path over and over, never reaching its own set default=/timeout.
         let mut builder = GrubMenuBuilder::new().unwrap();
         builder.set_is_override_file();
         let cfg = builder.build().unwrap();
 
-        assert!(!cfg.contains("sleep 1"));
-        assert!(!cfg.contains("for _pxe_override_attempt"));
         assert!(!cfg.contains("grub.cfg-override-${net_default_mac}"));
     }
 
