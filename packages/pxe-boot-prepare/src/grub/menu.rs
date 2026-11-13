@@ -17,6 +17,15 @@ pub struct GrubMenuBuilder<'a> {
     placeholders: Vec<(String, String)>,
     default_entry: Option<usize>,
     timeout: Option<u32>,
+    /// True when this builder renders a `grub.cfg-override-<mac>` file
+    /// rather than an interface's own `grub.cfg`. The override-check block
+    /// (`if [ -f .../grub.cfg-override-${net_default_mac} ]; then configfile
+    /// ...`) must be skipped in that case -- it exists so the BASE file can
+    /// redirect into a MAC's override; emitting it in the override file
+    /// itself made it `configfile` into its own path, which GRUB executes
+    /// as unbounded self-recursion (confirmed live: the menu never reaches
+    /// its own `set default=`/timeout, so it never auto-boots).
+    is_override_file: bool,
     handlebars: Handlebars<'a>,
 }
 
@@ -45,6 +54,7 @@ impl<'a> GrubMenuBuilder<'a> {
             placeholders: Vec::new(),
             default_entry: None,
             timeout: None,
+            is_override_file: false,
             handlebars,
         })
     }
@@ -68,6 +78,11 @@ impl<'a> GrubMenuBuilder<'a> {
 
     pub fn set_timeout(&mut self, seconds: u32) -> &mut Self {
         self.timeout = Some(seconds);
+        self
+    }
+
+    pub fn set_is_override_file(&mut self) -> &mut Self {
+        self.is_override_file = true;
         self
     }
 
@@ -99,10 +114,12 @@ impl<'a> GrubMenuBuilder<'a> {
         // probe, since GRUB's own undocumented automatic
         // grub.cfg-01-<mac> search (grub-mknetdir's default) does not
         // fire on this project's Ubuntu-netboot-sourced GRUB build.
-        output.push_str("if [ -f /grub/grub.cfg-override-${net_default_mac} ]; then\n");
-        output.push_str("  configfile /grub/grub.cfg-override-${net_default_mac}\n");
-        output.push_str("fi\n");
-        output.push('\n');
+        if !self.is_override_file {
+            output.push_str("if [ -f /grub/grub.cfg-override-${net_default_mac} ]; then\n");
+            output.push_str("  configfile /grub/grub.cfg-override-${net_default_mac}\n");
+            output.push_str("fi\n");
+            output.push('\n');
+        }
 
         // Header
         output.push_str("if [ x$feature_timeout_style = xy ] ; then\n");

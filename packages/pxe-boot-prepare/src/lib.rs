@@ -408,6 +408,7 @@ impl PxeBootService {
             failed_isos,
             interface.default_iso.as_deref(),
             interface.default_script.as_deref(),
+            false,
         )
         .await?;
 
@@ -445,6 +446,7 @@ impl PxeBootService {
                 failed_isos,
                 default_iso,
                 default_script,
+                true,
             )
             .await?;
         }
@@ -471,8 +473,13 @@ impl PxeBootService {
         failed_isos: &[(String, String)],
         default_iso: Option<&str>,
         default_script: Option<&str>,
+        is_override_file: bool,
     ) -> Result<()> {
         let mut builder = GrubMenuBuilder::new()?;
+
+        if is_override_file {
+            builder.set_is_override_file();
+        }
 
         for (entry, _, _) in entries {
             builder.add_entry(entry.clone());
@@ -923,6 +930,13 @@ mod tests {
         // ...only the default differs: alpha is entry 0, beta is entry 1.
         assert!(base_cfg.contains("\nset default=0\n"));
         assert!(override_cfg.contains("\nset default=1\n"));
+
+        // The base file redirects into a MAC's override; the override
+        // file must NOT redirect into itself (GRUB has no stack depth
+        // limit check here -- that content would make it `configfile`
+        // itself over and over and never reach its own `set default=`).
+        assert!(base_cfg.contains("grub.cfg-override-${net_default_mac}"));
+        assert!(!override_cfg.contains("grub.cfg-override-${net_default_mac}"));
     }
 
     #[tokio::test]
