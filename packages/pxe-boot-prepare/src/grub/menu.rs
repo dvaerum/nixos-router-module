@@ -115,6 +115,19 @@ impl<'a> GrubMenuBuilder<'a> {
         // grub.cfg-01-<mac> search (grub-mknetdir's default) does not
         // fire on this project's Ubuntu-netboot-sourced GRUB build.
         if !self.is_override_file {
+            // D36: on at least one piece of real hardware, `${net_default_mac}`
+            // reads back correctly moments later at an interactive grub>
+            // prompt, and `configfile` against the exact same (hardcoded)
+            // path works when run manually -- but the automatic `-f` test
+            // below never even issues the TFTP request right after
+            // net_bootp (confirmed via packet capture: zero RRQs for the
+            // override path). The project's own E2E probe (a VM, near-
+            // instant DHCP) never hit this; a brief settle delay is the
+            // standard defensive fix for net_bootp's variable-population
+            // timing on real hardware.
+            output.push_str("sleep 1\n");
+            output.push('\n');
+
             output.push_str("if [ -f /grub/grub.cfg-override-${net_default_mac} ]; then\n");
             output.push_str("  configfile /grub/grub.cfg-override-${net_default_mac}\n");
             output.push_str("fi\n");
@@ -415,6 +428,29 @@ mod tests {
             override_pos > bootp_pos,
             "override check must come after net_bootp"
         );
+
+        // D36: a settle delay must sit between net_bootp and the check --
+        // real hardware doesn't reliably have ${net_default_mac} readable
+        // the instant net_bootp returns.
+        let sleep_pos = cfg.find("sleep 1").expect("settle delay must be present");
+        assert!(
+            bootp_pos < sleep_pos && sleep_pos < override_pos,
+            "settle delay must sit between net_bootp and the override check"
+        );
+    }
+
+    #[test]
+    fn override_file_has_no_settle_delay_or_redirect() {
+        // D36: the settle delay exists only to protect the override-check
+        // `-f` test, which is itself skipped entirely for an override file
+        // (see is_override_file) -- so the delay has nothing to protect
+        // there and would just add a pointless second of boot time.
+        let mut builder = GrubMenuBuilder::new().unwrap();
+        builder.set_is_override_file();
+        let cfg = builder.build().unwrap();
+
+        assert!(!cfg.contains("sleep 1"));
+        assert!(!cfg.contains("grub.cfg-override-${net_default_mac}"));
     }
 
     #[test]
