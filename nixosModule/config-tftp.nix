@@ -242,15 +242,19 @@ lib.mkMerge [
     # service (or wait for the next switch) after copying in a new ISO.
     # `PathChanged=` fires only on IN_CLOSE_WRITE (a writer closing the
     # file after finishing), not on every write -- an in-progress
-    # multi-GB copy doesn't trigger a premature, partial run. No extra
-    # debounce layer on top: `prepare()`'s own steps are all idempotent,
-    # so a batch of simultaneous file changes causing a few redundant
-    # re-runs is harmless, not worth the complexity of building a real
-    # debounce mechanism to avoid.
+    # multi-GB copy doesn't trigger a premature, partial run.
+    #
+    # The path unit triggers a separate `-refresh` unit rather than
+    # pxe-boot-prepare.service itself: that one is a RemainAfterExit
+    # oneshot, so it stays active after boot and starting an active unit
+    # does nothing -- a copied-in ISO would never reach the menu. A
+    # restart also runs the unit's ExecStop cleanup, so ISOs removed from
+    # the folder get unmounted instead of lingering. Several changes in a
+    # row just cause a few redundant restarts, which is harmless.
     systemd.paths.pxe-boot-prepare-auto-refresh = {
       wantedBy = [ "paths.target" ];
       pathConfig = {
-        Unit = "pxe-boot-prepare.service";
+        Unit = "pxe-boot-prepare-refresh.service";
         PathChanged = [ iso_folder_path ] ++ lib.optional (cfg.pxe-boot.nixIsos != [ ]) nix_isos_dir;
       };
     };
@@ -281,6 +285,14 @@ lib.mkMerge [
         '');
 
     systemd.services = {
+      "pxe-boot-prepare-refresh" = {
+        description = "PXE Boot - Re-run prepare after the ISO folder changed";
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = "${config.systemd.package}/bin/systemctl restart pxe-boot-prepare.service";
+        };
+      };
+
       "pxe-boot-main-script" = {
         enable = true;
         description = "PXE Boot - Copy GRUB Binaries";

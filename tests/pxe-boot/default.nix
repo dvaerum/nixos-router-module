@@ -1217,6 +1217,7 @@ in
   #   - the `systemd.tmpfiles.rules "L+"` entry exists when nixIsos is
   #     non-empty
   #   - `PathChanged` on the auto-refresh path unit includes nixIsosDir
+  #   - that path unit triggers a unit that restarts prepare (see below)
   #   - the duplicate-`.name` assertion actually fires
   nixIsosWiringCheck =
     let
@@ -1268,6 +1269,19 @@ in
         evaluatedGood.config.systemd.paths.pxe-boot-prepare-auto-refresh.pathConfig.PathChanged;
       hasPathChangedEntry = builtins.elem nixIsosDir pathChanged;
 
+      # Starting a unit that is already active is a no-op, and
+      # `pxe-boot-prepare.service` is a RemainAfterExit oneshot that stays
+      # active after boot. So the path unit must trigger a *different*
+      # unit whose job is to restart it, or no file change ever re-runs
+      # prepare.
+      triggeredName = pkgs.lib.removeSuffix ".service" (
+        evaluatedGood.config.systemd.paths.pxe-boot-prepare-auto-refresh.pathConfig.Unit
+      );
+      triggeredService = evaluatedGood.config.systemd.services.${triggeredName};
+      refreshRestartsPrepare = pkgs.lib.hasInfix "restart pxe-boot-prepare.service" (
+        triggeredService.serviceConfig.ExecStart
+      );
+
       evaluatedBad = mkEvaluated [
         pkgA
         pkgDup
@@ -1284,6 +1298,14 @@ in
         {
           name = "auto-refresh path unit's PathChanged includes nixIsosDir";
           ok = hasPathChangedEntry;
+        }
+        {
+          name = "auto-refresh triggers a unit other than the RemainAfterExit prepare service";
+          ok = triggeredName != "pxe-boot-prepare";
+        }
+        {
+          name = "the triggered refresh unit restarts pxe-boot-prepare.service";
+          ok = refreshRestartsPrepare;
         }
         {
           name = "duplicate nixIsos package name triggers an assertion";
