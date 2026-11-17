@@ -59,7 +59,7 @@ impl MenuEntryFactory {
         detector: &dyn DistroDetector,
     ) -> bool {
         let Some(nfs) = nfs else { return false };
-        detector.supports_nfs()
+        detector.supports_nfs(iso_info)
             && !nfs.http_only_isos.contains(&iso_info.file_name)
             && !iso_info
                 .mount_path

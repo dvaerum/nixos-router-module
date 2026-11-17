@@ -92,8 +92,10 @@
           pxe-boot-full-disable = tests.pxe-boot-full-disable;
           pxe-boot-nfs-wiring = tests.pxe-boot-nfs-wiring;
           pxe-boot-secure-boot = tests.pxe-boot-secure-boot;
+          pxe-boot-nixos-nfs = tests.pxe-boot-nixos-nfs;
           iso-builder-network-download-options = tests.iso-builder-network-download-options;
           iso-builder-kernel-selection = tests.iso-builder-kernel-selection;
+          iso-builder-nfs-boot = tests.iso-builder-nfs-boot;
           vxlan = tests.vxlan;
           dns-server = tests.dns-server;
           dns-server-disabled = tests.dns-server-disabled;

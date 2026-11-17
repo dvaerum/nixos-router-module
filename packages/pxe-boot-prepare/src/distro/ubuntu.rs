@@ -113,7 +113,7 @@ impl DistroDetector for UbuntuDetector {
         params
     }
 
-    fn supports_nfs(&self) -> bool {
+    fn supports_nfs(&self, _iso_info: &IsoInfo) -> bool {
         true
     }
 
@@ -278,7 +278,8 @@ mod tests {
     #[test]
     fn supports_nfs_agrees_with_the_nfs_params() {
         let d = UbuntuDetector::new();
-        assert!(d.supports_nfs());
+        let iso = IsoInfo::placeholder("u.iso".into(), PathBuf::from("/x/u.iso"), PathBuf::from("/m/u.iso"));
+        assert!(d.supports_nfs(&iso));
         assert!(d.generate_nfs_boot_params("h:/p", &boot_info(), None).is_some());
     }
 

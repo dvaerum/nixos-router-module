@@ -43,6 +43,51 @@ fn architecture_from_system(system: &str) -> Option<String> {
 }
 
 
+/// File at the root of an ISO built by this project's ISO builder listing
+/// the boot features its initrd supports, one per line. Lets the detector
+/// tell such an ISO from an upstream NixOS ISO without booting it.
+pub const FEATURES_FILE: &str = "pxe-boot-iso-features";
+/// `FEATURES_FILE` line for `nfsiso=` support.
+pub const NFS_FEATURE: &str = "nfsiso";
+
+/// Kernel parameters shared by the HTTP (`findiso=`) and NFS (`nfsiso=`)
+/// boots; only how the ISO reaches the initrd differs.
+fn common_boot_params(boot_info: &BootInfo) -> Vec<String> {
+    let mut params = vec![
+        // No root=LABEL=... needed: under systemd stage-1, nixpkgs' own
+        // cd-dvd module makes `/` plain tmpfs (no root device at all)
+        // and mounts the ISO at `/iso` as a `neededForBoot` filesystem
+        // instead -- `findiso-download`'s loop device (or `nfsiso-configure`'s
+        // NFS mount) satisfies that mount (see modules/iso-builder/default.nix).
+        "boot.shell_on_fail".to_string(),
+        "nohibernate".to_string(),
+        // Increase loglevel to debug boot issues
+        "loglevel=7".to_string(),
+        "lsm=landlock,yama,bpf".to_string(),
+        // Without this, kernel output only goes to the VGA console,
+        // invisible to serial-only capture (e.g. nixosTest's VM logs).
+        // Serial only (not also tty0): the kernel treats the LAST
+        // console= as preferred for later output, so listing both
+        // silently stops routing to serial once systemd takes over.
+        "console=ttyS0,115200".to_string(),
+    ];
+
+    // Without `init=`, systemd stage-1's `initrd-find-nixos-closure.service`
+    // has no way to know which closure to switch-root into ("No init=
+    // parameter on the kernel command line"), failing the whole boot
+    // into emergency mode right after all filesystems (including the
+    // network-downloaded ISO) have mounted successfully. A normal
+    // (non-network) ISO boot gets this for free from the ISO's own
+    // self-contained GRUB config; PXE boot constructs its own command
+    // line and bypasses that config entirely, so it must be restated
+    // here from the value discovered in extract_boot_info.
+    if let Some(init) = &boot_info.init_path {
+        params.push(format!("init={}", init));
+    }
+
+    params
+}
+
 pub struct NixOsDetector;
 
 impl Default for NixOsDetector {
@@ -164,41 +209,31 @@ impl DistroDetector for NixOsDetector {
         // For PXE boot, we load kernel/initrd directly from mounted ISO
         // The initrd downloads the full ISO to continue booting via findiso parameter
         // NOTE: This requires the ISO to be built with enableNetworkDownload = true
-        let mut params = vec![
-            format!("findiso={}", iso_url),
-            // No root=LABEL=... needed: under systemd stage-1, nixpkgs' own
-            // cd-dvd module makes `/` plain tmpfs (no root device at all)
-            // and mounts the ISO at `/iso` as a `neededForBoot` filesystem
-            // instead -- `findiso-download`'s loop device satisfies that
-            // mount's own by-label device dependency directly (see
-            // modules/iso-builder/default.nix).
-            "boot.shell_on_fail".to_string(),
-            "nohibernate".to_string(),
-            // Increase loglevel to debug boot issues
-            "loglevel=7".to_string(),
-            "lsm=landlock,yama,bpf".to_string(),
-            // Without this, kernel output only goes to the VGA console,
-            // invisible to serial-only capture (e.g. nixosTest's VM logs).
-            // Serial only (not also tty0): the kernel treats the LAST
-            // console= as preferred for later output, so listing both
-            // silently stops routing to serial once systemd takes over.
-            "console=ttyS0,115200".to_string(),
-        ];
-
-        // Without `init=`, systemd stage-1's `initrd-find-nixos-closure.service`
-        // has no way to know which closure to switch-root into ("No init=
-        // parameter on the kernel command line"), failing the whole boot
-        // into emergency mode right after all filesystems (including the
-        // network-downloaded ISO) have mounted successfully. A normal
-        // (non-network) ISO boot gets this for free from the ISO's own
-        // self-contained GRUB config; PXE boot constructs its own command
-        // line and bypasses that config entirely, so it must be restated
-        // here from the value discovered in extract_boot_info.
-        if let Some(init) = &boot_info.init_path {
-            params.push(format!("init={}", init));
-        }
-
+        let mut params = vec![format!("findiso={}", iso_url)];
+        params.extend(common_boot_params(boot_info));
         params
+    }
+
+    /// Only for ISOs built by this project's ISO builder with
+    /// `enableNfsBoot` (see `FEATURES_FILE`): an ordinary NixOS ISO has no
+    /// `nfsiso=` support in its initrd and would not find its `/iso`.
+    fn supports_nfs(&self, iso_info: &IsoInfo) -> bool {
+        std::fs::read_to_string(iso_info.mount_path.join(FEATURES_FILE))
+            .map(|text| text.lines().any(|line| line.trim() == NFS_FEATURE))
+            .unwrap_or(false)
+    }
+
+    /// Same as the HTTP boot, with the initrd mounting the ISO's tree from
+    /// the NFS export (`nfsiso=`) instead of downloading the ISO (`findiso=`).
+    fn generate_nfs_boot_params(
+        &self,
+        nfs_root: &str,
+        boot_info: &BootInfo,
+        _autoinstall: Option<&AutoinstallScript>,
+    ) -> Option<Vec<String>> {
+        let mut params = vec![format!("nfsiso={}", nfs_root)];
+        params.extend(common_boot_params(boot_info));
+        Some(params)
     }
 }
 
@@ -407,5 +442,71 @@ mod tests {
             None,
         );
         assert!(!params.iter().any(|p| p.starts_with("init=")));
+    }
+
+    fn nfs_iso(features: Option<&str>) -> (tempfile::TempDir, IsoInfo) {
+        let dir = tempfile::tempdir().unwrap();
+        if let Some(text) = features {
+            fs::write(dir.path().join(FEATURES_FILE), text).unwrap();
+        }
+        let iso = IsoInfo::placeholder(
+            "nixos.iso".into(),
+            PathBuf::from("/x/nixos.iso"),
+            dir.path().to_path_buf(),
+        );
+        (dir, iso)
+    }
+
+    fn bi(init: Option<&str>) -> BootInfo {
+        BootInfo {
+            kernel_path: PathBuf::from("/m/boot/k"),
+            initrd_path: PathBuf::from("/m/boot/i"),
+            distro_type: DistroType::NixOS,
+            version: None,
+            architecture: Some("x86_64".into()),
+            init_path: init.map(String::from),
+        }
+    }
+
+    #[test]
+    fn nfs_is_supported_only_for_isos_that_advertise_it() {
+        let d = NixOsDetector::new();
+        let (_a, with) = nfs_iso(Some("findiso\nnfsiso\n"));
+        let (_b, without) = nfs_iso(Some("findiso\n"));
+        let (_c, no_file) = nfs_iso(None);
+        assert!(d.supports_nfs(&with));
+        assert!(!d.supports_nfs(&without));
+        assert!(!d.supports_nfs(&no_file));
+    }
+
+    #[test]
+    fn nfs_boot_passes_nfsiso_instead_of_findiso() {
+        let params = NixOsDetector::new()
+            .generate_nfs_boot_params("192.0.2.1:/m/nixos.iso", &bi(Some("/nix/store/x/init")), None)
+            .unwrap();
+        assert!(params.contains(&"nfsiso=192.0.2.1:/m/nixos.iso".to_string()));
+        assert!(!params.iter().any(|p| p.starts_with("findiso=")));
+    }
+
+    #[test]
+    fn nfs_boot_keeps_init_and_the_serial_console() {
+        let params = NixOsDetector::new()
+            .generate_nfs_boot_params("h:/p", &bi(Some("/nix/store/x/init")), None)
+            .unwrap();
+        assert!(params.contains(&"init=/nix/store/x/init".to_string()));
+        assert!(params.contains(&"console=ttyS0,115200".to_string()));
+    }
+
+    #[test]
+    fn http_boot_is_unchanged_by_the_shared_param_refactor() {
+        let params = NixOsDetector::new().generate_boot_params(
+            "http://gw/isos/n.iso",
+            "http://gw/m",
+            &bi(Some("/nix/store/x/init")),
+            None,
+        );
+        assert_eq!(params[0], "findiso=http://gw/isos/n.iso");
+        assert!(params.contains(&"init=/nix/store/x/init".to_string()));
+        assert!(!params.iter().any(|p| p.starts_with("nfsiso=")));
     }
 }

@@ -31,8 +31,10 @@ in
   pxe-boot-full-disable = pxe-boot.fullDisableCheck;
   pxe-boot-nfs-wiring = pxe-boot.nfsWiringCheck;
   pxe-boot-secure-boot = (import ./pxe-boot/secure-boot.nix { inherit pkgs nixosModule; }).vm;
+  pxe-boot-nixos-nfs = (import ./pxe-boot/nixos-nfs.nix { inherit pkgs nixosModule; }).vm;
   iso-builder-network-download-options = import ./iso-builder-network-download-options.nix {
     inherit pkgs;
   };
   iso-builder-kernel-selection = import ./iso-builder-kernel-selection.nix { inherit pkgs; };
+  iso-builder-nfs-boot = import ./iso-builder-nfs-boot.nix { inherit pkgs; };
 }

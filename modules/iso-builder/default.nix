@@ -108,6 +108,19 @@ in
       '';
     };
 
+    enableNfsBoot = mkOption {
+      type = types.bool;
+      default = true;
+      description = ''
+        Let the initrd mount the ISO's contents from an NFS export instead
+        of downloading the whole ISO, selected at boot with
+        `nfsiso=<server>:<exported path>` on the kernel command line (what
+        `my.router.pxe-boot.nfs` generates for this ISO). Adds an NFS
+        client to the initrd; without the `nfsiso=` parameter nothing
+        changes. Independent of `enableNetworkDownload`.
+      '';
+    };
+
     networkDownloadTmpfsSize = mkOption {
       type = types.str;
       default = "2G";
@@ -265,6 +278,14 @@ in
         source = "${config.system.build.toplevel}/boot.json";
         target = "/boot.json";
       }
+      {
+        source = pkgs.writeText "pxe-boot-iso-features" (
+          lib.concatMapStrings (feature: feature + "\n") (
+            lib.optional cfg.enableNetworkDownload "findiso" ++ lib.optional cfg.enableNfsBoot "nfsiso"
+          )
+        );
+        target = "/pxe-boot-iso-features";
+      }
     ];
 
     # Enable flakes for modern Nix workflow
@@ -358,13 +379,41 @@ in
       # Enable network in initrd for PXE boot
       initrd.network.enable = true;
 
+      # NFS client for `nfsiso=` (see `enableNfsBoot`). The kernel module is
+      # named directly: nixpkgs' own `boot.initrd.supportedFilesystems.nfs`
+      # only takes effect when NFS is also in the system-wide
+      # `boot.supportedFilesystems`, which would pull the whole NFS service
+      # setup into the ISO. The `mount.nfs` helper that `mount -t nfs`
+      # needs for NFSv3 (it talks to the server's mount daemon) is not in a
+      # systemd initrd at all and has to be put in by hand.
+      initrd.kernelModules = mkIf cfg.enableNfsBoot [
+        "nfs"
+        # NFSv3 is its own module; without it mount(2) fails with
+        # "Protocol not supported".
+        "nfsv3"
+      ];
+      initrd.systemd.extraBin = mkIf cfg.enableNfsBoot {
+        "mount.nfs" = "${pkgs.nfs-utils}/bin/mount.nfs";
+      };
+      # mount.nfs finds the "tcp"/"udp" transports through libtirpc's
+      # /etc/netconfig and resolves protocol and service names through the
+      # libc databases; without these files it fails with "Failed to find
+      # 'tcp' protocol".
+      initrd.systemd.contents = mkIf cfg.enableNfsBoot {
+        "/etc/netconfig".source = "${pkgs.libtirpc}/etc/netconfig";
+        "/etc/protocols".source = "${pkgs.iana-etc}/etc/protocols";
+        "/etc/services".source = "${pkgs.iana-etc}/etc/services";
+      };
+
       # DHCP needs an explicit match rule -- systemd-networkd applies no
       # implicit "DHCP on any interface" default the way the (now-removed)
       # legacy scripted stage-1's `udhcpc.enable` did.
-      initrd.systemd.network.networks."40-findiso-dhcp" = mkIf cfg.enableNetworkDownload {
-        matchConfig.Type = "ether";
-        networkConfig.DHCP = "yes";
-      };
+      initrd.systemd.network.networks."40-findiso-dhcp" =
+        mkIf (cfg.enableNetworkDownload || cfg.enableNfsBoot)
+          {
+            matchConfig.Type = "ether";
+            networkConfig.DHCP = "yes";
+          };
 
       # `pkgs.util-linux` and the systemd package here (for `losetup`,
       # `udevadm`, and `systemd-cat`, each referenced by full store path in
@@ -376,7 +425,7 @@ in
       # providing bin/setarch). `storePaths` instead just copies each
       # listed closure's real files into the initrd verbatim, no
       # merging, so it doesn't hit that conflict.
-      initrd.systemd.storePaths = mkIf cfg.enableNetworkDownload [
+      initrd.systemd.storePaths = mkIf (cfg.enableNetworkDownload || cfg.enableNfsBoot) [
         "${pkgs.wget}/bin/wget"
         "${pkgs.util-linux}/bin/losetup"
         "${pkgs.util-linux}/bin/mount"
@@ -525,6 +574,62 @@ in
       # /dev/disk/by-label/<volumeID>" immediately followed by "Dependency
       # failed for /sysroot/iso" at exactly the 90s mark, in every run
       # where the real download took longer than that).
+    };
+
+    # Lists the boot features this image's initrd supports, so
+    # pxe-boot-prepare can tell it from an upstream NixOS ISO (which has no
+    # `findiso=`/`nfsiso=` support) just by looking at the mounted tree.
+    # Must match `distro::nixos::FEATURES_FILE` in packages/pxe-boot-prepare.
+    # (Added to `isoImage.contents` above, next to boot.json.)
+    # `nfsiso=<server>:<path>`: mount the ISO's tree from NFS as `/iso`.
+    #
+    # TCP for both the NFS and the mount protocol: with neither forced,
+    # mount.nfs asks the server's mount daemon over UDP, which the initrd
+    # kernel refuses ("Protocol not supported", seen in the probe VM).
+    #
+    # `fileSystems."/iso"` cannot be changed from here (see the long comment
+    # below), so instead this rewrites the already-generated
+    # `sysroot-iso.mount` at boot: same mount point, but an NFS source and no
+    # by-label block device to wait for. It must run before that unit starts
+    # and reload the manager so the new What=/Type= take effect, including
+    # dropping the device dependency systemd derived from the old What=.
+    boot.initrd.systemd.services.nfsiso-configure = mkIf cfg.enableNfsBoot {
+      description = "Point /iso at the NFS export given as nfsiso=<server>:<path>";
+      wantedBy = [ "sysroot-iso.mount" ];
+      before = [ "sysroot-iso.mount" ];
+      after = [ "systemd-networkd-wait-online.service" ];
+      wants = [ "systemd-networkd-wait-online.service" ];
+      unitConfig = {
+        DefaultDependencies = false;
+        OnFailure = [ "emergency.target" ];
+      };
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        StandardOutput = "journal+console";
+        StandardError = "journal+console";
+      };
+      path = [
+        pkgs.gnugrep
+        pkgs.coreutils
+      ];
+      script = ''
+        nfs_iso="$(grep -Eo 'nfsiso=[^ ]+' /proc/cmdline | cut -d= -f2-)"
+        if [ -n "$nfs_iso" ]; then
+          mkdir -p /run/systemd/system/sysroot-iso.mount.d
+          cat > /run/systemd/system/sysroot-iso.mount.d/10-nfsiso.conf <<EOF
+        [Unit]
+        After=network-online.target
+        Wants=network-online.target
+        [Mount]
+        What=$nfs_iso
+        Type=nfs
+        Options=vers=3,proto=tcp,mountproto=tcp,nolock,ro
+        EOF
+          echo "nfsiso-configure: /iso <- $nfs_iso"
+          ${config.boot.initrd.systemd.package}/bin/systemctl daemon-reload
+        fi
+      '';
     };
 
     # NOT `fileSystems."/iso".options` (tried first, silently had zero

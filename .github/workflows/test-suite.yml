@@ -39,6 +39,7 @@ jobs:
           nix build -L --no-link \
             .#checks.x86_64-linux.ipv4-lib \
             .#checks.x86_64-linux.iso-builder-network-download-options \
+            .#checks.x86_64-linux.iso-builder-nfs-boot \
             .#checks.x86_64-linux.pxe-boot-tftp-warnings \
             .#checks.x86_64-linux.pxe-boot-kea-client-classes \
             .#checks.x86_64-linux.pxe-boot-nix-isos-wiring \
@@ -93,4 +94,5 @@ jobs:
             .#checks.x86_64-linux.dhcp-ntp-servers-wire \
             .#checks.x86_64-linux.dhcp-ntp-servers-global-wire \
             .#checks.x86_64-linux.dhcp-ntp-server-enable-wire \
-            .#checks.x86_64-linux.dhcp-kea-logging-wire
+            .#checks.x86_64-linux.dhcp-kea-logging-wire \
+            .#checks.x86_64-linux.pxe-boot-nixos-nfs

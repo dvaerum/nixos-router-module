@@ -44,10 +44,13 @@ pub trait DistroDetector: Send + Sync {
         autoinstall: Option<&AutoinstallScript>,
     ) -> Vec<String>;
 
-    /// Whether this distro has a verified NFS boot path. Must agree with
-    /// `generate_nfs_boot_params` returning `Some`. Default `false`: a
-    /// distro stays on HTTP until someone has booted it over NFS.
-    fn supports_nfs(&self) -> bool {
+    /// Whether this ISO can boot over NFS. Must agree with
+    /// `generate_nfs_boot_params` returning `Some`. Takes the ISO, not just
+    /// the distro: for some distros it depends on how the image was built
+    /// (a NixOS ISO needs the initrd support this project's ISO builder
+    /// adds). Default `false`: stays on HTTP until someone has booted it
+    /// over NFS.
+    fn supports_nfs(&self, _iso_info: &IsoInfo) -> bool {
         false
     }
 
