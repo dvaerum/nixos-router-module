@@ -583,9 +583,11 @@ in
     # (Added to `isoImage.contents` above, next to boot.json.)
     # `nfsiso=<server>:<path>`: mount the ISO's tree from NFS as `/iso`.
     #
-    # TCP for both the NFS and the mount protocol: with neither forced,
-    # mount.nfs asks the server's mount daemon over UDP, which the initrd
-    # kernel refuses ("Protocol not supported", seen in the probe VM).
+    # TCP for both the NFS and the mount protocol, so the boot needs no UDP
+    # path to the router (mount.nfs would otherwise ask the mount daemon over
+    # UDP). Not required for the boot to work: a mutation test without it still
+    # passed; the "Protocol not supported" seen while building this was the
+    # missing nfsv3 module and /etc/netconfig.
     #
     # `fileSystems."/iso"` cannot be changed from here (see the long comment
     # below), so instead this rewrites the already-generated

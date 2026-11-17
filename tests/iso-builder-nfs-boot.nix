@@ -61,7 +61,7 @@ let
         && default.boot.initrd.systemd.contents ? "/etc/services";
     }
     {
-      name = "the mount forces TCP for both NFS and the mount protocol (the initrd kernel refuses UDP)";
+      name = "the mount uses TCP only, for both NFS and the mount protocol (no UDP path needed)";
       ok =
         lib.hasInfix "proto=tcp" (unitsOf default).nfsiso-configure.script
         && lib.hasInfix "mountproto=tcp" (unitsOf default).nfsiso-configure.script;
