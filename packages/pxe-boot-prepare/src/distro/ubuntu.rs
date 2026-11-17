@@ -31,9 +31,27 @@ impl DistroDetector for UbuntuDetector {
     }
 
     async fn can_handle(&self, mount_path: &Path) -> Result<bool> {
-        // Check for ubuntu-server-minimal.squashfs
-        let squashfs = mount_path.join("casper/ubuntu-server-minimal.squashfs");
-        Ok(squashfs.exists())
+        // Server ISOs carry a squashfs with an Ubuntu-specific name.
+        if mount_path
+            .join("casper/ubuntu-server-minimal.squashfs")
+            .exists()
+        {
+            return Ok(true);
+        }
+
+        // Desktop ISOs (and flavours such as Kubuntu) have no such file, and
+        // other casper distros (Linux Mint, ...) share the same layout, so
+        // `.disk/info` ("Ubuntu 26.04.1 LTS ...") is what tells them apart.
+        if !mount_path.join("casper/vmlinuz").exists() {
+            return Ok(false);
+        }
+        Ok(
+            match tokio::fs::read_to_string(mount_path.join(".disk/info")).await {
+                Ok(info) => info.to_lowercase().contains("ubuntu"),
+                // No readable `.disk/info`: not enough evidence to claim it.
+                Err(_) => false,
+            },
+        )
     }
 
     async fn extract_boot_info(&self, iso_info: &IsoInfo) -> Result<BootInfo> {
@@ -205,6 +223,63 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         fs::create_dir_all(dir.path().join("casper")).unwrap();
 
+        let d = UbuntuDetector::new();
+        assert!(!d.can_handle(dir.path()).await.unwrap());
+    }
+
+    /// Lays out a casper ISO the way the desktop image does: no
+    /// `ubuntu-server-minimal.squashfs`, just `minimal*.squashfs` and a
+    /// `.disk/info` naming the distro.
+    fn desktop_iso(disk_info: Option<&str>) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("casper")).unwrap();
+        fs::write(dir.path().join("casper/vmlinuz"), b"fake-kernel").unwrap();
+        fs::write(dir.path().join("casper/initrd"), b"fake-initrd").unwrap();
+        fs::write(dir.path().join("casper/minimal.squashfs"), b"fake").unwrap();
+        if let Some(info) = disk_info {
+            fs::create_dir_all(dir.path().join(".disk")).unwrap();
+            fs::write(dir.path().join(".disk/info"), info).unwrap();
+        }
+        dir
+    }
+
+    #[tokio::test]
+    async fn can_handle_detects_desktop_iso_by_disk_info() {
+        let dir = desktop_iso(Some(
+            "Ubuntu 26.04.1 LTS \"Resolute Raccoon\" - Release amd64 (20260826)\n",
+        ));
+        let d = UbuntuDetector::new();
+        assert!(d.can_handle(dir.path()).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn can_handle_detects_ubuntu_flavours() {
+        let dir = desktop_iso(Some("Kubuntu 26.04 LTS - Release amd64\n"));
+        let d = UbuntuDetector::new();
+        assert!(d.can_handle(dir.path()).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn can_handle_rejects_other_casper_distros() {
+        // Linux Mint and friends ship the same casper layout but are not
+        // Ubuntu; claiming them would hand them Ubuntu's boot parameters.
+        let dir = desktop_iso(Some("Linux Mint 22 \"Wilma\" - Release amd64\n"));
+        let d = UbuntuDetector::new();
+        assert!(!d.can_handle(dir.path()).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn can_handle_rejects_casper_iso_without_disk_info() {
+        let dir = desktop_iso(None);
+        let d = UbuntuDetector::new();
+        assert!(!d.can_handle(dir.path()).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn can_handle_rejects_ubuntu_disk_info_without_casper_kernel() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join(".disk")).unwrap();
+        fs::write(dir.path().join(".disk/info"), "Ubuntu 26.04.1 LTS\n").unwrap();
         let d = UbuntuDetector::new();
         assert!(!d.can_handle(dir.path()).await.unwrap());
     }

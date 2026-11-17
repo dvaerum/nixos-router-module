@@ -6,7 +6,7 @@ Automated PXE boot environment preparation from ISO files.
 
 - **Automatic ISO Discovery**: Scans directory for ISO files
 - **Smart Mounting**: Mounts ISOs with verification and deduplication
-- **Multi-Distribution Support**: NixOS, Ubuntu Server, RHEL/Rocky/Alma Linux
+- **Multi-Distribution Support**: NixOS, Ubuntu (Server and Desktop), RHEL/Rocky/Alma Linux
 - **Plugin Architecture**: Extensible distribution detector system
 - **GRUB Menu Generation**: Dynamic GRUB configuration from discovered ISOs
 - **Autoinstall Support**: Kickstart and other unattended installation scripts
@@ -56,7 +56,8 @@ The tool uses a priority-based detector system. Each detector implements the
 
 1. **NixOS Detector** (priority 60): Looks for `nix-store.squashfs`
 2. **Ubuntu Detector** (priority 55): Looks for
-   `casper/ubuntu-server-minimal.squashfs`
+   `casper/ubuntu-server-minimal.squashfs` (Server), or `casper/vmlinuz`
+   together with a `.disk/info` naming Ubuntu (Desktop and flavours)
 3. **RHEL Detector** (priority 50): Looks for `RPM-GPG-KEY-redhat-release`
 
 ### GRUB Menu Generation
