@@ -166,15 +166,17 @@ downloading the whole ISO into RAM. Other distros keep using HTTP.
 
 ### NFS boot: remaining work
 
-Implemented (`my.router.pxe-boot.nfs.enable`, see [NFS boot](#nfs-boot)) but not
-yet confirmed on real hardware:
+Confirmed on real hardware: Ubuntu 26.04.1 Desktop boots all the way over NFS
+(initrd mounts the export, casper's default squashfs layer is found).
 
-- Whether Ubuntu 26.04's initrd can mount the export (`nfsmount`/`modprobe nfs`).
-- The right `layerfs-path` for layered Desktop ISOs (casper's default is used now).
+Not done or not confirmed:
+
 - Unattended Desktop install over NFS (the Server `autoinstall` seed is passed through).
 - RHEL over NFS (`inst.stage2`): not implemented, RHEL keeps the HTTP path.
 - A refresh that leaves unchanged ISOs alone: today a refresh restarts
   everything, which breaks a client that is mid-install over NFS.
+- A VM test that boots a client over NFS (only the wiring is covered by
+  `pxe-boot-nfs-wiring`).
 
 ## Development
 
