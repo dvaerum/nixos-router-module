@@ -1471,4 +1471,140 @@ in
           standalone systemd.services: ${builtins.toJSON (builtins.attrNames standaloneEvaluated.config.systemd.services)}
         ''
     );
+
+  # Pure-eval check (no VM): `pxe-boot.nfs` wiring. The runtime behaviour
+  # (a client actually mounting an export) needs real hardware/ISOs and is
+  # tested by hand; this covers what is a pure function of module
+  # evaluation:
+  #   - off by default: no NFS server, no exports unit, no `nfs` key in the
+  #     JSON handed to pxe-boot-prepare
+  #   - on: NFSv3 server with a pinned mountd port, an exports unit that
+  #     stops before pxe-boot-prepare and unexports on stop, and the JSON
+  #     carrying the PXE subnets and the escape hatch
+  #   - on without any PXE interface: an assertion fires
+  nfsWiringCheck =
+    let
+      mkEvaluated =
+        {
+          nfs,
+          withPxeInterface ? true,
+        }:
+        pkgs.nixos {
+          imports = [ nixosModule.nixosModules.default ];
+          my.router = {
+            enable = true;
+            pxe-boot = {
+              enable = true;
+              isoFolderPath = "/tmp/dummy-iso-dir";
+              inherit nfs;
+            };
+            configInterface.eth1 = {
+              mac = null;
+              dhcp.server = {
+                id = 930;
+                address = "192.168.93.1/24";
+                pxe-boot.enable = withPxeInterface;
+              };
+            };
+          };
+        };
+
+      off = mkEvaluated { nfs = { }; };
+      on = mkEvaluated {
+        nfs = {
+          enable = true;
+          httpOnlyIsos = [ "pinned.iso" ];
+          mountdPort = 20999;
+          unmountRetrySecs = 45;
+        };
+      };
+      noPxe = mkEvaluated {
+        nfs.enable = true;
+        withPxeInterface = false;
+      };
+
+      # The config JSON path is only reachable through the prepare unit's
+      # command line.
+      jsonOf =
+        evaluated:
+        let
+          execStart = evaluated.config.systemd.services.pxe-boot-prepare.serviceConfig.ExecStart;
+          path = builtins.head (builtins.match ".*--config ([^ ]+) prepare.*" execStart);
+        in
+        # `match` drops the string context; without it pure evaluation
+        # refuses to read the (not yet built) store path.
+        builtins.fromJSON (builtins.readFile (pkgs.lib.addContextFrom execStart path));
+
+      exportsUnit = on.config.systemd.services.pxe-boot-nfs-exports;
+      stopCommands = exportsUnit.serviceConfig.ExecStop;
+      onJson = jsonOf on;
+
+      checks = [
+        {
+          name = "off by default: no NFS server";
+          ok = !off.config.services.nfs.server.enable;
+        }
+        {
+          name = "off by default: no exports unit";
+          ok = !(off.config.systemd.services ? "pxe-boot-nfs-exports");
+        }
+        {
+          name = "off by default: JSON has no nfs section";
+          ok = !((jsonOf off) ? nfs);
+        }
+        {
+          name = "on: NFS server enabled";
+          ok = on.config.services.nfs.server.enable;
+        }
+        {
+          name = "on: mountd port is pinned";
+          ok = on.config.services.nfs.server.mountdPort == 20999;
+        }
+        {
+          name = "on: NFSv3 is enabled (the initramfs client cannot do v4)";
+          ok = on.config.services.nfs.settings.nfsd.vers3 == true;
+        }
+        {
+          name = "on: exports unit stops before pxe-boot-prepare (partOf + after)";
+          ok =
+            builtins.elem "pxe-boot-prepare.service" exportsUnit.partOf
+            && builtins.elem "pxe-boot-prepare.service" exportsUnit.after;
+        }
+        {
+          name = "on: exports unit removes the exports file and re-exports on stop";
+          ok =
+            builtins.any (c: pkgs.lib.hasInfix "rm -f /etc/exports.d/pxe-boot.exports" c) stopCommands
+            && builtins.any (c: pkgs.lib.hasSuffix "exportfs -r" c) stopCommands;
+        }
+        {
+          name = "on: exports.d directory is created";
+          ok = builtins.elem "d /etc/exports.d 0755 root root - -" on.config.systemd.tmpfiles.rules;
+        }
+        {
+          name = "on: JSON exports file path";
+          ok = onJson.nfs.exports_file == "/etc/exports.d/pxe-boot.exports";
+        }
+        {
+          name = "on: JSON clients are the PXE interface subnets";
+          ok = onJson.nfs.clients == [ "192.168.93.0/24" ];
+        }
+        {
+          name = "on: JSON carries httpOnlyIsos and the unmount retry window";
+          ok = onJson.nfs.http_only_isos == [ "pinned.iso" ] && onJson.nfs.unmount_retry_secs == 45;
+        }
+        {
+          name = "on without a PXE interface: an assertion fires";
+          ok = builtins.any (
+            a: !a.assertion && pkgs.lib.hasInfix "pxe-boot.nfs.enable" a.message
+          ) noPxe.config.assertions;
+        }
+      ];
+      failures = builtins.filter (c: !c.ok) checks;
+    in
+    pkgs.runCommand "pxe-boot-nfs-wiring-check" { } (
+      if failures == [ ] then
+        "touch $out"
+      else
+        throw "pxe-boot NFS wiring check(s) failed: ${builtins.toJSON (map (f: f.name) failures)}"
+    );
 }

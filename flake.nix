@@ -90,6 +90,7 @@
           pxe-boot-nix-isos-wiring = tests.pxe-boot-nix-isos-wiring;
           pxe-boot-iso-download-rate-limit = tests.pxe-boot-iso-download-rate-limit;
           pxe-boot-full-disable = tests.pxe-boot-full-disable;
+          pxe-boot-nfs-wiring = tests.pxe-boot-nfs-wiring;
           pxe-boot-secure-boot = tests.pxe-boot-secure-boot;
           iso-builder-network-download-options = tests.iso-builder-network-download-options;
           iso-builder-kernel-selection = tests.iso-builder-kernel-selection;

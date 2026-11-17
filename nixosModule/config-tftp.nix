@@ -117,71 +117,98 @@ let
     dhcp_interface_conf: dhcp_interface_conf.dhcp.server.tftpServer == false
   ) pxeBootInterfaces;
 
+  nfsEnabled = cfg.pxe-boot.enable && cfg.pxe-boot.nfs.enable;
+
+  # pxe-boot-prepare rewrites this file on every run (one read-only export
+  # per ISO that boots over NFS); `exports.d` is read by `exportfs -r`
+  # alongside the NixOS-managed /etc/exports.
+  nfsExportsFile = "/etc/exports.d/pxe-boot.exports";
+
+  # Networks allowed to mount the exports: the subnet of every
+  # PXE-enabled interface.
+  nfsClientNetworks = lib.forEach pxeBootInterfaces (
+    dhcp_interface_conf:
+    let
+      cidr = fromCidrString dhcp_interface_conf.dhcp.server.address;
+    in
+    "${cidr.network}/${builtins.toString cidr.prefix}"
+  );
+
   # Build the Rust pxe-boot-prepare binary
   pxe-boot-prepare-pkg = pkgs.callPackage ./../packages/pxe-boot-prepare/package.nix { };
 
   # Generate JSON configuration from NixOS options
   pxe-config = pkgs.writeText "pxe-boot-config.json" (
-    builtins.toJSON {
-      iso_folder_paths = iso_folder_paths;
-      tftp_root = builtins.toString pxe_boot_folder;
-      runtime_root = "/run/pxe-boot";
+    builtins.toJSON (
+      {
+        iso_folder_paths = iso_folder_paths;
+        tftp_root = builtins.toString pxe_boot_folder;
+        runtime_root = "/run/pxe-boot";
 
-      dhcp_interfaces = lib.forEach pxeBootInterfaces (
-        dhcp_interface_conf:
-        let
-          dhcp_server = dhcp_interface_conf.dhcp.server;
-          gateway = (fromCidrString dhcp_server.address).address;
-        in
-        {
-          id = dhcp_server.id;
-          name = dhcp_interface_conf.interfaceName;
-          gateway = gateway;
-          default_iso =
-            if dhcp_server.pxe-boot.defaultIso != "" then dhcp_server.pxe-boot.defaultIso else null;
-          default_script =
-            if dhcp_server.pxe-boot.defaultScriptName != "" then
-              dhcp_server.pxe-boot.defaultScriptName
-            else
-              null;
-          # D35: one entry per reservation that actually sets its own
-          # default -- a reservation that overrides neither field has
-          # nothing for pxe-boot-prepare to act on, so it's omitted
-          # rather than emitting a no-op override file per MAC.
-          reservations =
-            lib.mapAttrsToList
-              (mac: value: {
-                inherit mac;
-                default_iso = if value.defaultIso != "" then value.defaultIso else null;
-                default_script = if value.defaultScriptName != "" then value.defaultScriptName else null;
-              })
-              (
-                lib.filterAttrs (
-                  _mac: value: value.defaultIso != "" || value.defaultScriptName != ""
-                ) dhcp_server.reservations
-              );
-        }
-        // lib.attrsets.optionalAttrs (dhcp_server.tftpServerRoot != null) {
-          tftp_root = builtins.toString dhcp_server.tftpServerRoot;
-        }
-      );
+        dhcp_interfaces = lib.forEach pxeBootInterfaces (
+          dhcp_interface_conf:
+          let
+            dhcp_server = dhcp_interface_conf.dhcp.server;
+            gateway = (fromCidrString dhcp_server.address).address;
+          in
+          {
+            id = dhcp_server.id;
+            name = dhcp_interface_conf.interfaceName;
+            gateway = gateway;
+            default_iso =
+              if dhcp_server.pxe-boot.defaultIso != "" then dhcp_server.pxe-boot.defaultIso else null;
+            default_script =
+              if dhcp_server.pxe-boot.defaultScriptName != "" then
+                dhcp_server.pxe-boot.defaultScriptName
+              else
+                null;
+            # D35: one entry per reservation that actually sets its own
+            # default -- a reservation that overrides neither field has
+            # nothing for pxe-boot-prepare to act on, so it's omitted
+            # rather than emitting a no-op override file per MAC.
+            reservations =
+              lib.mapAttrsToList
+                (mac: value: {
+                  inherit mac;
+                  default_iso = if value.defaultIso != "" then value.defaultIso else null;
+                  default_script = if value.defaultScriptName != "" then value.defaultScriptName else null;
+                })
+                (
+                  lib.filterAttrs (
+                    _mac: value: value.defaultIso != "" || value.defaultScriptName != ""
+                  ) dhcp_server.reservations
+                );
+          }
+          // lib.attrsets.optionalAttrs (dhcp_server.tftpServerRoot != null) {
+            tftp_root = builtins.toString dhcp_server.tftpServerRoot;
+          }
+        );
 
-      autoinstall = lib.attrsets.mapAttrs (
-        isoName: scripts:
-        lib.forEach scripts (script: {
-          name = script.scriptName;
-          script_path =
-            if builtins.isString script.script then
-              "${pkgs.writeText script.scriptName script.script}"
-            else
-              "${script.script}";
-        })
-      ) cfg.pxe-boot.autoinstall;
+        autoinstall = lib.attrsets.mapAttrs (
+          isoName: scripts:
+          lib.forEach scripts (script: {
+            name = script.scriptName;
+            script_path =
+              if builtins.isString script.script then
+                "${pkgs.writeText script.scriptName script.script}"
+              else
+                "${script.script}";
+          })
+        ) cfg.pxe-boot.autoinstall;
 
-      http = {
-        port = httpPort;
-      };
-    }
+        http = {
+          port = httpPort;
+        };
+      }
+      // lib.optionalAttrs nfsEnabled {
+        nfs = {
+          exports_file = nfsExportsFile;
+          clients = nfsClientNetworks;
+          http_only_isos = cfg.pxe-boot.nfs.httpOnlyIsos;
+          unmount_retry_secs = cfg.pxe-boot.nfs.unmountRetrySecs;
+        };
+      }
+    )
   );
 
   main_ipxe_file_fn = (
@@ -672,5 +699,56 @@ lib.mkMerge [
         };
       })
     );
+  })
+
+  (lib.mkIf nfsEnabled {
+    assertions = [
+      {
+        assertion = nfsClientNetworks != [ ];
+        message = ''
+          my.router.pxe-boot.nfs.enable needs at least one interface with
+          dhcp.server.pxe-boot.enable: the exports are limited to those
+          interfaces' subnets, so with none there is nobody to serve.
+        '';
+      }
+    ];
+
+    # NFSv3 because the initramfs NFS client (klibc `nfsmount`, used by
+    # Ubuntu's casper) cannot speak NFSv4. The exports themselves are not
+    # declared here: they depend on which ISOs are mounted, so
+    # pxe-boot-prepare writes `nfsExportsFile` at run time.
+    services.nfs.server = {
+      enable = true;
+      mountdPort = cfg.pxe-boot.nfs.mountdPort;
+    };
+    services.nfs.settings.nfsd.vers3 = true;
+
+    systemd.tmpfiles.rules = [ "d /etc/exports.d 0755 root root - -" ];
+
+    # Tells the NFS server about the file pxe-boot-prepare just wrote. Its
+    # own unit rather than an ExecStartPost of pxe-boot-prepare, whose
+    # sandbox (capability bounding set) is sized for mounting only.
+    # `PartOf` + `After` make a restart of prepare restart this too, and
+    # stop it first: unexporting is what lets prepare's cleanup unmount the
+    # ISOs (the NFS server holds exported ISOs busy).
+    systemd.services.pxe-boot-nfs-exports = {
+      description = "PXE Boot - Export mounted ISOs over NFS";
+      wantedBy = [ "multi-user.target" ];
+      after = [
+        "pxe-boot-prepare.service"
+        "nfs-server.service"
+      ];
+      requires = [ "nfs-server.service" ];
+      partOf = [ "pxe-boot-prepare.service" ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = "${pkgs.nfs-utils}/bin/exportfs -r";
+        ExecStop = [
+          "${pkgs.coreutils}/bin/rm -f ${nfsExportsFile}"
+          "${pkgs.nfs-utils}/bin/exportfs -r"
+        ];
+      };
+    };
   })
 ]

@@ -37,6 +37,38 @@ pub struct PxeBootConfig {
 
     /// HTTP server configuration
     pub http: HttpConfig,
+
+    /// NFS boot support. `None` (the default) keeps every ISO on HTTP.
+    #[serde(default)]
+    pub nfs: Option<NfsConfig>,
+}
+
+/// NFS boot configuration. Present only when the Nix side enabled NFS;
+/// each ISO whose distro supports NFS boot then uses it instead of the
+/// whole-ISO HTTP download, unless listed in `http_only_isos`.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct NfsConfig {
+    /// `exports(5)` file rewritten on every run; the NFS server re-reads it
+    /// after `pxe-boot-prepare` finishes.
+    pub exports_file: PathBuf,
+
+    /// Networks allowed to mount the exports (CIDR), one per PXE interface.
+    pub clients: Vec<String>,
+
+    /// ISO file names that must stay on HTTP even though NFS is enabled
+    /// (escape hatch when NFS misbehaves for one image).
+    #[serde(default)]
+    pub http_only_isos: Vec<String>,
+
+    /// How long cleanup keeps retrying a busy unmount (seconds). nfsd holds
+    /// an ISO for a short while after a client last read it.
+    #[serde(default = "default_unmount_retry_secs")]
+    pub unmount_retry_secs: u64,
+}
+
+fn default_unmount_retry_secs() -> u64 {
+    60
 }
 
 /// DHCP interface configuration

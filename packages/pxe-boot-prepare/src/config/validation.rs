@@ -100,6 +100,7 @@ mod tests {
             dhcp_interfaces: vec![],
             autoinstall: HashMap::new(),
             http: HttpConfig { port: 1337 },
+            nfs: None,
         }
     }
 

@@ -44,6 +44,25 @@ pub trait DistroDetector: Send + Sync {
         autoinstall: Option<&AutoinstallScript>,
     ) -> Vec<String>;
 
+    /// Whether this distro has a verified NFS boot path. Must agree with
+    /// `generate_nfs_boot_params` returning `Some`. Default `false`: a
+    /// distro stays on HTTP until someone has booted it over NFS.
+    fn supports_nfs(&self) -> bool {
+        false
+    }
+
+    /// Boot parameters for booting from the ISO's mounted tree over NFS, or
+    /// `None` when the distro has no NFS path (the caller then uses
+    /// `generate_boot_params`). `nfs_root` is `<server>:<exported path>`.
+    fn generate_nfs_boot_params(
+        &self,
+        _nfs_root: &str,
+        _boot_info: &BootInfo,
+        _autoinstall: Option<&AutoinstallScript>,
+    ) -> Option<Vec<String>> {
+        None
+    }
+
     /// Optional: Custom GRUB entry template
     fn grub_template(&self) -> Option<String> {
         None

@@ -2,6 +2,7 @@ use crate::error::{IoResultExt, PxeBootError, Result};
 use async_trait::async_trait;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::time::{Duration, Instant};
 use tokio::process::Command;
 
 /// Seam for `PxeBootService` (C33) -- lets tests inject a `FakeIsoMounter`
@@ -41,13 +42,53 @@ fn unescape_mount_field(field: &str) -> String {
 }
 
 
+/// How often a busy unmount is retried within its window.
+const UNMOUNT_RETRY_INTERVAL: Duration = Duration::from_secs(2);
+
+/// `umount` reports a mount that something still holds as "target is busy".
+fn is_busy(error: &PxeBootError) -> bool {
+    error.to_string().to_lowercase().contains("busy")
+}
+
+/// Runs `op`, retrying every `interval` for up to `window` while it fails
+/// with a "busy" error; any other failure, or still busy once the window
+/// has passed, is returned as is. A zero window means a single attempt.
+async fn retry_while_busy<F, Fut>(window: Duration, interval: Duration, mut op: F) -> Result<()>
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Result<()>>,
+{
+    let start = Instant::now();
+    loop {
+        match op().await {
+            Err(e) if is_busy(&e) && start.elapsed() < window => {
+                tokio::time::sleep(interval).await;
+            }
+            other => return other,
+        }
+    }
+}
+
 pub struct IsoMounter {
     runtime_root: PathBuf,
+    /// How long `unmount` keeps retrying a busy mount. nfsd holds an
+    /// exported ISO for a short while after a client last read it, so a
+    /// single attempt right after unexporting fails; measured at ~20 s in a
+    /// VM. Zero (the default) keeps the single attempt.
+    unmount_retry: Duration,
 }
 
 impl IsoMounter {
     pub fn new(runtime_root: PathBuf) -> Self {
-        Self { runtime_root }
+        Self {
+            runtime_root,
+            unmount_retry: Duration::ZERO,
+        }
+    }
+
+    pub fn with_unmount_retry(mut self, window: Duration) -> Self {
+        self.unmount_retry = window;
+        self
     }
 
     pub fn mount_path(&self, iso_name: &str) -> PathBuf {
@@ -197,15 +238,21 @@ impl IsoMounter {
     }
 
     async fn unmount(&self, mount_point: &Path) -> Result<()> {
+        let result = retry_while_busy(self.unmount_retry, UNMOUNT_RETRY_INTERVAL, || {
+            self.unmount_once(mount_point)
+        })
+        .await;
+        if let Err(PxeBootError::MountFailed { reason, .. }) = &result {
+            tracing::error!("umount failed for {}: {}", mount_point.display(), reason);
+        }
+        result
+    }
+
+    async fn unmount_once(&self, mount_point: &Path) -> Result<()> {
         let output = Command::new("umount").arg(mount_point).output().await?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            tracing::error!(
-                "umount command failed for {}: {}",
-                mount_point.display(),
-                stderr.trim()
-            );
             return Err(PxeBootError::MountFailed {
                 path: mount_point.to_path_buf(),
                 reason: format!(
@@ -330,6 +377,70 @@ impl IsoMounting for FakeIsoMounter {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    fn busy() -> PxeBootError {
+        PxeBootError::MountFailed {
+            path: PathBuf::from("/m/x.iso"),
+            reason: "umount command exited with exit status: 32: target is busy.".into(),
+        }
+    }
+
+    fn other_failure() -> PxeBootError {
+        PxeBootError::MountFailed {
+            path: PathBuf::from("/m/x.iso"),
+            reason: "umount command exited with exit status: 32: not mounted.".into(),
+        }
+    }
+
+    #[tokio::test]
+    async fn retry_while_busy_succeeds_once_the_mount_is_released() {
+        let attempts = AtomicUsize::new(0);
+        let result = retry_while_busy(Duration::from_secs(5), Duration::from_millis(1), || {
+            let n = attempts.fetch_add(1, Ordering::SeqCst);
+            async move { if n < 3 { Err(busy()) } else { Ok(()) } }
+        })
+        .await;
+        assert!(result.is_ok());
+        assert_eq!(attempts.load(Ordering::SeqCst), 4);
+    }
+
+    #[tokio::test]
+    async fn retry_while_busy_gives_up_after_the_window_and_reports_busy() {
+        let attempts = AtomicUsize::new(0);
+        let result = retry_while_busy(Duration::from_millis(30), Duration::from_millis(5), || {
+            attempts.fetch_add(1, Ordering::SeqCst);
+            async { Err(busy()) }
+        })
+        .await;
+        assert!(is_busy(&result.unwrap_err()));
+        assert!(attempts.load(Ordering::SeqCst) > 1);
+    }
+
+    #[tokio::test]
+    async fn retry_while_busy_does_not_retry_other_failures() {
+        let attempts = AtomicUsize::new(0);
+        let result = retry_while_busy(Duration::from_secs(5), Duration::from_millis(1), || {
+            attempts.fetch_add(1, Ordering::SeqCst);
+            async { Err(other_failure()) }
+        })
+        .await;
+        assert!(result.is_err());
+        assert_eq!(attempts.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn a_zero_window_is_a_single_attempt() {
+        let attempts = AtomicUsize::new(0);
+        let result = retry_while_busy(Duration::ZERO, Duration::from_millis(1), || {
+            attempts.fetch_add(1, Ordering::SeqCst);
+            async { Err(busy()) }
+        })
+        .await;
+        assert!(result.is_err());
+        assert_eq!(attempts.load(Ordering::SeqCst), 1);
+    }
+
     use super::*;
 
     #[test]

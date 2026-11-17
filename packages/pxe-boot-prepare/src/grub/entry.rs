@@ -1,4 +1,4 @@
-use crate::config::{AutoinstallScript, BootInfo, IsoInfo, MenuEntry};
+use crate::config::{AutoinstallScript, BootInfo, IsoInfo, MenuEntry, NfsConfig};
 use crate::distro::DistroDetector;
 use crate::distro::detector::{AUTOINSTALL_DIR_URL_PLACEHOLDER, AUTOINSTALL_URL_PLACEHOLDER};
 use crate::error::{PxeBootError, Result};
@@ -32,11 +32,40 @@ fn url_encode_segment(s: &str) -> String {
 pub struct MenuEntryFactory {
     gateway: IpAddr,
     http_port: u16,
+    nfs: Option<NfsConfig>,
 }
 
 impl MenuEntryFactory {
     pub fn new(gateway: IpAddr, http_port: u16) -> Self {
-        Self { gateway, http_port }
+        Self {
+            gateway,
+            http_port,
+            nfs: None,
+        }
+    }
+
+    /// Enables NFS boot for ISOs whose distro supports it.
+    pub fn with_nfs(mut self, nfs: Option<NfsConfig>) -> Self {
+        self.nfs = nfs;
+        self
+    }
+
+    /// Whether this ISO boots over NFS: NFS is enabled, the distro supports
+    /// it, the ISO is not pinned to HTTP, and its mount path can be written
+    /// into a kernel command line (no whitespace).
+    pub fn boots_over_nfs(
+        nfs: Option<&NfsConfig>,
+        iso_info: &IsoInfo,
+        detector: &dyn DistroDetector,
+    ) -> bool {
+        let Some(nfs) = nfs else { return false };
+        detector.supports_nfs()
+            && !nfs.http_only_isos.contains(&iso_info.file_name)
+            && !iso_info
+                .mount_path
+                .to_string_lossy()
+                .chars()
+                .any(char::is_whitespace)
     }
 
     pub fn create_entry(
@@ -90,8 +119,15 @@ impl MenuEntryFactory {
             iso_info.file_name.clone()
         };
 
-        let mut kernel_params =
-            detector.generate_boot_params(&iso_url, &mounted_url, boot_info, autoinstall);
+        let nfs_params = if Self::boots_over_nfs(self.nfs.as_ref(), iso_info, detector) {
+            let nfs_root = format!("{}:{}", self.gateway, iso_info.mount_path.display());
+            detector.generate_nfs_boot_params(&nfs_root, boot_info, autoinstall)
+        } else {
+            None
+        };
+        let mut kernel_params = nfs_params.unwrap_or_else(|| {
+            detector.generate_boot_params(&iso_url, &mounted_url, boot_info, autoinstall)
+        });
 
         // Replace autoinstall URL placeholders if present.
         // - `{autoinstall_url}`     → the seed *file* (e.g. RHEL `inst.ks=`).
@@ -358,5 +394,96 @@ mod tests {
             .expect("inst.repo= param missing");
         assert!(!repo_param.contains(' '));
         assert!(!repo_param.contains('"'));
+    }
+
+    fn nfs_config(http_only: &[&str]) -> NfsConfig {
+        NfsConfig {
+            exports_file: PathBuf::from("/etc/exports.d/pxe-boot.exports"),
+            clients: vec!["192.168.75.0/24".to_string()],
+            http_only_isos: http_only.iter().map(|s| s.to_string()).collect(),
+            unmount_retry_secs: 60,
+        }
+    }
+
+    fn ubuntu_iso_info(name: &str) -> IsoInfo {
+        let mount = PathBuf::from(format!("/run/pxe-boot/iso-mountpoint/{name}"));
+        IsoInfo {
+            file_name: name.to_string(),
+            file_path: PathBuf::from(format!("/srv/isos/{name}")),
+            mount_path: mount.clone(),
+            distro_type: DistroType::Ubuntu,
+            kernel_path: mount.join("casper/vmlinuz"),
+            initrd_path: mount.join("casper/initrd"),
+        }
+    }
+
+    fn ubuntu_boot_info(iso: &IsoInfo) -> BootInfo {
+        BootInfo {
+            kernel_path: iso.kernel_path.clone(),
+            initrd_path: iso.initrd_path.clone(),
+            distro_type: DistroType::Ubuntu,
+            version: None,
+            architecture: Some("x86_64".to_string()),
+            init_path: None,
+        }
+    }
+
+    fn ubuntu_params(factory: &MenuEntryFactory, name: &str) -> Vec<String> {
+        let iso = ubuntu_iso_info(name);
+        factory
+            .create_entry(&iso, &ubuntu_boot_info(&iso), &UbuntuDetector::new(), None, 0)
+            .unwrap()
+            .kernel_params
+    }
+
+    #[test]
+    fn ubuntu_stays_on_http_when_nfs_is_not_configured() {
+        let params = ubuntu_params(&factory(), "ubuntu.iso");
+        assert!(params.iter().any(|p| p.starts_with("url=http://")));
+        assert!(!params.contains(&"netboot=nfs".to_string()));
+    }
+
+    #[test]
+    fn ubuntu_boots_over_nfs_by_default_when_nfs_is_enabled() {
+        let f = factory().with_nfs(Some(nfs_config(&[])));
+        let params = ubuntu_params(&f, "ubuntu.iso");
+        assert!(params.contains(&"netboot=nfs".to_string()));
+        assert!(params.contains(
+            &"nfsroot=192.168.75.1:/run/pxe-boot/iso-mountpoint/ubuntu.iso".to_string()
+        ));
+        assert!(!params.iter().any(|p| p.starts_with("url=")));
+    }
+
+    #[test]
+    fn an_iso_listed_as_http_only_keeps_the_http_download() {
+        let f = factory().with_nfs(Some(nfs_config(&["ubuntu.iso"])));
+        let params = ubuntu_params(&f, "ubuntu.iso");
+        assert!(params.iter().any(|p| p.starts_with("url=http://")));
+        assert!(!params.contains(&"netboot=nfs".to_string()));
+    }
+
+    #[test]
+    fn http_only_applies_to_the_named_iso_only() {
+        let f = factory().with_nfs(Some(nfs_config(&["other.iso"])));
+        assert!(ubuntu_params(&f, "ubuntu.iso").contains(&"netboot=nfs".to_string()));
+    }
+
+    #[test]
+    fn a_distro_without_nfs_support_stays_on_http_even_when_nfs_is_enabled() {
+        let f = factory().with_nfs(Some(nfs_config(&[])));
+        let entry = f
+            .create_entry(&iso_info(), &boot_info(), &RhelDetector::new(), None, 0)
+            .unwrap();
+        assert!(entry.kernel_params.iter().any(|p| p.starts_with("inst.repo=http://")));
+        assert!(!entry.kernel_params.iter().any(|p| p.contains("nfs")));
+    }
+
+    #[test]
+    fn an_iso_whose_mount_path_has_whitespace_falls_back_to_http() {
+        // A space would split the nfsroot= argument on the kernel command line.
+        let f = factory().with_nfs(Some(nfs_config(&[])));
+        let params = ubuntu_params(&f, "my ubuntu.iso");
+        assert!(params.iter().any(|p| p.starts_with("url=http://")));
+        assert!(!params.contains(&"netboot=nfs".to_string()));
     }
 }

@@ -1286,6 +1286,59 @@ in
           example = "20m";
           type = types.nullOr types.str;
         };
+        nfs = {
+          enable = mkOption {
+            description = ''
+              Serve the mounted ISOs over NFS (read-only) and boot every
+              ISO whose distribution supports it from there, instead of
+              downloading the whole ISO into the client's RAM. Distributions
+              without NFS support keep using the HTTP download, so enabling
+              this never breaks an existing entry.
+
+              Currently supported: Ubuntu (Server and Desktop). Because the
+              ISO stays on the router, much smaller machines can boot
+              Desktop-sized images.
+
+              Starts the kernel NFS server (`services.nfs.server`, NFSv3
+              only -- the initramfs NFS client does not speak NFSv4) with one
+              read-only export per ISO, limited to the subnets of the
+              PXE-enabled interfaces. This module does not manage a
+              firewall: keep ports 111, 2049 and `nfs.mountdPort` reachable
+              from the PXE networks only.
+            '';
+            type = bool;
+            default = false;
+            example = true;
+          };
+          httpOnlyIsos = mkOption {
+            description = ''
+              ISO file names that keep using the HTTP download even though
+              NFS is enabled. A per-image escape hatch for when NFS boot
+              misbehaves for one ISO.
+            '';
+            type = types.listOf types.str;
+            default = [ ];
+            example = [ "ubuntu-26.04.1-desktop-amd64.iso" ];
+          };
+          mountdPort = mkOption {
+            description = ''
+              Fixed port for the NFS mount daemon, so it can be allowed
+              through a firewall (it is otherwise assigned randomly).
+            '';
+            type = types.port;
+            default = 20048;
+          };
+          unmountRetrySecs = mkOption {
+            description = ''
+              How long, in seconds, cleanup keeps retrying to unmount an ISO
+              that is still busy. The NFS server holds an ISO for a short
+              while after a client last read it, so unmounting right after
+              unexporting fails; measured at about 20 seconds.
+            '';
+            type = types.ints.unsigned;
+            default = 60;
+          };
+        };
         shimPackage = mkOption {
           description = ''
             The signed shim + GRUB build served over TFTP as

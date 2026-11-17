@@ -211,6 +211,7 @@ mod tests {
             dhcp_interfaces: vec![],
             autoinstall,
             http: HttpConfig { port: 1337 },
+            nfs: None,
         }
     }
 
@@ -419,6 +420,7 @@ mod tests {
             dhcp_interfaces: vec![],
             autoinstall,
             http: HttpConfig { port: 1337 },
+            nfs: None,
         };
         let mgr = AutoinstallManager::new(rt.path().to_path_buf());
 

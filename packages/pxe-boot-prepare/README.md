@@ -141,24 +141,40 @@ request) any ISO/script this service is configured to serve. Firewalling
 or VLAN-isolating that interface, not adding transport encryption, is the
 correct control for a network you don't fully trust.
 
+## NFS boot
+
+With `my.router.pxe-boot.nfs.enable = true` the mounted ISOs are exported read-only
+over NFSv3 and every ISO whose distro supports it boots from there instead of
+downloading the whole ISO into RAM. Other distros keep using HTTP.
+
+```text
+  ISO file --pxe-boot-prepare--> /run/pxe-boot/iso-mountpoint/<iso>
+                                      |  one export per ISO, fsid derived from its name
+                                      v
+  /etc/exports.d/pxe-boot.exports --exportfs -r--> NFS server --> client (netboot=nfs)
+```
+
+- **One export per ISO** with an explicit `fsid=`: nfsd otherwise derives the ID from the
+  ISO's creation timestamp, and two ISOs built in the same second get served as each other.
+- **Cleanup unexports first, then unmounts**, retrying a busy unmount for
+  `nfs.unmountRetrySecs` (nfsd holds an ISO ~20 s after a client's last read).
+- Pin one ISO to HTTP with `nfs.httpOnlyIsos`. Options: see [options](../../docs/options.md).
+- The module does not manage a firewall; allow 111, 2049 and `nfs.mountdPort` from the PXE
+  networks only. Exports are limited to those networks' subnets.
+
 ## TODO
 
-### NFS boot for Ubuntu (lower install-time RAM)
+### NFS boot: remaining work
 
-Ubuntu boots via `url=<iso>`, loading the whole ISO into RAM. With cloud-init
-26.04's ~5.5 GB footprint (a cloud-init bug, not our seed) the install peaks
-around ~10 GB — so give Ubuntu VMs **≥12 GB** for now. The autoinstall itself is
-correct; only the boot RAM is the issue.
+Implemented (`my.router.pxe-boot.nfs.enable`, see [NFS boot](#nfs-boot)) but not
+yet confirmed on real hardware:
 
-Fix: serve the ISO tree over NFS and boot `netboot=nfs`, keeping the squashfs on
-the server instead of in RAM (HTTP `fetch=` doesn't work — casper needs the whole
-`/casper` as one medium):
-
-- Export `/run/pxe-boot/iso-mountpoint` read-only via NFS.
-- In `src/distro/ubuntu.rs`, replace `url=<iso>` with
-  `boot=casper netboot=nfs nfsroot=<gw>:/run/pxe-boot/iso-mountpoint/<iso>` +
-  `layerfs-path=<deepest casper/*.squashfs>`.
-- Keep the working `autoinstall ds=nocloud;s=<dir>/` seed.
+- Whether Ubuntu 26.04's initrd can mount the export (`nfsmount`/`modprobe nfs`).
+- The right `layerfs-path` for layered Desktop ISOs (casper's default is used now).
+- Unattended Desktop install over NFS (the Server `autoinstall` seed is passed through).
+- RHEL over NFS (`inst.stage2`): not implemented, RHEL keeps the HTTP path.
+- A refresh that leaves unchanged ISOs alone: today a refresh restarts
+  everything, which breaks a client that is mid-install over NFS.
 
 ## Development
 

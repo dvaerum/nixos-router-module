@@ -63,7 +63,13 @@ impl PxeBootService {
     pub fn new(config: PxeBootConfig) -> Self {
         let detector_registry = DetectorRegistry::new();
         let iso_discovery = IsoDiscovery::new(config.iso_folder_paths.clone());
-        let iso_mounter = IsoMounter::new(config.runtime_root.clone());
+        let iso_mounter = IsoMounter::new(config.runtime_root.clone()).with_unmount_retry(
+            config
+                .nfs
+                .as_ref()
+                .map(|n| std::time::Duration::from_secs(n.unmount_retry_secs))
+                .unwrap_or_default(),
+        );
         let iso_serve_tree = ServeTree::new(config.runtime_root.clone());
         let autoinstall_manager = AutoinstallManager::new(config.runtime_root.clone());
 
@@ -249,6 +255,16 @@ impl PxeBootService {
             tracing::info!("Detected {} distributions", iso_infos.len());
         }
 
+        // 3b. NFS exports for the ISOs that will boot over NFS. Isolated like
+        //     the raw-ISO tree: without exports those ISOs fail to boot, but
+        //     the HTTP-served entries and menus are unaffected.
+        if let Err(e) = self.write_nfs_exports(&iso_infos).await {
+            tracing::warn!(
+                "Failed to write NFS exports: {}. ISOs booting over NFS will not be reachable until the next successful run.",
+                e
+            );
+        }
+
         // 4. Process autoinstall scripts. Pass the already-detected distro per ISO
         //    so the manager can lay out each seed the way that installer expects
         //    (e.g. Ubuntu NoCloud user-data/meta-data vs RHEL kickstart).
@@ -321,13 +337,47 @@ impl PxeBootService {
         Ok(())
     }
 
+    /// Writes the `exports(5)` file for every ISO that boots over NFS (an
+    /// empty one when none do, so entries from a previous run don't
+    /// linger). No-op when NFS is not configured. Written to a temp file and
+    /// renamed so the NFS server never reads a half-written file.
+    async fn write_nfs_exports(
+        &self,
+        iso_infos: &[(IsoInfo, BootInfo, &dyn DistroDetector)],
+    ) -> Result<()> {
+        let Some(nfs) = &self.config.nfs else {
+            return Ok(());
+        };
+
+        let exported: Vec<(String, &std::path::Path)> = iso_infos
+            .iter()
+            .filter(|(iso_info, _, detector)| {
+                MenuEntryFactory::boots_over_nfs(Some(nfs), iso_info, *detector)
+            })
+            .map(|(iso_info, _, _)| (iso_info.file_name.clone(), iso_info.mount_path.as_path()))
+            .collect();
+        let text = iso::nfs_exports::render_exports(&exported, &nfs.clients)?;
+
+        if let Some(dir) = nfs.exports_file.parent() {
+            tokio::fs::create_dir_all(dir).await.with_path(dir)?;
+        }
+        let tmp = nfs.exports_file.with_extension("exports.tmp");
+        tokio::fs::write(&tmp, text).await.with_path(&tmp)?;
+        tokio::fs::rename(&tmp, &nfs.exports_file)
+            .await
+            .with_path(&nfs.exports_file)?;
+        tracing::info!("Wrote NFS exports for {} ISOs", exported.len());
+        Ok(())
+    }
+
     async fn generate_grub_menu(
         &self,
         interface: &DhcpInterface,
         iso_infos: &[(IsoInfo, BootInfo, &dyn DistroDetector)],
         failed_isos: &[(String, String)],
     ) -> Result<()> {
-        let factory = MenuEntryFactory::new(interface.gateway, self.config.http.port);
+        let factory = MenuEntryFactory::new(interface.gateway, self.config.http.port)
+            .with_nfs(self.config.nfs.clone());
 
         // Built once, then reused for both the interface's own grub.cfg
         // and any per-MAC override (D35) -- the menu CONTENT never
@@ -513,6 +563,21 @@ impl PxeBootService {
     /// Cleanup: unmount all ISOs
     pub async fn cleanup(&self) -> Result<()> {
         tracing::info!("Cleaning up mounted ISOs");
+        // Stop exporting before unmounting: nfsd holds an exported ISO
+        // busy, so the unmount below can only succeed once the NFS server
+        // has been told (by its own unit, which stops before this one) to
+        // re-read the now-empty exports.
+        if let Some(nfs) = &self.config.nfs {
+            match tokio::fs::remove_file(&nfs.exports_file).await {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => tracing::warn!(
+                    "Failed to remove {}: {}",
+                    nfs.exports_file.display(),
+                    e
+                ),
+            }
+        }
         self.iso_mounter.unmount_all().await?;
         tracing::info!("Cleanup complete");
         Ok(())
@@ -801,6 +866,7 @@ mod tests {
             dhcp_interfaces: vec![],
             autoinstall: HashMap::new(),
             http: HttpConfig { port: 1337 },
+            nfs: None,
         }
     }
 
@@ -1445,5 +1511,117 @@ mod tests {
             global_root.join("7").join("grub").join("grub.cfg").exists(),
             "GRUB menu generation must still run even when autoinstall preparation fails"
         );
+    }
+
+    /// Mounted-ISO fixture laid out like Ubuntu Desktop (no server squashfs,
+    /// identified by `.disk/info`).
+    fn ubuntu_desktop_tree() -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("casper")).unwrap();
+        std::fs::create_dir_all(dir.path().join(".disk")).unwrap();
+        std::fs::write(dir.path().join("casper/vmlinuz"), b"k").unwrap();
+        std::fs::write(dir.path().join("casper/initrd"), b"i").unwrap();
+        std::fs::write(dir.path().join(".disk/info"), "Ubuntu 26.04.1 LTS\n").unwrap();
+        dir
+    }
+
+    fn nfs_enabled(rt: &std::path::Path, http_only: &[&str]) -> config::NfsConfig {
+        config::NfsConfig {
+            exports_file: rt.join("etc/exports.d/pxe-boot.exports"),
+            clients: vec!["192.0.2.0/24".to_string()],
+            http_only_isos: http_only.iter().map(|s| s.to_string()).collect(),
+            unmount_retry_secs: 0,
+        }
+    }
+
+    fn service_with_ubuntu(
+        rt: &tempfile::TempDir,
+        mount_target: &tempfile::TempDir,
+        nfs: Option<config::NfsConfig>,
+    ) -> PxeBootService {
+        let mut config = config_with(&rt.path().join("global"), rt.path());
+        config.dhcp_interfaces = vec![interface(7, None)];
+        config.nfs = nfs;
+        PxeBootService::new_with_dependencies(
+            config,
+            DetectorRegistry::new(),
+            Box::new(crate::iso::discovery::FakeIsoDiscovery::returning(vec![
+                std::path::PathBuf::from("/fake/ubuntu-26.04.1-desktop-amd64.iso"),
+            ])),
+            Box::new(
+                crate::iso::mount::FakeIsoMounter::new().succeeding_for(
+                    "ubuntu-26.04.1-desktop-amd64.iso",
+                    mount_target.path().to_path_buf(),
+                ),
+            ),
+            Box::new(ServeTree::new(rt.path().to_path_buf())),
+            Box::new(crate::autoinstall::manager::FakeAutoinstallPreparing::always_succeeding()),
+        )
+    }
+
+    #[tokio::test]
+    async fn prepare_exports_an_nfs_capable_iso_with_its_own_fsid() {
+        let rt = tempfile::tempdir().unwrap();
+        let tree = ubuntu_desktop_tree();
+        let nfs = nfs_enabled(rt.path(), &[]);
+        let exports_file = nfs.exports_file.clone();
+        service_with_ubuntu(&rt, &tree, Some(nfs)).prepare().await.unwrap();
+
+        let text = std::fs::read_to_string(&exports_file).unwrap();
+        assert!(text.contains(&tree.path().display().to_string()));
+        assert!(text.contains(&format!(
+            "fsid={}",
+            iso::nfs_exports::fsid_for("ubuntu-26.04.1-desktop-amd64.iso")
+        )));
+    }
+
+    #[tokio::test]
+    async fn prepare_does_not_export_an_iso_pinned_to_http() {
+        let rt = tempfile::tempdir().unwrap();
+        let tree = ubuntu_desktop_tree();
+        let nfs = nfs_enabled(rt.path(), &["ubuntu-26.04.1-desktop-amd64.iso"]);
+        let exports_file = nfs.exports_file.clone();
+        service_with_ubuntu(&rt, &tree, Some(nfs)).prepare().await.unwrap();
+
+        let text = std::fs::read_to_string(&exports_file).unwrap();
+        assert!(!text.contains(&tree.path().display().to_string()));
+    }
+
+    #[tokio::test]
+    async fn prepare_writes_no_exports_file_when_nfs_is_not_configured() {
+        let rt = tempfile::tempdir().unwrap();
+        let tree = ubuntu_desktop_tree();
+        service_with_ubuntu(&rt, &tree, None).prepare().await.unwrap();
+        assert!(!rt.path().join("etc/exports.d/pxe-boot.exports").exists());
+    }
+
+    #[tokio::test]
+    async fn the_boot_menu_uses_nfs_for_an_exported_iso() {
+        let rt = tempfile::tempdir().unwrap();
+        let tree = ubuntu_desktop_tree();
+        service_with_ubuntu(&rt, &tree, Some(nfs_enabled(rt.path(), &[])))
+            .prepare()
+            .await
+            .unwrap();
+        let cfg = std::fs::read_to_string(
+            rt.path().join("global/7/grub/grub.cfg"),
+        )
+        .unwrap();
+        assert!(cfg.contains("netboot=nfs"), "{cfg}");
+        assert!(!cfg.contains("url=http"), "{cfg}");
+    }
+
+    #[tokio::test]
+    async fn cleanup_removes_the_exports_file() {
+        let rt = tempfile::tempdir().unwrap();
+        let tree = ubuntu_desktop_tree();
+        let nfs = nfs_enabled(rt.path(), &[]);
+        let exports_file = nfs.exports_file.clone();
+        let service = service_with_ubuntu(&rt, &tree, Some(nfs));
+        service.prepare().await.unwrap();
+        assert!(exports_file.exists());
+
+        service.cleanup().await.unwrap();
+        assert!(!exports_file.exists());
     }
 }

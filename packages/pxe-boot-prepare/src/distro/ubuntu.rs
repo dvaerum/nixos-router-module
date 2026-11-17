@@ -85,8 +85,8 @@ impl DistroDetector for UbuntuDetector {
         // squashfs is unsupported (casper needs the entire /casper directory as a
         // single medium), and every HTTP mode copies the filesystem fully into
         // RAM anyway. The low-memory alternative is an on-demand NFS mount
-        // (`netboot=nfs`), which requires serving the ISO tree over NFS — deferred
-        // until the module grows an NFS server.
+        // (`netboot=nfs`), see `generate_nfs_boot_params`; this HTTP path is
+        // what runs when `pxe-boot.nfs` is off or this ISO is pinned to HTTP.
         // `BOOTIF=${net_default_mac}` scopes casper's initramfs DHCP to the
         // single interface GRUB actually PXE-booted from (matched by MAC
         // address via configure_networking()'s BOOTIF path in
@@ -109,18 +109,47 @@ impl DistroDetector for UbuntuDetector {
             format!("url={}", iso_url),
         ];
 
-        // Ubuntu Server (subiquity) unattended install. `autoinstall` runs the
-        // installer non-interactively; `ds=nocloud-net;s=<dir>/` points cloud-init
-        // at the directory serving `user-data` + `meta-data`. The semicolon is
-        // escaped (`\;`) so GRUB treats the whole value as one kernel argument.
-        // `{autoinstall_dir_url}` (a directory URL ending in `/`) is substituted
-        // by MenuEntryFactory.
-        if autoinstall.is_some() {
-            params.push("autoinstall".to_string());
-            params.push(format!("ds=nocloud-net\\;s={AUTOINSTALL_DIR_URL_PLACEHOLDER}"));
-        }
-
+        push_autoinstall_params(&mut params, autoinstall);
         params
+    }
+
+    fn supports_nfs(&self) -> bool {
+        true
+    }
+
+    /// Boots casper from the ISO's own mounted tree over NFS (`netboot=nfs`)
+    /// instead of downloading the whole ISO into RAM (`url=`), which is what
+    /// makes Desktop-sized images (~6 GB) unbootable on small machines.
+    /// `BOOTIF`/`ip=dhcp` are the same as for `url=`, see
+    /// `generate_boot_params`.
+    fn generate_nfs_boot_params(
+        &self,
+        nfs_root: &str,
+        _boot_info: &BootInfo,
+        autoinstall: Option<&AutoinstallScript>,
+    ) -> Option<Vec<String>> {
+        let mut params = vec![
+            "BOOTIF=${net_default_mac}".to_string(),
+            "ip=dhcp".to_string(),
+            "boot=casper".to_string(),
+            "netboot=nfs".to_string(),
+            format!("nfsroot={nfs_root}"),
+        ];
+        push_autoinstall_params(&mut params, autoinstall);
+        Some(params)
+    }
+}
+
+/// Ubuntu Server (subiquity) unattended install. `autoinstall` runs the
+/// installer non-interactively; `ds=nocloud-net;s=<dir>/` points cloud-init
+/// at the directory serving `user-data` + `meta-data`. The semicolon is
+/// escaped (`\;`) so GRUB treats the whole value as one kernel argument.
+/// `{autoinstall_dir_url}` (a directory URL ending in `/`) is substituted
+/// by MenuEntryFactory.
+fn push_autoinstall_params(params: &mut Vec<String>, autoinstall: Option<&AutoinstallScript>) {
+    if autoinstall.is_some() {
+        params.push("autoinstall".to_string());
+        params.push(format!("ds=nocloud-net\\;s={AUTOINSTALL_DIR_URL_PLACEHOLDER}"));
     }
 }
 
@@ -202,6 +231,55 @@ mod tests {
         let params = d.generate_boot_params("http://i", "http://m", &boot_info(), None);
         assert!(!params.contains(&"autoinstall".to_string()));
         assert!(!params.iter().any(|p| p.starts_with("ds=")));
+    }
+
+    #[test]
+    fn nfs_boot_uses_casper_netboot_nfs_with_the_given_root() {
+        let d = UbuntuDetector::new();
+        let params = d
+            .generate_nfs_boot_params("192.0.2.1:/run/pxe-boot/iso-mountpoint/u.iso", &boot_info(), None)
+            .unwrap();
+        assert!(params.contains(&"boot=casper".to_string()));
+        assert!(params.contains(&"netboot=nfs".to_string()));
+        assert!(params
+            .contains(&"nfsroot=192.0.2.1:/run/pxe-boot/iso-mountpoint/u.iso".to_string()));
+    }
+
+    #[test]
+    fn nfs_boot_does_not_download_the_iso() {
+        let d = UbuntuDetector::new();
+        let params = d
+            .generate_nfs_boot_params("192.0.2.1:/m/u.iso", &boot_info(), None)
+            .unwrap();
+        assert!(!params.iter().any(|p| p.starts_with("url=")));
+    }
+
+    #[test]
+    fn nfs_boot_still_scopes_dhcp_to_the_pxe_interface() {
+        let d = UbuntuDetector::new();
+        let params = d
+            .generate_nfs_boot_params("192.0.2.1:/m/u.iso", &boot_info(), None)
+            .unwrap();
+        assert!(params.contains(&"BOOTIF=${net_default_mac}".to_string()));
+        assert!(params.contains(&"ip=dhcp".to_string()));
+    }
+
+    #[test]
+    fn nfs_boot_keeps_the_autoinstall_seed() {
+        let d = UbuntuDetector::new();
+        let s = script();
+        let params = d
+            .generate_nfs_boot_params("192.0.2.1:/m/u.iso", &boot_info(), Some(&s))
+            .unwrap();
+        assert!(params.contains(&"autoinstall".to_string()));
+        assert!(params.contains(&format!("ds=nocloud-net\\;s={AUTOINSTALL_DIR_URL_PLACEHOLDER}")));
+    }
+
+    #[test]
+    fn supports_nfs_agrees_with_the_nfs_params() {
+        let d = UbuntuDetector::new();
+        assert!(d.supports_nfs());
+        assert!(d.generate_nfs_boot_params("h:/p", &boot_info(), None).is_some());
     }
 
     #[tokio::test]
