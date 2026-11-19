@@ -82,22 +82,6 @@ let
       dhcp_interface_conf.dhcp.server.ntpServerEnable
     else
       cfg.dhcp.server.generalSettings.ntpServerEnable;
-
-  # DHCP option 67 (boot file name) as the bytes of `file` followed by a NUL.
-  # Plain `data = "bootx64.efi"` sends exactly 11 bytes with no terminator, and
-  # some PXE firmware copies the value up to the first NUL: it then runs into
-  # the DHCP END marker (0xff) and asks TFTP for "bootx64.efi\xff", which
-  # fails with PXE-E23. A trailing NUL is valid for every client (the string
-  # simply ends there), so every PXE class sends it this way.
-  bootFileOption = file: {
-    name = "boot-file-name";
-    csv-format = false;
-    data =
-      lib.concatMapStrings (c: lib.toLower (lib.toHexString (lib.strings.charToInt c))) (
-        lib.stringToCharacters file
-      )
-      + "00";
-  };
 in
 (lib.mkIf cfg.enable {
   assertions = lib.lists.concatMap (vxlan_conf: [
@@ -562,15 +546,18 @@ in
                   only-if-required = true;
                   test = "option[175].exists and option[93].hex == 0x0000";
                   next-server = gateway;
-                  # Also fill the BOOTP `file` header field: many PXE ROMs read it
-                  # first, and it was all zeros before.
+                  # The boot file goes in the BOOTP `file` header field, NOT in
+                  # option 67 (x86 classes): Kea strips a trailing NUL from
+                  # string options, and some PXE firmware copies option 67
+                  # up to the first NUL, running past the name into the DHCP
+                  # END marker and requesting "bootx64.efi\xff" (PXE-E23).
+                  # Tested on real hardware: with only this field it boots.
                   boot-file-name = "grub.pxe";
                   option-data = [
                     {
                       name = "tftp-server-name";
                       data = gateway;
                     }
-                    (bootFileOption "grub.pxe")
                   ];
                 }
 
@@ -579,20 +566,18 @@ in
                   only-if-required = true;
                   test = "option[175].exists and option[93].hex == 0x0007";
                   next-server = gateway;
-                  # Also fill the BOOTP `file` header field: many PXE ROMs read it
-                  # first, and it was all zeros before.
+                  # BOOTP `file` header field only, see the iPXE-BIOS class.
+                  # Must chain through the Microsoft-signed shim first, not
+                  # grubx64.efi directly -- Secure-Boot-enabled firmware only
+                  # trusts shim's cert out of the box; shim then verifies
+                  # grubx64.efi against Canonical's cert before chain-loading
+                  # it. See tests/pxe-boot/secure-boot.nix.
                   boot-file-name = "bootx64.efi";
                   option-data = [
                     {
                       name = "tftp-server-name";
                       data = gateway;
                     }
-                    # Must chain through the Microsoft-signed shim first, not
-                    # grubx64.efi directly -- Secure-Boot-enabled firmware only trusts
-                    # shim's cert out of the box; shim then verifies grubx64.efi against
-                    # Canonical's cert before chain-loading it. See
-                    # tests/pxe-boot/secure-boot.nix.
-                    (bootFileOption "bootx64.efi")
                   ];
                 }
 
@@ -604,8 +589,7 @@ in
                   # next-server is required here: GRUB2 refuses to load
                   # /grub/grub.cfg without it.
                   next-server = gateway;
-                  # Also fill the BOOTP `file` header field: many PXE ROMs read it
-                  # first, and it was all zeros before.
+                  # BOOTP `file` header field only, see the iPXE-BIOS class.
                   boot-file-name = "bootx64.efi";
 
                   option-data = [
@@ -613,9 +597,6 @@ in
                       name = "tftp-server-name";
                       data = gateway;
                     }
-                    # Same Secure-Boot rationale as the iPXE-UEFI class above: chain
-                    # through shim, not grubx64.efi directly.
-                    (bootFileOption "bootx64.efi")
                   ];
                 }
                 {
@@ -627,8 +608,7 @@ in
                   # next-server required -- same GRUB2 requirement as the
                   # UEFI (x86_64) class above.
                   next-server = gateway;
-                  # Also fill the BOOTP `file` header field: many PXE ROMs read it
-                  # first, and it was all zeros before.
+                  # BOOTP `file` header field only, see the iPXE-BIOS class.
                   boot-file-name = "/grub.pxe";
 
                   option-data = [
@@ -636,7 +616,6 @@ in
                       name = "tftp-server-name";
                       data = gateway;
                     }
-                    (bootFileOption "/grub.pxe")
                   ];
                 }
 
@@ -647,8 +626,7 @@ in
 
                   # next-server required -- same GRUB2 requirement as above.
                   next-server = gateway;
-                  # Also fill the BOOTP `file` header field: many PXE ROMs read it
-                  # first, and it was all zeros before.
+                  # BOOTP `file` header field only, see the iPXE-BIOS class.
                   boot-file-name = "bootaa64.efi";
 
                   option-data = [
@@ -656,9 +634,14 @@ in
                       name = "tftp-server-name";
                       data = gateway;
                     }
-                    # Same Secure-Boot rationale as the x86_64 classes above: chain
-                    # through the signed aarch64 shim, not grubaa64.efi directly.
-                    (bootFileOption "bootaa64.efi" // { always-send = true; })
+                    {
+                      name = "boot-file-name";
+                      # Same Secure-Boot rationale as the x86_64 classes
+                      # above: chain through the signed aarch64 shim, not
+                      # grubaa64.efi directly.
+                      data = "bootaa64.efi";
+                      always-send = true;
+                    }
                   ];
                 }
               ]

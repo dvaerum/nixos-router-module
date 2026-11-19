@@ -1075,36 +1075,40 @@ in
       ) pxeMarkers;
       matchClientIdFalse = (subnet."match-client-id" or null) == false;
 
-      # What each PXE class must hand the firmware, with the option-67 bytes
-      # written out by hand (ASCII hex of the name + a NUL), not derived from
-      # the implementation. Some PXE firmware copies option 67 up to the first
-      # NUL; an unterminated value runs into the DHCP END marker and the
-      # client then asks TFTP for "bootx64.efi\xff" (seen on real hardware).
+      # What each PXE class must hand the firmware. The x86 classes carry the
+      # boot file ONLY in the BOOTP `file` header field and no option 67: some
+      # PXE firmware prefers option 67 and copies it up to the first NUL, but
+      # Kea strips a trailing NUL from string options, so the 11 name bytes
+      # run into the DHCP END marker and the client asks TFTP for
+      # "bootx64.efi\xff" (PXE-E23, seen on real hardware; a capture showed
+      # option 67 on the wire as exactly the name). With only the header
+      # field that same machine boots. aarch64 keeps option 67 (always-send)
+      # as before: it cannot be tested here.
       pxeClassExpectations = [
         {
           name = "iPXE-BIOS-920";
           file = "grub.pxe";
-          hex = "677275622e70786500";
+          option67 = null;
         }
         {
           name = "iPXE-UEFI-920";
           file = "bootx64.efi";
-          hex = "626f6f747836342e65666900";
+          option67 = null;
         }
         {
           name = "UEFI (x86_64) Client-920";
           file = "bootx64.efi";
-          hex = "626f6f747836342e65666900";
+          option67 = null;
         }
         {
           name = "BIOS Legacy (x86_64) Client-920";
           file = "/grub.pxe";
-          hex = "2f677275622e70786500";
+          option67 = null;
         }
         {
           name = "UEFI (aarch64) Client-920";
           file = "bootaa64.efi";
-          hex = "626f6f74616136342e65666900";
+          option67 = "bootaa64.efi";
         }
       ];
       classByName = name: pkgs.lib.findFirst (c: c.name == name) null keaJson.Dhcp4.client-classes;
@@ -1118,12 +1122,19 @@ in
             ok = (classByName e.name) != null && (classByName e.name)."boot-file-name" or null == e.file;
           }
           {
-            name = "${e.name}: option 67 is the NUL-terminated bytes of ${e.file}";
+            name =
+              if e.option67 == null then
+                "${e.name}: no option 67 is sent (firmware reads it past its end)"
+              else
+                "${e.name}: option 67 is ${e.option67}";
             ok =
               (classByName e.name) != null
-              && (optionOf (classByName e.name)) != null
-              && (optionOf (classByName e.name))."csv-format" or true == false
-              && (optionOf (classByName e.name)).data == e.hex;
+              && (
+                if e.option67 == null then
+                  (optionOf (classByName e.name)) == null
+                else
+                  (optionOf (classByName e.name)) != null && (optionOf (classByName e.name)).data == e.option67
+              );
           }
         ]) pxeClassExpectations)
         ++ [
