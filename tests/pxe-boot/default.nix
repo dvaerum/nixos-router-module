@@ -1075,28 +1075,79 @@ in
       ) pxeMarkers;
       matchClientIdFalse = (subnet."match-client-id" or null) == false;
 
-      checks = [
+      # What each PXE class must hand the firmware, with the option-67 bytes
+      # written out by hand (ASCII hex of the name + a NUL), not derived from
+      # the implementation. Some PXE firmware copies option 67 up to the first
+      # NUL; an unterminated value runs into the DHCP END marker and the
+      # client then asks TFTP for "bootx64.efi\xff" (seen on real hardware).
+      pxeClassExpectations = [
         {
-          name = "client-classes contains iPXE/BIOS/aarch64 markers";
-          ok = hasClassContaining "iPXE" && hasClassContaining "BIOS" && hasClassContaining "aarch64";
+          name = "iPXE-BIOS-920";
+          file = "grub.pxe";
+          hex = "677275622e70786500";
         }
         {
-          name = "client-classes contains a UEFI x86_64 class";
-          ok = hasUefiX86Class;
+          name = "iPXE-UEFI-920";
+          file = "bootx64.efi";
+          hex = "626f6f747836342e65666900";
         }
         {
-          name = "reservation present and outside the pool";
-          ok = subnet != null && builtins.elem reservedPxeIp resvIps;
+          name = "UEFI (x86_64) Client-920";
+          file = "bootx64.efi";
+          hex = "626f6f747836342e65666900";
         }
         {
-          name = "PXE classes required at the SUBNET level (PXE-E16 regression)";
-          ok = subnet != null && hasSubnetPxeClasses;
+          name = "BIOS Legacy (x86_64) Client-920";
+          file = "/grub.pxe";
+          hex = "2f677275622e70786500";
         }
         {
-          name = "match-client-id is false on the PXE subnet";
-          ok = subnet != null && matchClientIdFalse;
+          name = "UEFI (aarch64) Client-920";
+          file = "bootaa64.efi";
+          hex = "626f6f74616136342e65666900";
         }
       ];
+      classByName = name: pkgs.lib.findFirst (c: c.name == name) null keaJson.Dhcp4.client-classes;
+      optionOf =
+        class: pkgs.lib.findFirst (o: o.name == "boot-file-name") null (class."option-data" or [ ]);
+
+      checks =
+        (builtins.concatMap (e: [
+          {
+            name = "${e.name}: the BOOTP file header field is set to ${e.file}";
+            ok = (classByName e.name) != null && (classByName e.name)."boot-file-name" or null == e.file;
+          }
+          {
+            name = "${e.name}: option 67 is the NUL-terminated bytes of ${e.file}";
+            ok =
+              (classByName e.name) != null
+              && (optionOf (classByName e.name)) != null
+              && (optionOf (classByName e.name))."csv-format" or true == false
+              && (optionOf (classByName e.name)).data == e.hex;
+          }
+        ]) pxeClassExpectations)
+        ++ [
+          {
+            name = "client-classes contains iPXE/BIOS/aarch64 markers";
+            ok = hasClassContaining "iPXE" && hasClassContaining "BIOS" && hasClassContaining "aarch64";
+          }
+          {
+            name = "client-classes contains a UEFI x86_64 class";
+            ok = hasUefiX86Class;
+          }
+          {
+            name = "reservation present and outside the pool";
+            ok = subnet != null && builtins.elem reservedPxeIp resvIps;
+          }
+          {
+            name = "PXE classes required at the SUBNET level (PXE-E16 regression)";
+            ok = subnet != null && hasSubnetPxeClasses;
+          }
+          {
+            name = "match-client-id is false on the PXE subnet";
+            ok = subnet != null && matchClientIdFalse;
+          }
+        ];
       failures = builtins.filter (c: !c.ok) checks;
     in
     pkgs.runCommand "pxe-boot-kea-client-classes-check" { } (
