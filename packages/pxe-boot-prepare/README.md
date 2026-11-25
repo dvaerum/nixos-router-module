@@ -158,6 +158,13 @@ downloading the whole ISO into RAM. Other distros keep using HTTP.
   ISO's creation timestamp, and two ISOs built in the same second get served as each other.
 - **Cleanup unexports first, then unmounts**, retrying a busy unmount for
   `nfs.unmountRetrySecs` (nfsd holds an ISO ~20 s after a client's last read).
+- **A changed ISO folder is refreshed incrementally** (`pxe-boot-prepare refresh`, run by
+  `pxe-boot-prepare-refresh.service`), not by restarting the service: ISOs that are still
+  there and unchanged (same inode, size and mtime) stay mounted and exported, so a client
+  installing from one is not cut off when another is added or removed. A removed or
+  changed ISO is first dropped from the exports (`exportfs -r` re-reads them and keeps the
+  unchanged ones), then unmounted with the same busy retry; one that is still busy
+  afterwards is left mounted, logged, and retried by the next refresh.
 - Pin one ISO to HTTP with `nfs.httpOnlyIsos`. Options: see [options](../../docs/options.md).
 - The module does not manage a firewall; allow 111, 2049 and `nfs.mountdPort` from the PXE
   networks only. Exports are limited to those networks' subnets.
@@ -185,8 +192,11 @@ Not done or not confirmed:
 - Unattended Ubuntu installs (autoinstall) over NFS: the seed is passed through
   unchanged and stays an HTTP fetch, as the RHEL kickstart does, but it has not been
   run.
-- A refresh that leaves unchanged ISOs alone: today a refresh restarts
-  everything, which breaks a client that is mid-install over NFS.
+- The incremental refresh is covered by a VM test (`pxe-boot-nfs-refresh`: a reader keeps
+  a file of one ISO open over NFS while another ISO is added, replaced and removed), not
+  yet by a real install on hardware. Menus are rewritten only after the removed ISO's
+  unmount finishes, so a removed ISO can stay listed for as long as nfsd holds it (about
+  20 s measured).
 
 ## Development
 
