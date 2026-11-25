@@ -170,11 +170,14 @@ downloading the whole ISO into RAM. Other distros keep using HTTP.
 |---|---|---|
 | Ubuntu 26.04.1 Desktop | boots over NFS into the installer | unit tests, config check |
 | NixOS (this project's ISO builder) | not yet | VM test: PXE client boots over NFS and sends its beacon |
-| RHEL 9.6 / 10.2 | not yet | unit tests, VM test of the export and menu entry (mock ISO) |
+| RHEL 9.6 / 10.2 | boots over NFS into the graphical installer (a full install is not confirmed) | unit tests, VM test of the export, the menu entry and the installer's exact repo mount (mock ISO) |
 
-RHEL boots with `inst.repo=nfs:<router>:<mounted ISO>`: the installer mounts that
+RHEL boots with `inst.repo=nfs:<router>:<mounted ISO>/`: the installer mounts that
 export as its repo and loop-mounts `images/install.img` from it (checked against
 the real RHEL 9.6 and 10.2 initrds' dracut scripts; defaults to NFS version 3).
+The trailing slash matters: anaconda treats an `nfs:` repo ending in `.iso` as an ISO
+*file* and mounts its parent directory, and an ISO's mount point is a directory named
+after the file (found on real hardware: "mount.nfs: access denied by server").
 
 Not done or not confirmed:
 
