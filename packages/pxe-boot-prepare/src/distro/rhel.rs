@@ -84,6 +84,12 @@ impl DistroDetector for RhelDetector {
     /// export as its repo and find `images/install.img` and the packages in
     /// it, instead of downloading the installer image into RAM over HTTP. With
     /// no `nfsvers=` it defaults to NFS version 3, which the router serves.
+    ///
+    /// The path gets a trailing slash. The same hook treats an `nfs:` repo that
+    /// ends in `.iso` as an ISO *file* and mounts its parent directory to look
+    /// for it, and an ISO's mount point is a directory named after the file
+    /// (`.../rhel-10.2-x86_64-dvd.iso`): without the slash the installer asked
+    /// for the parent, which is not exported (seen on real hardware).
     fn generate_nfs_boot_params(
         &self,
         nfs_root: &str,
@@ -92,7 +98,7 @@ impl DistroDetector for RhelDetector {
     ) -> Option<Vec<String>> {
         let mut params = vec![
             "initrd=initrd.img".to_string(),
-            format!("inst.repo=nfs:{nfs_root}"),
+            format!("inst.repo=nfs:{}/", nfs_root.trim_end_matches('/')),
         ];
         push_kickstart(&mut params, autoinstall);
         Some(params)
@@ -316,7 +322,27 @@ mod tests {
             .unwrap();
         assert!(params.contains(&"initrd=initrd.img".to_string()));
         assert!(params
-            .contains(&"inst.repo=nfs:192.0.2.1:/run/pxe-boot/iso-mountpoint/rhel.iso".to_string()));
+            .contains(&"inst.repo=nfs:192.0.2.1:/run/pxe-boot/iso-mountpoint/rhel.iso/".to_string()));
+    }
+
+    #[test]
+    fn nfs_repo_path_never_ends_in_dot_iso() {
+        // anaconda's dracut hook treats an nfs: repo ending in ".iso" as an ISO
+        // *file* and mounts its PARENT directory to find it. The mount point of
+        // an ISO is a directory named after the file, so without a trailing
+        // slash the installer asks for a path that is not exported.
+        let params = RhelDetector::new()
+            .generate_nfs_boot_params(
+                "192.0.2.1:/run/pxe-boot/iso-mountpoint/rhel-10.2-x86_64-dvd.iso",
+                &boot_info(),
+                None,
+            )
+            .unwrap();
+        let repo = params
+            .iter()
+            .find_map(|p| p.strip_prefix("inst.repo="))
+            .expect("an inst.repo= parameter");
+        assert!(!repo.ends_with(".iso"), "{repo}");
     }
 
     #[test]

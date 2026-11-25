@@ -160,8 +160,19 @@ in
           menu = router.succeed("cat /srv/pxeboot/400/grub/grub.cfg")
           entry = [l for l in menu.splitlines() if "inst.repo=" in l and "${rhelNfsIsoName}" in l]
           assert entry, menu
-          assert "inst.repo=nfs:${routerIp}:/run/pxe-boot/iso-mountpoint/${rhelNfsIsoName}" in entry[0], entry[0]
+          # Trailing slash: RHEL's installer treats an nfs: repo ending in ".iso" as
+          # an ISO file and mounts the parent directory, which is not exported.
+          assert "inst.repo=nfs:${routerIp}:/run/pxe-boot/iso-mountpoint/${rhelNfsIsoName}/" in entry[0], entry[0]
           assert "inst.repo=http" not in entry[0], entry[0]
+
+      with subtest("The installer's exact repo path mounts and shows the installer image"):
+          # Same path and options the installer uses (NFS version 3, read-only).
+          router.succeed(
+              "mkdir -p /mnt/repo && mount -t nfs -o vers=3,nolock,ro "
+              "${routerIp}:/run/pxe-boot/iso-mountpoint/${rhelNfsIsoName}/ /mnt/repo"
+          )
+          router.succeed("test -f /mnt/repo/images/install.img")
+          router.succeed("umount /mnt/repo")
 
       with subtest("RHEL without an installer image stays on HTTP and is not exported"):
           exports = router.succeed("exportfs -v")
