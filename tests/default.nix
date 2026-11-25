@@ -14,6 +14,8 @@ in
   dhcp-ntp-servers-wire = (import ./dhcp-ntp-servers-wire.nix { inherit pkgs nixosModule; }).vm;
   dhcp-ntp-servers-global-wire =
     (import ./dhcp-ntp-servers-wire.nix { inherit pkgs nixosModule; }).globalVm;
+  dhcp-ntp-server-enable-wire =
+    (import ./dhcp-ntp-servers-wire.nix { inherit pkgs nixosModule; }).serveVm;
   dhcp-authoritative-wire = (import ./dhcp-authoritative-wire.nix { inherit pkgs nixosModule; }).vm;
   dhcp-client-use-routes = import ./dhcp-client-use-routes.nix { inherit pkgs nixosModule; };
   vxlan = import ./vxlan.nix { inherit pkgs nixosModule; };

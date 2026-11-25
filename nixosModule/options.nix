@@ -145,6 +145,20 @@ let
           default = true;
           example = false;
         };
+        ntpServerEnable = mkOption {
+          description = ''
+            Whether the NTP server this module runs (ntpd) serves the
+            DHCP-served subnets. When on, ntpd answers a subnet's clients and
+            the default `ntpServers` advertises that subnet's own router
+            address; when off, ntpd ignores the subnet and the default
+            advertises nothing. ntpd only runs while at least one subnet has
+            it on. This is the value for every subnet; set
+            `<interface>.dhcp.server.ntpServerEnable` to override it for one.
+          '';
+          type = bool;
+          default = true;
+          example = false;
+        };
         ntpServers = mkOption {
           description = ''
             The NTP server(s) advertised to DHCP clients (kea `ntp-servers`,
@@ -152,7 +166,8 @@ let
             `<interface>.dhcp.server.ntp-servers`:
             - `null` (the default): each subnet advertises its own router
               address, where the NTP server this module runs for DHCP-served
-              subnets answers.
+              subnets answers (see `ntpServerEnable`; nothing is advertised
+              where that is off).
             - `[ ]`: advertise no NTP server on any such subnet.
             - a non-empty list: advertise exactly those servers.
           '';
@@ -359,6 +374,21 @@ let
                 "192.168.1.1"
                 "1.1.1.1"
               ];
+            };
+            ntpServerEnable = mkOption {
+              description = ''
+                Override `dhcp.server.generalSettings.ntpServerEnable` (the
+                global value, on by default) for this subnet only: whether the
+                NTP server this module runs answers this subnet's clients and
+                the default advertises this router's address.
+
+                `null` (the default) follows the global value. `false` makes
+                ntpd ignore this subnet and advertise nothing by default;
+                `true` serves this subnet even when the global value is off.
+              '';
+              type = nullOr bool;
+              default = null;
+              example = false;
             };
             ntp-servers = mkOption {
               description = ''

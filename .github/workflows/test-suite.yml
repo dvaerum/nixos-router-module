@@ -89,4 +89,5 @@ jobs:
             .#checks.x86_64-linux.pxe-boot-secure-boot \
             .#checks.x86_64-linux.dhcp-authoritative-wire \
             .#checks.x86_64-linux.dhcp-ntp-servers-wire \
-            .#checks.x86_64-linux.dhcp-ntp-servers-global-wire
+            .#checks.x86_64-linux.dhcp-ntp-servers-global-wire \
+            .#checks.x86_64-linux.dhcp-ntp-server-enable-wire

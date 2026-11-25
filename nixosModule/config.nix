@@ -73,6 +73,15 @@ let
       exit "$status"
     ''
   );
+
+  # Whether the module's NTP server (ntpd) serves this DHCP subnet: its own
+  # `ntpServerEnable` if set, else the global one.
+  ntpServerEnabledFor =
+    dhcp_interface_conf:
+    if dhcp_interface_conf.dhcp.server.ntpServerEnable != null then
+      dhcp_interface_conf.dhcp.server.ntpServerEnable
+    else
+      cfg.dhcp.server.generalSettings.ntpServerEnable;
 in
 (lib.mkIf cfg.enable {
   assertions = lib.lists.concatMap (vxlan_conf: [
@@ -360,11 +369,22 @@ in
 
             # This subnet's own value, else the global one; null (both unset)
             # means "this router", [] means none.
-            ntpServers =
+            chosenNtpServers =
               if dhcp_server.ntp-servers != null then
                 dhcp_server.ntp-servers
               else
                 cfg.dhcp.server.generalSettings.ntpServers;
+
+            # The default (nothing chosen) is "this router", which only makes
+            # sense where ntpd actually serves this subnet: not when it is
+            # switched off for it, nor when ntpd is disabled from outside.
+            ntpServers =
+              if
+                chosenNtpServers == null && !(ntpServerEnabledFor dhcp_interface_conf && config.services.ntp.enable)
+              then
+                [ ]
+              else
+                chosenNtpServers;
           in
           {
             id = dhcp_server.id;
@@ -645,14 +665,19 @@ in
     };
 
   services.ntp = lib.attrsets.optionalAttrs (lib.length cfgSetDhcpServerInterfaceOnly > 0) {
-    enable = true;
+    # Runs while at least one DHCP-served subnet has it enabled.
+    enable = lib.any ntpServerEnabledFor cfgSetDhcpServerInterfaceOnly;
 
+    # ntpd's default policy still answers time requests from anywhere, so a
+    # subnet it must not serve gets an explicit `ignore`, not just no line.
     extraConfig = lib.strings.concatMapStringsSep "\n" (
       dhcp_interface_conf:
       let
         cidr = ipv4_fn.fromCidrString dhcp_interface_conf.dhcp.server.address;
       in
-      "restrict ${cidr.network} mask ${cidr.netmask} nomodify notrap nopeer"
+      "restrict ${cidr.network} mask ${cidr.netmask} ${
+        if ntpServerEnabledFor dhcp_interface_conf then "nomodify notrap nopeer" else "ignore"
+      }"
     ) cfgSetDhcpServerInterfaceOnly;
   };
 
