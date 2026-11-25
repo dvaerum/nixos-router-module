@@ -26,6 +26,10 @@ enum Commands {
     /// Prepare PXE boot environment
     Prepare,
 
+    /// Bring mounts, exports and menus in line with the ISO folder without
+    /// disturbing ISOs that are still there and unchanged
+    Refresh,
+
     /// Cleanup mounted ISOs
     Cleanup,
 
@@ -68,6 +72,9 @@ async fn main() -> anyhow::Result<()> {
     match cli.command {
         Commands::Prepare => {
             service.prepare().await?;
+        }
+        Commands::Refresh => {
+            service.refresh().await?;
         }
         Commands::Cleanup => {
             service.cleanup().await?;
@@ -176,6 +183,7 @@ mod tests {
     fn all_subcommands_parse_to_their_own_variant() {
         let cases: &[SubcommandCase] = &[
             ("prepare", |c| matches!(c, Commands::Prepare)),
+            ("refresh", |c| matches!(c, Commands::Refresh)),
             ("cleanup", |c| matches!(c, Commands::Cleanup)),
             ("list", |c| matches!(c, Commands::List)),
             ("status", |c| matches!(c, Commands::Status)),

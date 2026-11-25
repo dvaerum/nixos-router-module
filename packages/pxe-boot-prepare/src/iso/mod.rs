@@ -3,6 +3,7 @@ pub mod info;
 pub mod mount;
 pub mod nfs_exports;
 pub mod serve_tree;
+pub mod state;
 
 pub use discovery::{IsoDiscovering, IsoDiscovery};
 pub use info::find_file;

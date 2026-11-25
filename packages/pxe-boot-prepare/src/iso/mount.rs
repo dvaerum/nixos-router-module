@@ -13,6 +13,12 @@ use tokio::process::Command;
 pub trait IsoMounting: Send + Sync {
     async fn mount(&self, iso_path: &Path) -> Result<PathBuf>;
     async fn unmount_all(&self) -> Result<()>;
+    /// Where the ISO with this file name is (or would be) mounted.
+    fn mount_path(&self, iso_file_name: &str) -> PathBuf;
+    /// File names of the ISOs that are mounted right now.
+    async fn mounted_names(&self) -> Result<Vec<String>>;
+    /// Unmounts one ISO, retrying while it is busy.
+    async fn unmount_one(&self, iso_file_name: &str) -> Result<()>;
 }
 
 /// `/proc/mounts` octal-escapes space, tab, newline, and backslash in its
@@ -266,6 +272,33 @@ impl IsoMounter {
         Ok(())
     }
 
+    pub async fn mounted_names(&self) -> Result<Vec<String>> {
+        let mount_root = self.runtime_root.join("iso-mountpoint");
+        let mut entries = match tokio::fs::read_dir(&mount_root).await {
+            Ok(entries) => entries,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(e) => return Err(e).with_path(&mount_root),
+        };
+        let mut names = Vec::new();
+        while let Some(entry) = entries.next_entry().await? {
+            if self.is_mounted(&entry.path()).await? {
+                names.push(entry.file_name().to_string_lossy().into_owned());
+            }
+        }
+        Ok(names)
+    }
+
+    pub async fn unmount_one(&self, iso_file_name: &str) -> Result<()> {
+        let mount_point = self.mount_path(iso_file_name);
+        self.unmount(&mount_point).await?;
+        // Only an unmounted, empty directory is left; a failure here is
+        // cosmetic (the next mount reuses the directory).
+        if let Err(e) = tokio::fs::remove_dir(&mount_point).await {
+            tracing::warn!("Could not remove {}: {}", mount_point.display(), e);
+        }
+        Ok(())
+    }
+
     /// Unmount all ISOs (cleanup)
     pub async fn unmount_all(&self) -> Result<()> {
         let mount_root = self.runtime_root.join("iso-mountpoint");
@@ -309,16 +342,35 @@ impl IsoMounting for IsoMounter {
     async fn unmount_all(&self) -> Result<()> {
         IsoMounter::unmount_all(self).await
     }
+
+    fn mount_path(&self, iso_file_name: &str) -> PathBuf {
+        IsoMounter::mount_path(self, iso_file_name)
+    }
+
+    async fn mounted_names(&self) -> Result<Vec<String>> {
+        IsoMounter::mounted_names(self).await
+    }
+
+    async fn unmount_one(&self, iso_file_name: &str) -> Result<()> {
+        IsoMounter::unmount_one(self, iso_file_name).await
+    }
 }
 
 /// Test double for [`IsoMounting`] -- `pub` so `lib.rs`'s test module can
 /// use it (see the note on `FakeIsoDiscovery` in iso/discovery.rs).
 /// Keyed by ISO file name (not the full path), since that's the only part
 /// callers can predict without depending on a real discovered path.
+/// Cloning shares the mount table and event log, so a test can hand one
+/// clone to a service and keep another to inspect it (or to build the next
+/// service of a multi-run scenario on the same "mounts").
 #[cfg(test)]
+#[derive(Clone)]
 pub struct FakeIsoMounter {
     successes: std::collections::HashMap<String, PathBuf>,
     failures: std::collections::HashMap<String, String>,
+    busy: std::collections::HashSet<String>,
+    mounted: std::sync::Arc<std::sync::Mutex<std::collections::BTreeSet<String>>>,
+    events: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
 }
 
 #[cfg(test)]
@@ -334,6 +386,9 @@ impl FakeIsoMounter {
         Self {
             successes: Default::default(),
             failures: Default::default(),
+            busy: Default::default(),
+            mounted: Default::default(),
+            events: Default::default(),
         }
     }
 
@@ -347,16 +402,53 @@ impl FakeIsoMounter {
             .insert(iso_file_name.to_string(), reason.to_string());
         self
     }
+
+    /// Unmounting this ISO always fails with "target is busy".
+    pub fn busy_on_unmount(mut self, iso_file_name: &str) -> Self {
+        self.busy.insert(iso_file_name.to_string());
+        self
+    }
+
+    /// Pretends the ISO was already mounted before the service started.
+    pub fn already_mounted(self, iso_file_name: &str) -> Self {
+        self.mounted.lock().unwrap().insert(iso_file_name.to_string());
+        self
+    }
+
+    /// `mount <name>` / `unmount <name>` entries, in call order.
+    pub fn events(&self) -> Vec<String> {
+        self.events.lock().unwrap().clone()
+    }
+
+    pub fn currently_mounted(&self) -> Vec<String> {
+        self.mounted.lock().unwrap().iter().cloned().collect()
+    }
+
+    /// Shared with `FakeNfsReloader` so a test sees mounts, unmounts and
+    /// export reloads in one ordered list.
+    pub fn event_log(&self) -> std::sync::Arc<std::sync::Mutex<Vec<String>>> {
+        self.events.clone()
+    }
+
+    fn log(&self, event: String) {
+        self.events.lock().unwrap().push(event);
+    }
+}
+
+#[cfg(test)]
+fn file_name_of(iso_path: &Path) -> String {
+    iso_path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default()
 }
 
 #[cfg(test)]
 #[async_trait]
 impl IsoMounting for FakeIsoMounter {
     async fn mount(&self, iso_path: &Path) -> Result<PathBuf> {
-        let name = iso_path
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_default();
+        let name = file_name_of(iso_path);
+        self.log(format!("mount {name}"));
 
         if let Some(reason) = self.failures.get(&name) {
             return Err(PxeBootError::MountFailed {
@@ -365,12 +457,36 @@ impl IsoMounting for FakeIsoMounter {
             });
         }
         if let Some(path) = self.successes.get(&name) {
+            self.mounted.lock().unwrap().insert(name);
             return Ok(path.clone());
         }
         panic!("FakeIsoMounter: no configured result for '{name}' -- call .succeeding_for() or .failing_for() in the test setup");
     }
 
     async fn unmount_all(&self) -> Result<()> {
+        Ok(())
+    }
+
+    fn mount_path(&self, iso_file_name: &str) -> PathBuf {
+        self.successes
+            .get(iso_file_name)
+            .cloned()
+            .unwrap_or_else(|| panic!("FakeIsoMounter: no mount path for '{iso_file_name}'"))
+    }
+
+    async fn mounted_names(&self) -> Result<Vec<String>> {
+        Ok(self.currently_mounted())
+    }
+
+    async fn unmount_one(&self, iso_file_name: &str) -> Result<()> {
+        self.log(format!("unmount {iso_file_name}"));
+        if self.busy.contains(iso_file_name) {
+            return Err(PxeBootError::MountFailed {
+                path: PathBuf::from(iso_file_name),
+                reason: "umount command exited with exit status: 32: target is busy.".into(),
+            });
+        }
+        self.mounted.lock().unwrap().remove(iso_file_name);
         Ok(())
     }
 }

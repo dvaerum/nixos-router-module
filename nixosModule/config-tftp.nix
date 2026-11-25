@@ -264,8 +264,8 @@ lib.mkMerge [
       "loop"
     ];
 
-    # Re-run pxe-boot-prepare whenever the manually-managed ISO directory
-    # changes, instead of requiring an operator to manually restart the
+    # Refresh the mounts, exports and menus whenever the manually-managed
+    # ISO directory changes, instead of requiring an operator to restart the
     # service (or wait for the next switch) after copying in a new ISO.
     # `PathChanged=` fires only on IN_CLOSE_WRITE (a writer closing the
     # file after finishing), not on every write -- an in-progress
@@ -274,10 +274,12 @@ lib.mkMerge [
     # The path unit triggers a separate `-refresh` unit rather than
     # pxe-boot-prepare.service itself: that one is a RemainAfterExit
     # oneshot, so it stays active after boot and starting an active unit
-    # does nothing -- a copied-in ISO would never reach the menu. A
-    # restart also runs the unit's ExecStop cleanup, so ISOs removed from
-    # the folder get unmounted instead of lingering. Several changes in a
-    # row just cause a few redundant restarts, which is harmless.
+    # does nothing -- a copied-in ISO would never reach the menu. The
+    # refresh unit does not restart it either: a restart unexports and
+    # unmounts every ISO, which cuts off a client that is installing from
+    # one while another ISO is added or removed. `pxe-boot-prepare refresh`
+    # touches only the ISOs that changed. Several changes in a row just
+    # cause a few cheap refreshes, serialised by the prepare lock.
     systemd.paths.pxe-boot-prepare-auto-refresh = {
       wantedBy = [ "paths.target" ];
       pathConfig = {
@@ -313,10 +315,19 @@ lib.mkMerge [
 
     systemd.services = {
       "pxe-boot-prepare-refresh" = {
-        description = "PXE Boot - Re-run prepare after the ISO folder changed";
+        description = "PXE Boot - Refresh mounts, exports and menus after the ISO folder changed";
+        # mount/umount for the ISOs, exportfs to re-read the exports without
+        # unexporting the unchanged ones.
+        path = [ pkgs.util-linux ] ++ lib.optional nfsEnabled pkgs.nfs-utils;
+        environment = {
+          PXE_BOOT_PREPARE = "${pxe-boot-prepare-pkg}/bin/pxe-boot-prepare";
+          PXE_BOOT_CONFIG = "${pxe-config}";
+        };
+        script = builtins.readFile ./scripts/pxe-boot-refresh.sh;
         serviceConfig = {
           Type = "oneshot";
-          ExecStart = "${config.systemd.package}/bin/systemctl restart pxe-boot-prepare.service";
+          # Same as pxe-boot-prepare.service: nginx reads what this creates.
+          UMask = "0022";
         };
       };
 

@@ -32,6 +32,7 @@ in
   pxe-boot-nfs-wiring = pxe-boot.nfsWiringCheck;
   pxe-boot-secure-boot = (import ./pxe-boot/secure-boot.nix { inherit pkgs nixosModule; }).vm;
   pxe-boot-nixos-nfs = (import ./pxe-boot/nixos-nfs.nix { inherit pkgs nixosModule; }).vm;
+  pxe-boot-nfs-refresh = (import ./pxe-boot/nfs-refresh.nix { inherit pkgs nixosModule; }).vm;
   pxe-boot-picky-client = (import ./pxe-boot/picky-client.nix { inherit pkgs nixosModule; }).vm;
   iso-builder-network-download-options = import ./iso-builder-network-download-options.nix {
     inherit pkgs;

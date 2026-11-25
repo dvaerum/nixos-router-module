@@ -9,8 +9,84 @@
 //! `fsid=` per export overrides the derived ID.
 
 use crate::error::{PxeBootError, Result};
+use async_trait::async_trait;
 use std::collections::HashMap;
 use std::path::Path;
+use tokio::process::Command;
+
+/// Tells the NFS server to re-read the exports file. Behind a trait so the
+/// unit tests don't need a kernel NFS server.
+#[async_trait]
+pub trait NfsExportReloading: Send + Sync {
+    async fn reload(&self) -> Result<()>;
+}
+
+/// `exportfs -r` re-reads `/etc/exports.d`, drops exports that vanished from
+/// it and leaves unchanged ones exported (exportfs(8) -r: removes entries
+/// "which have been deleted"; re-reading alone unexports nothing). That is
+/// what lets `refresh` add or remove one ISO without cutting off a client
+/// reading another.
+pub struct ExportfsReloader;
+
+#[async_trait]
+impl NfsExportReloading for ExportfsReloader {
+    async fn reload(&self) -> Result<()> {
+        let output = Command::new("exportfs").arg("-r").output().await?;
+        if !output.status.success() {
+            return Err(PxeBootError::Config(format!(
+                "exportfs -r exited with {}: {}",
+                output.status,
+                String::from_utf8_lossy(&output.stderr).trim()
+            )));
+        }
+        Ok(())
+    }
+}
+
+/// Test double: logs `reload [<exported paths at that moment>]` so a test
+/// can tell what the NFS server would have been told to keep.
+#[cfg(test)]
+pub struct FakeNfsReloader {
+    exports_file: std::path::PathBuf,
+    events: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+    fail: bool,
+}
+
+#[cfg(test)]
+impl FakeNfsReloader {
+    pub fn new(
+        exports_file: std::path::PathBuf,
+        events: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+    ) -> Self {
+        Self { exports_file, events, fail: false }
+    }
+
+    pub fn failing(mut self) -> Self {
+        self.fail = true;
+        self
+    }
+}
+
+#[cfg(test)]
+#[async_trait]
+impl NfsExportReloading for FakeNfsReloader {
+    async fn reload(&self) -> Result<()> {
+        let text = std::fs::read_to_string(&self.exports_file).unwrap_or_default();
+        let paths: Vec<&str> = text
+            .lines()
+            .filter(|l| !l.starts_with('#'))
+            .filter_map(|l| l.split_whitespace().next())
+            .collect();
+        self.events
+            .lock()
+            .unwrap()
+            .push(format!("reload [{}]", paths.join(",")));
+        if self.fail {
+            return Err(PxeBootError::Config("simulated exportfs failure".into()));
+        }
+        Ok(())
+    }
+}
 
 /// Lowest `fsid` handed out. `fsid=0` is NFSv4's pseudo-root and small
 /// numbers are what admins write by hand, so stay clear of both.
