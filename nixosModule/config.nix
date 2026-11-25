@@ -309,10 +309,15 @@ in
     lib.attrsets.optionalAttrs (lib.length cfgSetDhcpServerInterfaceOnly > 0) {
       enable = true;
       settings = {
-        control-socket = {
-          socket-type = "unix";
-          socket-name = "/run/kea/kea4-ctrl-socket";
-        };
+        # A list since Kea 3.0; the single-socket key `control-socket` is the same key and a config with both is
+        # refused. A host adds more sockets (an `http` one needs a login since Kea 3.2) with its own
+        # `services.kea.dhcp4.settings.control-sockets` entries: lists merge.
+        control-sockets = [
+          {
+            socket-type = "unix";
+            socket-name = "/run/kea/kea4-ctrl-socket";
+          }
+        ];
 
         interfaces-config = {
           interfaces = lib.forEach cfgSetDhcpServerInterfaceOnly (
