@@ -10,6 +10,8 @@ in
   basic-routing = import ./basic-routing.nix { inherit pkgs nixosModule; };
   dhcp-server = import ./dhcp-server.nix { inherit pkgs nixosModule; };
   dhcp-authoritative = import ./dhcp-authoritative.nix { inherit pkgs nixosModule; };
+  dhcp-ntp-servers = import ./dhcp-ntp-servers.nix { inherit pkgs nixosModule; };
+  dhcp-ntp-servers-wire = (import ./dhcp-ntp-servers-wire.nix { inherit pkgs nixosModule; }).vm;
   dhcp-authoritative-wire = (import ./dhcp-authoritative-wire.nix { inherit pkgs nixosModule; }).vm;
   dhcp-client-use-routes = import ./dhcp-client-use-routes.nix { inherit pkgs nixosModule; };
   vxlan = import ./vxlan.nix { inherit pkgs nixosModule; };

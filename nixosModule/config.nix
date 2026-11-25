@@ -387,6 +387,18 @@ in
                   else
                     lib.strings.concatStringsSep ", " dhcp_server.dns-servers;
               }
+              # Same convention for NTP: null -> the router itself (the module
+              # runs an NTP server on every DHCP-served subnet); [] -> none.
+              ++ lib.lists.optional (dhcp_server.ntp-servers != [ ]) {
+                # code = 42;
+                name = "ntp-servers";
+                csv-format = true;
+                data =
+                  if dhcp_server.ntp-servers == null then
+                    cidr.address
+                  else
+                    lib.strings.concatStringsSep ", " dhcp_server.ntp-servers;
+              }
               ++ lib.lists.optional (dhcp_server.default-route) {
                 # code = 3;
                 name = "routers";

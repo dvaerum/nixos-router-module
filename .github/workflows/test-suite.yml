@@ -47,6 +47,7 @@ jobs:
             .#checks.x86_64-linux.basic-routing \
             .#checks.x86_64-linux.dhcp-server \
             .#checks.x86_64-linux.dhcp-authoritative \
+            .#checks.x86_64-linux.dhcp-ntp-servers \
             .#checks.x86_64-linux.vxlan \
             .#checks.x86_64-linux.dns-server \
             .#checks.x86_64-linux.dns-server-disabled
@@ -86,4 +87,5 @@ jobs:
           nix build -L --no-link \
             .#checks.x86_64-linux.pxe-boot \
             .#checks.x86_64-linux.pxe-boot-secure-boot \
-            .#checks.x86_64-linux.dhcp-authoritative-wire
+            .#checks.x86_64-linux.dhcp-authoritative-wire \
+            .#checks.x86_64-linux.dhcp-ntp-servers-wire

@@ -76,6 +76,8 @@
           basic-routing = tests.basic-routing;
           dhcp-server = tests.dhcp-server;
           dhcp-authoritative = tests.dhcp-authoritative;
+          dhcp-ntp-servers = tests.dhcp-ntp-servers;
+          dhcp-ntp-servers-wire = tests.dhcp-ntp-servers-wire;
           dhcp-authoritative-wire = tests.dhcp-authoritative-wire;
           dhcp-client-use-routes = tests.dhcp-client-use-routes;
           pxe-boot = tests.pxe-boot;

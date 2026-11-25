@@ -345,6 +345,23 @@ let
                 "1.1.1.1"
               ];
             };
+            ntp-servers = mkOption {
+              description = ''
+                The NTP server(s) advertised to DHCP clients (kea
+                `ntp-servers`, DHCP option 42):
+                - `null` (the default): advertise this router's own `address`,
+                  where the NTP server this module runs for DHCP-served subnets
+                  answers.
+                - `[ ]`: advertise no NTP server at all.
+                - a non-empty list: advertise exactly those servers.
+              '';
+              type = nullOr (listOf networkTypes.ipAddress);
+              default = null;
+              example = [
+                "192.168.1.1"
+                "203.0.113.123"
+              ];
+            };
             default-route = mkOption {
               description = ''
                 Whether to advertise a default route. `false` sends no
