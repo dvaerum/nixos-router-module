@@ -190,11 +190,12 @@ after the file (found on real hardware: "mount.nfs: access denied by server").
 
 Not done or not confirmed:
 
-- The incremental refresh is covered by a VM test (`pxe-boot-nfs-refresh`: a reader keeps
-  a file of one ISO open over NFS while another ISO is added, replaced and removed), not
-  yet by a real install on hardware. Menus are rewritten only after the removed ISO's
-  unmount finishes, so a removed ISO can stay listed for as long as nfsd holds it (about
-  20 s measured).
+- The incremental refresh was tested by hand on the deployed router: a local NFS client
+  kept reading an ISO while another ISO was added to and removed from the ISO folder (no
+  read errors, no service restart, the other ISOs stayed mounted and exported). It has
+  not been tried with a PXE client installing from another machine. Menus are rewritten
+  only after the removed ISO's unmount finishes, so a removed ISO can stay listed for as
+  long as nfsd holds it (about 20 s measured).
 
 ## Development
 
