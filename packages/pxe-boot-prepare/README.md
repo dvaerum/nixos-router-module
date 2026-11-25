@@ -169,7 +169,7 @@ downloading the whole ISO into RAM. Other distros keep using HTTP.
 | Distro | Real hardware | Automated test |
 |---|---|---|
 | Ubuntu 26.04.1 Desktop | boots over NFS into the installer | unit tests, config check |
-| NixOS (this project's ISO builder) | not yet | VM test: PXE client boots over NFS and sends its beacon |
+| NixOS (this project's ISO builder) | boots over NFS to the live system (kernel and initrd over HTTP, the ISO tree over NFS, no whole-ISO download) | VM test: PXE client boots over NFS and sends its beacon |
 | RHEL 10.2 | full install completed over NFS (installer image and packages, about 2 GB read over NFS, none over HTTP) | unit tests, VM test of the export, the menu entry and the installer's exact repo mount (mock ISO) |
 
 RHEL 9.6 uses the same boot parameters and was seen reaching the same mounts; only 10.2
