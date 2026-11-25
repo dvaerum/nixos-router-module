@@ -126,6 +126,25 @@ let
           type = int;
           default = 4000;
         };
+        authoritative = mkOption {
+          description = ''
+            Whether Kea is the authoritative DHCP server for the subnets it
+            serves. An authoritative server answers a client that asks to
+            renew an address it has no lease for with a DHCPNAK straight away,
+            so the client drops the stale address and starts over. A
+            non-authoritative one stays silent, and the client keeps retrying
+            the old address until its own timers run out.
+
+            This is the value for every subnet; set
+            `<interface>.dhcp.server.authoritative` to override it for one
+            subnet. Turn it off, for that subnet, wherever another DHCP server
+            also answers on the same network: two authoritative servers
+            would NAK each other's leases.
+          '';
+          type = bool;
+          default = true;
+          example = false;
+        };
         domainName = domainName;
       };
     };
@@ -362,6 +381,22 @@ let
               type = bool;
               default = false;
               example = true;
+            };
+
+            authoritative = mkOption {
+              description = ''
+                Override `dhcp.server.generalSettings.authoritative` (the
+                global value, on by default) for this subnet only.
+
+                `null` (the default) means "follow the global value": nothing
+                is written to this subnet's Kea configuration and Kea uses the
+                global one. Set `false` on a subnet that shares its network
+                with another DHCP server, or `true` to be authoritative on one
+                subnet while the global value is off.
+              '';
+              type = nullOr bool;
+              default = null;
+              example = false;
             };
 
             reservations = mkOption {

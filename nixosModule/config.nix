@@ -326,6 +326,7 @@ in
         rebind-timer = cfg.dhcp.server.generalSettings.rebindTimer;
         renew-timer = cfg.dhcp.server.generalSettings.renewTimer;
         valid-lifetime = cfg.dhcp.server.generalSettings.validLifetime;
+        authoritative = cfg.dhcp.server.generalSettings.authoritative;
 
         loggers = [
           {
@@ -433,6 +434,11 @@ in
                 hostname = value.hostname;
               }
             ) dhcp_interface_conf.dhcp.server.reservations;
+          }
+          // lib.attrsets.optionalAttrs (dhcp_server.authoritative != null) {
+            # Only written when this subnet overrides the global value: an
+            # unset subnet inherits `authoritative` inside Kea itself.
+            authoritative = dhcp_server.authoritative;
           }
           // lib.attrsets.optionalAttrs (qualifyingSuffixFor dhcp_interface_conf != null) {
             # Qualifies a reservation's `hostname` (and, per Kea's default

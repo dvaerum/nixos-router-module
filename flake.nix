@@ -75,6 +75,8 @@
         checks = {
           basic-routing = tests.basic-routing;
           dhcp-server = tests.dhcp-server;
+          dhcp-authoritative = tests.dhcp-authoritative;
+          dhcp-authoritative-wire = tests.dhcp-authoritative-wire;
           dhcp-client-use-routes = tests.dhcp-client-use-routes;
           pxe-boot = tests.pxe-boot;
           pxe-boot-tftp-warnings = tests.pxe-boot-tftp-warnings;

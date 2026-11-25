@@ -9,6 +9,8 @@ in
 {
   basic-routing = import ./basic-routing.nix { inherit pkgs nixosModule; };
   dhcp-server = import ./dhcp-server.nix { inherit pkgs nixosModule; };
+  dhcp-authoritative = import ./dhcp-authoritative.nix { inherit pkgs nixosModule; };
+  dhcp-authoritative-wire = (import ./dhcp-authoritative-wire.nix { inherit pkgs nixosModule; }).vm;
   dhcp-client-use-routes = import ./dhcp-client-use-routes.nix { inherit pkgs nixosModule; };
   vxlan = import ./vxlan.nix { inherit pkgs nixosModule; };
   dns-server = dns-server.vm;
