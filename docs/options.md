@@ -680,6 +680,50 @@ integer between 1 and 4294967294 (both inclusive)
 
 
 
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.server\.ntp-servers
+
+
+
+The NTP server(s) advertised to DHCP clients on this subnet
+(kea ` ntp-servers `, DHCP option 42), overriding
+` dhcp.server.generalSettings.ntpServers `:
+
+ - ` null ` (the default): follow the global value\. With that left
+   at its default, this router’s own ` address ` is advertised,
+   where the NTP server this module runs for DHCP-served
+   subnets answers\.
+ - ` [ ] `: advertise no NTP server on this subnet\.
+ - a non-empty list: advertise exactly those servers\.
+
+
+
+*Type:*
+null or (list of (IP address))
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+[
+  "192.168.1.1"
+  "203.0.113.123"
+]
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
 ## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.server\.pxe-boot\.enable
 
 
@@ -2071,6 +2115,50 @@ integer between 1 and 4294967294 (both inclusive)
 
 
 
+## my\.router\.configInterface\.\<name>\.dhcp\.server\.ntp-servers
+
+
+
+The NTP server(s) advertised to DHCP clients on this subnet
+(kea ` ntp-servers `, DHCP option 42), overriding
+` dhcp.server.generalSettings.ntpServers `:
+
+ - ` null ` (the default): follow the global value\. With that left
+   at its default, this router’s own ` address ` is advertised,
+   where the NTP server this module runs for DHCP-served
+   subnets answers\.
+ - ` [ ] `: advertise no NTP server on this subnet\.
+ - a non-empty list: advertise exactly those servers\.
+
+
+
+*Type:*
+null or (list of (IP address))
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+[
+  "192.168.1.1"
+  "203.0.113.123"
+]
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
 ## my\.router\.configInterface\.\<name>\.dhcp\.server\.pxe-boot\.enable
 
 
@@ -3226,8 +3314,6 @@ attribute set of (open submodule of attribute set of anything)
 
 ## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.clientClasses\.\<name>\.test
 
-
-
 Kea classification test expression\.
 
 
@@ -3274,6 +3360,8 @@ false
 
 
 ## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.dns-server\.enable
+
+
 
 Enable the DNS Server (Unbound) for this network interface\.
 
@@ -3493,6 +3581,50 @@ integer between 1 and 4294967294 (both inclusive)
 
 ```nix
 1024
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.ntp-servers
+
+
+
+The NTP server(s) advertised to DHCP clients on this subnet
+(kea ` ntp-servers `, DHCP option 42), overriding
+` dhcp.server.generalSettings.ntpServers `:
+
+ - ` null ` (the default): follow the global value\. With that left
+   at its default, this router’s own ` address ` is advertised,
+   where the NTP server this module runs for DHCP-served
+   subnets answers\.
+ - ` [ ] `: advertise no NTP server on this subnet\.
+ - a non-empty list: advertise exactly those servers\.
+
+
+
+*Type:*
+null or (list of (IP address))
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+[
+  "192.168.1.1"
+  "203.0.113.123"
+]
 ```
 
 *Declared by:*
@@ -4441,6 +4573,48 @@ list of (FQDN (Fully Qualified Domain Name))
 
 ```nix
 [ ]
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.dhcp\.server\.generalSettings\.ntpServers
+
+
+
+The NTP server(s) advertised to DHCP clients (kea ` ntp-servers `,
+DHCP option 42) on every subnet that does not set its own
+` <interface>.dhcp.server.ntp-servers `:
+
+ - ` null ` (the default): each subnet advertises its own router
+   address, where the NTP server this module runs for DHCP-served
+   subnets answers\.
+ - ` [ ] `: advertise no NTP server on any such subnet\.
+ - a non-empty list: advertise exactly those servers\.
+
+
+
+*Type:*
+null or (list of (IP address))
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+[
+  "203.0.113.123"
+]
 ```
 
 *Declared by:*
@@ -6066,6 +6240,50 @@ integer between 1 and 4294967294 (both inclusive)
 
 
 
+## my\.router\.vxlanInterfaces\.\<name>\.dhcp\.server\.ntp-servers
+
+
+
+The NTP server(s) advertised to DHCP clients on this subnet
+(kea ` ntp-servers `, DHCP option 42), overriding
+` dhcp.server.generalSettings.ntpServers `:
+
+ - ` null ` (the default): follow the global value\. With that left
+   at its default, this router’s own ` address ` is advertised,
+   where the NTP server this module runs for DHCP-served
+   subnets answers\.
+ - ` [ ] `: advertise no NTP server on this subnet\.
+ - a non-empty list: advertise exactly those servers\.
+
+
+
+*Type:*
+null or (list of (IP address))
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+[
+  "192.168.1.1"
+  "203.0.113.123"
+]
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
 ## my\.router\.vxlanInterfaces\.\<name>\.dhcp\.server\.pxe-boot\.enable
 
 
@@ -6334,8 +6552,6 @@ string
 
 ## my\.router\.vxlanInterfaces\.\<name>\.dhcp\.server\.reservations\.\<name>\.hostname
 
-
-
 DNS hostname for this reservation\.
 
 When set, ` dns-server.enable ` (this router’s, not
@@ -6540,6 +6756,8 @@ submodule
 
 
 ## my\.router\.vxlanInterfaces\.\<name>\.dhcp\.static\.dns-servers
+
+
 
 Set the IP address(es) of the dns-server(s)
 
