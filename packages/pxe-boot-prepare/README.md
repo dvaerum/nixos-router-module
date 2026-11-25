@@ -169,6 +169,7 @@ downloading the whole ISO into RAM. Other distros keep using HTTP.
 | Distro | Real hardware | Automated test |
 |---|---|---|
 | Ubuntu 26.04.1 Desktop | boots over NFS into the installer | unit tests, config check |
+| Ubuntu 26.04.1 Server | unattended (autoinstall) install completed over NFS and the installed system booted from disk (the ISO, about 2.5 GB, read over NFS; the seed is an HTTP fetch) | unit tests |
 | NixOS (this project's ISO builder) | boots over NFS to the live system (kernel and initrd over HTTP, the ISO tree over NFS, no whole-ISO download) | VM test: PXE client boots over NFS and sends its beacon |
 | RHEL 10.2 | full interactive and unattended (kickstart) installs completed over NFS (installer image and packages, about 2 GB read over NFS, none over HTTP; the kickstart itself is an HTTP fetch) | unit tests, VM test of the export, the menu entry and the installer's exact repo mount (mock ISO) |
 
@@ -182,9 +183,6 @@ after the file (found on real hardware: "mount.nfs: access denied by server").
 
 Not done or not confirmed:
 
-- Unattended Ubuntu installs (autoinstall) over NFS: the seed is passed through
-  unchanged and stays an HTTP fetch, as the RHEL kickstart does, but it has not been
-  run.
 - A refresh that leaves unchanged ISOs alone: today a refresh restarts
   everything, which breaks a client that is mid-install over NFS.
 
