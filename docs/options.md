@@ -5598,6 +5598,142 @@ absolute path
 
 
 
+## my\.router\.pxe-boot\.nfs\.enable
+
+
+
+Serve the mounted ISOs over NFS (read-only) and boot every
+ISO whose distribution supports it from there, instead of
+downloading the whole ISO into the client’s RAM\. Distributions
+without NFS support keep using the HTTP download, so enabling
+this never breaks an existing entry\.
+
+Currently supported: Ubuntu (Server and Desktop), RHEL (an ISO
+that carries ` images/install.img `) and NixOS ISOs built by this
+project’s ISO builder\. Because the ISO stays on the router,
+much smaller machines can boot Desktop-sized images\.
+
+Starts the kernel NFS server (` services.nfs.server `, NFSv3
+only – the initramfs NFS client does not speak NFSv4) with one
+read-only export per ISO, limited to the subnets of the
+PXE-enabled interfaces\. This module does not manage a
+firewall: keep ports 111, 2049 and ` nfs.mountdPort ` reachable
+from the PXE networks only\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+
+
+*Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.pxe-boot\.nfs\.httpOnlyIsos
+
+
+
+ISO file names that keep using the HTTP download even though
+NFS is enabled\. A per-image escape hatch for when NFS boot
+misbehaves for one ISO\.
+
+
+
+*Type:*
+list of string
+
+
+
+*Default:*
+
+```nix
+[ ]
+```
+
+
+
+*Example:*
+
+```nix
+[
+  "ubuntu-26.04.1-desktop-amd64.iso"
+]
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.pxe-boot\.nfs\.mountdPort
+
+
+
+Fixed port for the NFS mount daemon, so it can be allowed
+through a firewall (it is otherwise assigned randomly)\.
+
+
+
+*Type:*
+16 bit unsigned integer; between 0 and 65535 (both inclusive)
+
+
+
+*Default:*
+
+```nix
+20048
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.pxe-boot\.nfs\.unmountRetrySecs
+
+
+
+How long, in seconds, cleanup keeps retrying to unmount an ISO
+that is still busy\. The NFS server holds an ISO for a short
+while after a client last read it, so unmounting right after
+unexporting fails; measured at about 20 seconds\.
+
+
+
+*Type:*
+unsigned integer, meaning >=0
+
+
+
+*Default:*
+
+```nix
+60
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
 ## my\.router\.pxe-boot\.nixIsos
 
 
@@ -6443,8 +6579,6 @@ null
 
 ## my\.router\.vxlanInterfaces\.\<name>\.dhcp\.server\.id
 
-
-
 Subnet IDs must be greater than zero and less than 4294967295
 
 
@@ -6633,6 +6767,8 @@ string
 
 
 ## my\.router\.vxlanInterfaces\.\<name>\.dhcp\.server\.pxe-boot\.defaultScriptName
+
+
 
 Select which autoinstall script should be selected by default\.
 
@@ -7502,6 +7638,35 @@ true
 
 Enable downloading ISO via network during initrd\.
 This allows using findiso=http://… kernel parameter to download the ISO over network\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/modules/iso-builder](file:///home/runner/work/nixos-router-module/nixos-router-module/modules/iso-builder)
+
+
+
+## pxe-boot-iso\.enableNfsBoot
+
+
+
+Let the initrd mount the ISO’s contents from an NFS export instead
+of downloading the whole ISO, selected at boot with
+` nfsiso=<server>:<exported path> ` on the kernel command line (what
+` my.router.pxe-boot.nfs ` generates for this ISO)\. Adds an NFS
+client to the initrd; without the ` nfsiso= ` parameter nothing
+changes\. Independent of ` enableNetworkDownload `\.
 
 
 
