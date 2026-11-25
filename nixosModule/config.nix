@@ -338,16 +338,21 @@ in
         authoritative = cfg.dhcp.server.generalSettings.authoritative;
 
         loggers = [
-          {
-            name = "kea-dhcp4";
-            output-options = [
-              {
-                output = "stdout";
-                pattern = "%-5p [%c/T-%t] %m\n";
-              }
-            ];
-            severity = "DEBU";
-          }
+          (
+            {
+              name = "kea-dhcp4";
+              output-options = [
+                {
+                  output = "stdout";
+                  pattern = "%-5p [%c/T-%t] %m\n";
+                }
+              ];
+              severity = cfg.dhcp.server.generalSettings.logSeverity;
+            }
+            // lib.attrsets.optionalAttrs (cfg.dhcp.server.generalSettings.logDebugLevel != null) {
+              debuglevel = cfg.dhcp.server.generalSettings.logDebugLevel;
+            }
+          )
         ];
 
         subnet4 = lib.forEach cfgSetDhcpServerInterfaceOnly (

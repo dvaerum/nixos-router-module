@@ -10,6 +10,8 @@ in
   basic-routing = import ./basic-routing.nix { inherit pkgs nixosModule; };
   dhcp-server = import ./dhcp-server.nix { inherit pkgs nixosModule; };
   dhcp-authoritative = import ./dhcp-authoritative.nix { inherit pkgs nixosModule; };
+  dhcp-kea-logging = (import ./dhcp-kea-logging.nix { inherit pkgs nixosModule; }).config;
+  dhcp-kea-logging-wire = (import ./dhcp-kea-logging.nix { inherit pkgs nixosModule; }).vm;
   dhcp-ntp-servers = import ./dhcp-ntp-servers.nix { inherit pkgs nixosModule; };
   dhcp-ntp-servers-wire = (import ./dhcp-ntp-servers-wire.nix { inherit pkgs nixosModule; }).vm;
   dhcp-ntp-servers-global-wire =

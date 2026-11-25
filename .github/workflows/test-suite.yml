@@ -47,6 +47,7 @@ jobs:
             .#checks.x86_64-linux.basic-routing \
             .#checks.x86_64-linux.dhcp-server \
             .#checks.x86_64-linux.dhcp-authoritative \
+            .#checks.x86_64-linux.dhcp-kea-logging \
             .#checks.x86_64-linux.dhcp-ntp-servers \
             .#checks.x86_64-linux.vxlan \
             .#checks.x86_64-linux.dns-server \
@@ -90,4 +91,5 @@ jobs:
             .#checks.x86_64-linux.dhcp-authoritative-wire \
             .#checks.x86_64-linux.dhcp-ntp-servers-wire \
             .#checks.x86_64-linux.dhcp-ntp-servers-global-wire \
-            .#checks.x86_64-linux.dhcp-ntp-server-enable-wire
+            .#checks.x86_64-linux.dhcp-ntp-server-enable-wire \
+            .#checks.x86_64-linux.dhcp-kea-logging-wire

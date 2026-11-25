@@ -126,6 +126,33 @@ let
           type = int;
           default = 4000;
         };
+        logSeverity = mkOption {
+          description = ''
+            How much Kea (the DHCP server) logs, from quiet to loud: `FATAL`,
+            `ERROR`, `WARN`, `INFO`, `DEBUG`. `INFO` is what Kea logs at by
+            default and what this module ran at in practice. Use `DEBUG`
+            (with `logDebugLevel`) only while investigating a problem: it is
+            much louder.
+          '';
+          type = enum [
+            "FATAL"
+            "ERROR"
+            "WARN"
+            "INFO"
+            "DEBUG"
+          ];
+          default = "INFO";
+          example = "WARN";
+        };
+        logDebugLevel = mkOption {
+          description = ''
+            How detailed Kea's debug output is, 0 to 99 (higher is more).
+            Only used when `logSeverity` is `DEBUG`; `null` leaves it unset.
+          '';
+          type = nullOr (ints.between 0 99);
+          default = null;
+          example = 50;
+        };
         authoritative = mkOption {
           description = ''
             Whether Kea is the authoritative DHCP server for the subnets it

@@ -76,6 +76,8 @@
           basic-routing = tests.basic-routing;
           dhcp-server = tests.dhcp-server;
           dhcp-authoritative = tests.dhcp-authoritative;
+          dhcp-kea-logging = tests.dhcp-kea-logging;
+          dhcp-kea-logging-wire = tests.dhcp-kea-logging-wire;
           dhcp-ntp-servers = tests.dhcp-ntp-servers;
           dhcp-ntp-servers-wire = tests.dhcp-ntp-servers-wire;
           dhcp-ntp-servers-global-wire = tests.dhcp-ntp-servers-global-wire;
