@@ -96,4 +96,5 @@ jobs:
             .#checks.x86_64-linux.dhcp-ntp-server-enable-wire \
             .#checks.x86_64-linux.dhcp-kea-logging-wire \
             .#checks.x86_64-linux.pxe-boot-nixos-nfs \
+            .#checks.x86_64-linux.pxe-boot-nfs-refresh \
             .#checks.x86_64-linux.pxe-boot-picky-client
