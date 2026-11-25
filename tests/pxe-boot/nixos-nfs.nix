@@ -38,9 +38,28 @@ let
     volumeID = "NIXOS_PXE_NFS";
   };
 
+  # Mock RHEL ISOs, only to check what the router exports and writes into the
+  # menu (a real RHEL boot is tested by hand): one with the installer image,
+  # which can boot over NFS, and one without it, which must stay on HTTP.
+  rhelNfsIsoName = "rhel-9.6-x86_64-dvd.iso";
+  rhelHttpIsoName = "rhel-9.6-x86_64-boot-without-stage2.iso";
+
+  mockRhel =
+    name: withInstallImg:
+    pkgs.runCommand "mock-${name}" { nativeBuildInputs = [ pkgs.xorriso ]; } ''
+      mkdir -p $out rhel-root/images/pxeboot
+      echo "Red Hat GPG Key" > rhel-root/RPM-GPG-KEY-redhat-release
+      echo "Mock RHEL kernel" > rhel-root/images/pxeboot/vmlinuz
+      echo "Mock RHEL initrd" > rhel-root/images/pxeboot/initrd.img
+      ${pkgs.lib.optionalString withInstallImg ''echo "Mock stage2" > rhel-root/images/install.img''}
+      xorriso -as mkisofs -o $out/${name} -V "RHEL-TEST" -r -J rhel-root/
+    '';
+
   isoDir = pkgs.runCommand "nixos-nfs-test-iso-directory" { } ''
     mkdir -p $out
     cp ${testIso}/iso/*.iso $out/${isoName}
+    cp ${mockRhel rhelNfsIsoName true}/${rhelNfsIsoName} $out/
+    cp ${mockRhel rhelHttpIsoName false}/${rhelHttpIsoName} $out/
   '';
 in
 {
@@ -134,6 +153,24 @@ in
           menu = router.succeed("cat /srv/pxeboot/400/grub/grub.cfg")
           assert "nfsiso=${routerIp}:/run/pxe-boot/iso-mountpoint/${isoName}" in menu, menu
           assert "findiso=" not in menu, menu
+
+      with subtest("RHEL with an installer image is exported and uses inst.repo=nfs:"):
+          exports = router.succeed("exportfs -v")
+          assert "${rhelNfsIsoName}" in exports, f"RHEL ISO not exported:\n{exports}"
+          menu = router.succeed("cat /srv/pxeboot/400/grub/grub.cfg")
+          entry = [l for l in menu.splitlines() if "inst.repo=" in l and "${rhelNfsIsoName}" in l]
+          assert entry, menu
+          assert "inst.repo=nfs:${routerIp}:/run/pxe-boot/iso-mountpoint/${rhelNfsIsoName}" in entry[0], entry[0]
+          assert "inst.repo=http" not in entry[0], entry[0]
+
+      with subtest("RHEL without an installer image stays on HTTP and is not exported"):
+          exports = router.succeed("exportfs -v")
+          assert "${rhelHttpIsoName}" not in exports, exports
+          menu = router.succeed("cat /srv/pxeboot/400/grub/grub.cfg")
+          entry = [l for l in menu.splitlines() if "inst.repo=" in l and "${rhelHttpIsoName}" in l]
+          assert entry, menu
+          assert "inst.repo=http://${routerIp}" in entry[0], entry[0]
+          assert "inst.repo=nfs" not in entry[0], entry[0]
 
       with subtest("Client PXE-boots the ISO over NFS and reaches the beacon"):
           pxeClient.start()

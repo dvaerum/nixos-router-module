@@ -164,19 +164,24 @@ downloading the whole ISO into RAM. Other distros keep using HTTP.
 
 ## TODO
 
-### NFS boot: remaining work
+### NFS boot: status and remaining work
 
-Confirmed on real hardware: Ubuntu 26.04.1 Desktop boots all the way over NFS
-(initrd mounts the export, casper's default squashfs layer is found).
+| Distro | Real hardware | Automated test |
+|---|---|---|
+| Ubuntu 26.04.1 Desktop | boots over NFS into the installer | unit tests, config check |
+| NixOS (this project's ISO builder) | not yet | VM test: PXE client boots over NFS and sends its beacon |
+| RHEL 9.6 / 10.2 | not yet | unit tests, VM test of the export and menu entry (mock ISO) |
+
+RHEL boots with `inst.repo=nfs:<router>:<mounted ISO>`: the installer mounts that
+export as its repo and loop-mounts `images/install.img` from it (checked against
+the real RHEL 9.6 and 10.2 initrds' dracut scripts; defaults to NFS version 3).
 
 Not done or not confirmed:
 
-- Unattended Desktop install over NFS (the Server `autoinstall` seed is passed through).
-- RHEL over NFS (`inst.stage2`): not implemented, RHEL keeps the HTTP path.
+- Unattended installs over NFS (the kickstart / autoinstall seed is passed through
+  unchanged and stays an HTTP fetch).
 - A refresh that leaves unchanged ISOs alone: today a refresh restarts
   everything, which breaks a client that is mid-install over NFS.
-- A VM test that boots a client over NFS (only the wiring is covered by
-  `pxe-boot-nfs-wiring`).
 
 ## Development
 

@@ -67,14 +67,43 @@ impl DistroDetector for RhelDetector {
             format!("inst.repo={}", mounted_url),
         ];
 
-        // Add kickstart if provided
-        if autoinstall.is_some() {
-            // The script URL will be provided by the caller
-            // This is a placeholder that should be replaced
-            params.push(format!("inst.ks={AUTOINSTALL_URL_PLACEHOLDER}"));
-        }
-
+        push_kickstart(&mut params, autoinstall);
         params
+    }
+
+    /// Only for an ISO that carries the installer image: over NFS the
+    /// installer mounts the exported tree as its repo and loop-mounts
+    /// `images/install.img` from it, so without that file there is nothing to
+    /// boot from.
+    fn supports_nfs(&self, iso_info: &IsoInfo) -> bool {
+        iso_info.mount_path.join("images/install.img").exists()
+    }
+
+    /// `inst.repo=nfs:<server>:<path>` makes the installer (anaconda's dracut
+    /// hooks, checked against the real RHEL 9.6 and 10.2 initrds) mount that
+    /// export as its repo and find `images/install.img` and the packages in
+    /// it, instead of downloading the installer image into RAM over HTTP. With
+    /// no `nfsvers=` it defaults to NFS version 3, which the router serves.
+    fn generate_nfs_boot_params(
+        &self,
+        nfs_root: &str,
+        _boot_info: &BootInfo,
+        autoinstall: Option<&AutoinstallScript>,
+    ) -> Option<Vec<String>> {
+        let mut params = vec![
+            "initrd=initrd.img".to_string(),
+            format!("inst.repo=nfs:{nfs_root}"),
+        ];
+        push_kickstart(&mut params, autoinstall);
+        Some(params)
+    }
+}
+
+/// The kickstart (unattended install) stays an HTTP fetch in both modes. The
+/// script URL is substituted by the caller for the placeholder.
+fn push_kickstart(params: &mut Vec<String>, autoinstall: Option<&AutoinstallScript>) {
+    if autoinstall.is_some() {
+        params.push(format!("inst.ks={AUTOINSTALL_URL_PLACEHOLDER}"));
     }
 }
 
@@ -259,5 +288,70 @@ mod tests {
         let boot_info = d.extract_boot_info(&iso_info).await.unwrap();
 
         assert_eq!(boot_info.architecture, None);
+    }
+
+    fn rhel_iso(with_install_img: bool) -> (tempfile::TempDir, IsoInfo) {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("images/pxeboot")).unwrap();
+        fs::write(dir.path().join("RPM-GPG-KEY-redhat-release"), b"key").unwrap();
+        if with_install_img {
+            fs::write(dir.path().join("images/install.img"), b"stage2").unwrap();
+        }
+        let iso = IsoInfo::placeholder(
+            "rhel-9.6-x86_64-dvd.iso".into(),
+            PathBuf::from("/x/rhel-9.6-x86_64-dvd.iso"),
+            dir.path().to_path_buf(),
+        );
+        (dir, iso)
+    }
+
+    #[test]
+    fn nfs_boot_mounts_the_isos_tree_as_the_installer_repo() {
+        let params = RhelDetector::new()
+            .generate_nfs_boot_params(
+                "192.0.2.1:/run/pxe-boot/iso-mountpoint/rhel.iso",
+                &boot_info(),
+                None,
+            )
+            .unwrap();
+        assert!(params.contains(&"initrd=initrd.img".to_string()));
+        assert!(params
+            .contains(&"inst.repo=nfs:192.0.2.1:/run/pxe-boot/iso-mountpoint/rhel.iso".to_string()));
+    }
+
+    #[test]
+    fn nfs_boot_does_not_use_an_http_repo() {
+        let params = RhelDetector::new()
+            .generate_nfs_boot_params("192.0.2.1:/m/rhel.iso", &boot_info(), None)
+            .unwrap();
+        assert!(!params.iter().any(|p| p.contains("http://")));
+    }
+
+    #[test]
+    fn nfs_boot_keeps_the_kickstart() {
+        let s = script();
+        let params = RhelDetector::new()
+            .generate_nfs_boot_params("192.0.2.1:/m/rhel.iso", &boot_info(), Some(&s))
+            .unwrap();
+        assert!(params.contains(&format!("inst.ks={AUTOINSTALL_URL_PLACEHOLDER}")));
+    }
+
+    #[test]
+    fn nfs_boot_without_a_kickstart_has_no_ks_param() {
+        let params = RhelDetector::new()
+            .generate_nfs_boot_params("192.0.2.1:/m/rhel.iso", &boot_info(), None)
+            .unwrap();
+        assert!(!params.iter().any(|p| p.starts_with("inst.ks=")));
+    }
+
+    #[test]
+    fn nfs_is_supported_only_when_the_iso_carries_the_installer_image() {
+        // The installer finds its stage2 image (images/install.img) inside the
+        // NFS-mounted repo; without it there is nothing to boot from over NFS.
+        let d = RhelDetector::new();
+        let (_a, with) = rhel_iso(true);
+        let (_b, without) = rhel_iso(false);
+        assert!(d.supports_nfs(&with));
+        assert!(!d.supports_nfs(&without));
     }
 }

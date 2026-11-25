@@ -1295,9 +1295,10 @@ in
               without NFS support keep using the HTTP download, so enabling
               this never breaks an existing entry.
 
-              Currently supported: Ubuntu (Server and Desktop). Because the
-              ISO stays on the router, much smaller machines can boot
-              Desktop-sized images.
+              Currently supported: Ubuntu (Server and Desktop), RHEL (an ISO
+              that carries `images/install.img`) and NixOS ISOs built by this
+              project's ISO builder. Because the ISO stays on the router,
+              much smaller machines can boot Desktop-sized images.
 
               Starts the kernel NFS server (`services.nfs.server`, NFSv3
               only -- the initramfs NFS client does not speak NFSv4) with one
