@@ -1181,7 +1181,8 @@ in
   #   - the `systemd.tmpfiles.rules "L+"` entry exists when nixIsos is
   #     non-empty
   #   - `PathChanged` on the auto-refresh path unit includes nixIsosDir
-  #   - that path unit triggers a unit that restarts prepare (see below)
+  #   - that path unit triggers a unit that runs the incremental refresh
+  #     rather than restarting prepare (see below)
   #   - the duplicate-`.name` assertion actually fires
   nixIsosWiringCheck =
     let
@@ -1236,15 +1237,21 @@ in
       # Starting a unit that is already active is a no-op, and
       # `pxe-boot-prepare.service` is a RemainAfterExit oneshot that stays
       # active after boot. So the path unit must trigger a *different*
-      # unit whose job is to restart it, or no file change ever re-runs
-      # prepare.
+      # unit, or no file change ever re-runs prepare.
       triggeredName = pkgs.lib.removeSuffix ".service" (
         evaluatedGood.config.systemd.paths.pxe-boot-prepare-auto-refresh.pathConfig.Unit
       );
       triggeredService = evaluatedGood.config.systemd.services.${triggeredName};
-      refreshRestartsPrepare = pkgs.lib.hasInfix "restart pxe-boot-prepare.service" (
-        triggeredService.serviceConfig.ExecStart
+      # A restart would unexport and unmount every ISO, cutting off a
+      # client that is mid-install from another one. The refresh unit must
+      # run the incremental `refresh` subcommand instead.
+      refreshScript = triggeredService.script;
+      refreshRestartsPrepare = pkgs.lib.hasInfix "restart" (
+        refreshScript + (triggeredService.serviceConfig.ExecStart or "")
       );
+      refreshRunsIncrementalRefresh =
+        pkgs.lib.hasInfix "refresh" refreshScript
+        && pkgs.lib.hasInfix "pxe-boot-prepare" triggeredService.environment.PXE_BOOT_PREPARE;
 
       evaluatedBad = mkEvaluated [
         pkgA
@@ -1268,8 +1275,12 @@ in
           ok = triggeredName != "pxe-boot-prepare";
         }
         {
-          name = "the triggered refresh unit restarts pxe-boot-prepare.service";
-          ok = refreshRestartsPrepare;
+          name = "the triggered refresh unit does not restart pxe-boot-prepare.service";
+          ok = !refreshRestartsPrepare;
+        }
+        {
+          name = "the triggered refresh unit runs the incremental refresh subcommand";
+          ok = refreshRunsIncrementalRefresh;
         }
         {
           name = "duplicate nixIsos package name triggers an assertion";
@@ -1500,6 +1511,8 @@ in
         builtins.fromJSON (builtins.readFile (pkgs.lib.addContextFrom execStart path));
 
       exportsUnit = on.config.systemd.services.pxe-boot-nfs-exports;
+      refreshPath = on.config.systemd.services.pxe-boot-prepare-refresh.path;
+      hasOnRefreshPath = name: builtins.any (p: pkgs.lib.getName p == name) refreshPath;
       stopCommands = exportsUnit.serviceConfig.ExecStop;
       onJson = jsonOf on;
 
@@ -1539,6 +1552,14 @@ in
           ok =
             builtins.any (c: pkgs.lib.hasInfix "rm -f /etc/exports.d/pxe-boot.exports" c) stopCommands
             && builtins.any (c: pkgs.lib.hasSuffix "exportfs -r" c) stopCommands;
+        }
+        {
+          name = "on: the refresh unit can tell the NFS server to re-read the exports (exportfs)";
+          ok = hasOnRefreshPath "nfs-utils";
+        }
+        {
+          name = "on: the refresh unit can mount and unmount ISOs (util-linux)";
+          ok = hasOnRefreshPath "util-linux";
         }
         {
           name = "on: exports.d directory is created";
