@@ -273,6 +273,45 @@ CIDR (IP and Subnet\. Example: 192\.168\.1\.4/24)
 
 
 
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.server\.authoritative
+
+
+
+Override ` dhcp.server.generalSettings.authoritative ` (the
+global value, on by default) for this subnet only\.
+
+` null ` (the default) means “follow the global value”: nothing
+is written to this subnet’s Kea configuration and Kea uses the
+global one\. Set ` false ` on a subnet that shares its network
+with another DHCP server, or ` true ` to be authoritative on one
+subnet while the global value is off\.
+
+
+
+*Type:*
+null or boolean
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+false
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
 ## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.server\.classless-static-route
 
 
@@ -1618,6 +1657,45 @@ CIDR (IP and Subnet\. Example: 192\.168\.1\.4/24)
 
 ```nix
 "192.168.1.1/24"
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.configInterface\.\<name>\.dhcp\.server\.authoritative
+
+
+
+Override ` dhcp.server.generalSettings.authoritative ` (the
+global value, on by default) for this subnet only\.
+
+` null ` (the default) means “follow the global value”: nothing
+is written to this subnet’s Kea configuration and Kea uses the
+global one\. Set ` false ` on a subnet that shares its network
+with another DHCP server, or ` true ` to be authoritative on one
+subnet while the global value is off\.
+
+
+
+*Type:*
+null or boolean
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+false
 ```
 
 *Declared by:*
@@ -3017,6 +3095,45 @@ CIDR (IP and Subnet\. Example: 192\.168\.1\.4/24)
 
 
 
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.authoritative
+
+
+
+Override ` dhcp.server.generalSettings.authoritative ` (the
+global value, on by default) for this subnet only\.
+
+` null ` (the default) means “follow the global value”: nothing
+is written to this subnet’s Kea configuration and Kea uses the
+global one\. Set ` false ` on a subnet that shares its network
+with another DHCP server, or ` true ` to be authoritative on one
+subnet while the global value is off\.
+
+
+
+*Type:*
+null or boolean
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+false
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
 ## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.classless-static-route
 
 
@@ -3158,8 +3275,6 @@ false
 
 ## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.dns-server\.enable
 
-
-
 Enable the DNS Server (Unbound) for this network interface\.
 
 Only takes effect when ` my.router.dns-server.enable ` is
@@ -3276,6 +3391,8 @@ null
 
 
 ## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.domainName
+
+
 
 Provide list of Domain Name(s)
 
@@ -4257,6 +4374,49 @@ submodule
 
 ```nix
 { }
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.dhcp\.server\.generalSettings\.authoritative
+
+
+
+Whether Kea is the authoritative DHCP server for the subnets it
+serves\. An authoritative server answers a client that asks to
+renew an address it has no lease for with a DHCPNAK straight away,
+so the client drops the stale address and starts over\. A
+non-authoritative one stays silent, and the client keeps retrying
+the old address until its own timers run out\.
+
+This is the value for every subnet; set
+` <interface>.dhcp.server.authoritative ` to override it for one
+subnet\. Turn it off, for that subnet, wherever another DHCP server
+also answers on the same network: two authoritative servers
+would NAK each other’s leases\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+
+
+*Example:*
+
+```nix
+false
 ```
 
 *Declared by:*
@@ -5499,6 +5659,45 @@ CIDR (IP and Subnet\. Example: 192\.168\.1\.4/24)
 
 
 
+## my\.router\.vxlanInterfaces\.\<name>\.dhcp\.server\.authoritative
+
+
+
+Override ` dhcp.server.generalSettings.authoritative ` (the
+global value, on by default) for this subnet only\.
+
+` null ` (the default) means “follow the global value”: nothing
+is written to this subnet’s Kea configuration and Kea uses the
+global one\. Set ` false ` on a subnet that shares its network
+with another DHCP server, or ` true ` to be authoritative on one
+subnet while the global value is off\.
+
+
+
+*Type:*
+null or boolean
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+false
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
 ## my\.router\.vxlanInterfaces\.\<name>\.dhcp\.server\.classless-static-route
 
 
@@ -6342,8 +6541,6 @@ submodule
 
 ## my\.router\.vxlanInterfaces\.\<name>\.dhcp\.static\.dns-servers
 
-
-
 Set the IP address(es) of the dns-server(s)
 
 
@@ -6482,6 +6679,8 @@ true
 
 
 ## my\.router\.vxlanInterfaces\.\<name>\.group
+
+
 
 Multicast mode: the multicast group every peer joins
 (224\.0\.0\.0 - 239\.255\.255\.255)\. All peers of one VXLAN must use
