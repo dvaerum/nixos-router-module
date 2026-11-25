@@ -357,6 +357,14 @@ in
                 ipv4_fn.nthAddress subnet dhcp_server.firstIP;
 
             domainNames = dhcp_server.domainName ++ cfg.dhcp.server.generalSettings.domainName;
+
+            # This subnet's own value, else the global one; null (both unset)
+            # means "this router", [] means none.
+            ntpServers =
+              if dhcp_server.ntp-servers != null then
+                dhcp_server.ntp-servers
+              else
+                cfg.dhcp.server.generalSettings.ntpServers;
           in
           {
             id = dhcp_server.id;
@@ -387,17 +395,14 @@ in
                   else
                     lib.strings.concatStringsSep ", " dhcp_server.dns-servers;
               }
-              # Same convention for NTP: null -> the router itself (the module
-              # runs an NTP server on every DHCP-served subnet); [] -> none.
-              ++ lib.lists.optional (dhcp_server.ntp-servers != [ ]) {
+              # Same convention for NTP (see `ntpServers` above): null -> the router
+              # itself (the module runs an NTP server on every DHCP-served
+              # subnet); [] -> none.
+              ++ lib.lists.optional (ntpServers != [ ]) {
                 # code = 42;
                 name = "ntp-servers";
                 csv-format = true;
-                data =
-                  if dhcp_server.ntp-servers == null then
-                    cidr.address
-                  else
-                    lib.strings.concatStringsSep ", " dhcp_server.ntp-servers;
+                data = if ntpServers == null then cidr.address else lib.strings.concatStringsSep ", " ntpServers;
               }
               ++ lib.lists.optional (dhcp_server.default-route) {
                 # code = 3;

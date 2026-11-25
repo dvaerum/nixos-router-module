@@ -5,10 +5,11 @@
 ###########################################################################
 # Pure-eval check (no VM): the NTP servers Kea advertises (option 42).
 #
-# `<interface>.dhcp.server.ntp-servers` mirrors `dns-servers`: null (default)
-# advertises the router's own address, [ ] advertises nothing, a list
-# advertises exactly those servers. What a client actually receives is covered
-# by the `dhcp-ntp-servers-wire` VM test.
+# `dhcp.server.generalSettings.ntpServers` is the value for every subnet and
+# `<interface>.dhcp.server.ntp-servers` overrides it for one: a subnet's own
+# value if set, else the global one, else the subnet's own router address;
+# [ ] advertises nothing. What a client actually receives is covered by the
+# `dhcp-ntp-servers-wire` VM test.
 ###########################################################################
 let
   inherit (pkgs) lib;
@@ -16,6 +17,7 @@ let
   # Two subnets so one run shows both an inheriting and an overriding one.
   render =
     {
+      global ? null,
       first ? null,
       second ? null,
     }:
@@ -24,6 +26,7 @@ let
         imports = [ nixosModule.nixosModules.default ];
         my.router = {
           enable = true;
+          dhcp.server.generalSettings = lib.optionalAttrs (global != null) { ntpServers = global; };
           configInterface = {
             eth1 = {
               mac = null;
@@ -71,7 +74,45 @@ let
     second = [ ];
   };
 
+  globalListed = render { global = [ "203.0.113.50" ]; };
+  globalNone = render { global = [ ]; };
+  globalListedSubnetOverride = render {
+    global = [ "203.0.113.50" ];
+    first = [ "203.0.113.10" ];
+  };
+  globalNoneSubnetOverride = render {
+    global = [ ];
+    first = [ "203.0.113.10" ];
+  };
+  globalListedSubnetNone = render {
+    global = [ "203.0.113.50" ];
+    first = [ ];
+  };
+
   checks = [
+    {
+      name = "global list: every subnet that does not override it advertises the global list";
+      ok = globalListed.dataOf 1 == "203.0.113.50" && globalListed.dataOf 2 == "203.0.113.50";
+    }
+    {
+      name = "global empty list: no subnet advertises an NTP server";
+      ok = globalNone.dataOf 1 == null && globalNone.dataOf 2 == null;
+    }
+    {
+      name = "a subnet list overrides the global list, the other subnet keeps the global one";
+      ok =
+        globalListedSubnetOverride.dataOf 1 == "203.0.113.10"
+        && globalListedSubnetOverride.dataOf 2 == "203.0.113.50";
+    }
+    {
+      name = "a subnet list overrides a global empty list";
+      ok =
+        globalNoneSubnetOverride.dataOf 1 == "203.0.113.10" && globalNoneSubnetOverride.dataOf 2 == null;
+    }
+    {
+      name = "a subnet empty list overrides the global list (no NTP there, the other subnet inherits)";
+      ok = globalListedSubnetNone.dataOf 1 == null && globalListedSubnetNone.dataOf 2 == "203.0.113.50";
+    }
     {
       name = "default: each subnet advertises its own router address";
       ok = default.dataOf 1 == "192.0.2.1" && default.dataOf 2 == "198.51.100.1";

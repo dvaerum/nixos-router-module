@@ -112,4 +112,93 @@ in
           assert "iface=eth3 ntp=none" in out, out
     '';
   };
+
+  # The same on the wire with the global handle set: one subnet inherits it,
+  # one overrides it with its own list, one turns NTP off for itself.
+  globalVm = pkgs.testers.nixosTest {
+    name = "router-dhcp-ntp-servers-global";
+    skipLint = false;
+
+    nodes = {
+      router =
+        { ... }:
+        {
+          imports = [ nixosModule.nixosModules.default ];
+
+          virtualisation.vlans = [
+            1
+            2
+            3
+          ];
+          networking.useDHCP = false;
+
+          my.router = {
+            enable = true;
+            dhcp.server.generalSettings.ntpServers = [ "203.0.113.50" ];
+            configInterface = {
+              eth1 = {
+                mac = null;
+                dhcp.server = {
+                  id = 1;
+                  address = "192.0.2.1/24";
+                };
+              };
+              eth2 = {
+                mac = null;
+                dhcp.server = {
+                  id = 2;
+                  address = "198.51.100.1/24";
+                  ntp-servers = [ "203.0.113.123" ];
+                };
+              };
+              eth3 = {
+                mac = null;
+                dhcp.server = {
+                  id = 3;
+                  address = "192.0.3.1/24";
+                  ntp-servers = [ ];
+                };
+              };
+            };
+          };
+        };
+
+      client =
+        { ... }:
+        {
+          virtualisation.vlans = [
+            1
+            2
+            3
+          ];
+          networking.useDHCP = false;
+          networking.firewall.enable = false;
+          environment.systemPackages = [
+            offerClient
+            pkgs.iproute2
+          ];
+        };
+    };
+
+    testScript = ''
+      router.start()
+      router.wait_for_unit("multi-user.target")
+      router.wait_for_unit("kea-dhcp4-server.service")
+
+      client.start()
+      client.wait_for_unit("multi-user.target")
+
+      with subtest("a subnet without its own value advertises the global list"):
+          out = client.succeed("dhcp-offer-ntp-client eth1")
+          assert "iface=eth1 ntp=203.0.113.50" in out, out
+
+      with subtest("a subnet's own list overrides the global one"):
+          out = client.succeed("dhcp-offer-ntp-client eth2")
+          assert "iface=eth2 ntp=203.0.113.123" in out, out
+
+      with subtest("a subnet set to an empty list advertises nothing despite the global list"):
+          out = client.succeed("dhcp-offer-ntp-client eth3")
+          assert "iface=eth3 ntp=none" in out, out
+    '';
+  };
 }

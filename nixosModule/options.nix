@@ -145,6 +145,21 @@ let
           default = true;
           example = false;
         };
+        ntpServers = mkOption {
+          description = ''
+            The NTP server(s) advertised to DHCP clients (kea `ntp-servers`,
+            DHCP option 42) on every subnet that does not set its own
+            `<interface>.dhcp.server.ntp-servers`:
+            - `null` (the default): each subnet advertises its own router
+              address, where the NTP server this module runs for DHCP-served
+              subnets answers.
+            - `[ ]`: advertise no NTP server on any such subnet.
+            - a non-empty list: advertise exactly those servers.
+          '';
+          type = nullOr (listOf networkTypes.ipAddress);
+          default = null;
+          example = [ "203.0.113.123" ];
+        };
         domainName = domainName;
       };
     };
@@ -347,12 +362,14 @@ let
             };
             ntp-servers = mkOption {
               description = ''
-                The NTP server(s) advertised to DHCP clients (kea
-                `ntp-servers`, DHCP option 42):
-                - `null` (the default): advertise this router's own `address`,
-                  where the NTP server this module runs for DHCP-served subnets
-                  answers.
-                - `[ ]`: advertise no NTP server at all.
+                The NTP server(s) advertised to DHCP clients on this subnet
+                (kea `ntp-servers`, DHCP option 42), overriding
+                `dhcp.server.generalSettings.ntpServers`:
+                - `null` (the default): follow the global value. With that left
+                  at its default, this router's own `address` is advertised,
+                  where the NTP server this module runs for DHCP-served
+                  subnets answers.
+                - `[ ]`: advertise no NTP server on this subnet.
                 - a non-empty list: advertise exactly those servers.
               '';
               type = nullOr (listOf networkTypes.ipAddress);

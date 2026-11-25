@@ -78,6 +78,7 @@
           dhcp-authoritative = tests.dhcp-authoritative;
           dhcp-ntp-servers = tests.dhcp-ntp-servers;
           dhcp-ntp-servers-wire = tests.dhcp-ntp-servers-wire;
+          dhcp-ntp-servers-global-wire = tests.dhcp-ntp-servers-global-wire;
           dhcp-authoritative-wire = tests.dhcp-authoritative-wire;
           dhcp-client-use-routes = tests.dhcp-client-use-routes;
           pxe-boot = tests.pxe-boot;
