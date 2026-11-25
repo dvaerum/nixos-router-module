@@ -11,6 +11,8 @@ use distro::{DetectorRegistry, DistroDetector};
 use error::{IoResultExt, PxeBootError, Result};
 use fs4::tokio::AsyncFileExt;
 use grub::{GrubMenuBuilder, MenuEntryFactory};
+use iso::nfs_exports::{ExportfsReloader, NfsExportReloading};
+use iso::state::{Fingerprint, IsoState};
 use iso::{IsoDiscovery, IsoDiscovering, IsoMounter, IsoMounting, ServeTree, ServeTreeRebuilding};
 use std::path::Path;
 
@@ -50,6 +52,14 @@ async fn acquire_prepare_lock(runtime_root: &Path) -> Result<tokio::fs::File> {
     Ok(file)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RunMode {
+    /// Service start: everything is mounted from scratch.
+    Full,
+    /// Path-triggered: only what changed is touched.
+    Incremental,
+}
+
 pub struct PxeBootService {
     config: PxeBootConfig,
     detector_registry: DetectorRegistry,
@@ -57,6 +67,8 @@ pub struct PxeBootService {
     iso_mounter: Box<dyn IsoMounting>,
     iso_serve_tree: Box<dyn ServeTreeRebuilding>,
     autoinstall_manager: Box<dyn AutoinstallPreparing>,
+    nfs_reloader: Box<dyn NfsExportReloading>,
+    iso_state: IsoState,
 }
 
 impl PxeBootService {
@@ -99,6 +111,8 @@ impl PxeBootService {
         autoinstall_manager: Box<dyn AutoinstallPreparing>,
     ) -> Self {
         Self {
+            iso_state: IsoState::new(&config.runtime_root),
+            nfs_reloader: Box::new(ExportfsReloader),
             config,
             detector_registry,
             iso_discovery,
@@ -108,18 +122,38 @@ impl PxeBootService {
         }
     }
 
+    /// Replaces the real `exportfs -r` call (tests).
+    pub fn with_nfs_reloader(mut self, reloader: Box<dyn NfsExportReloading>) -> Self {
+        self.nfs_reloader = reloader;
+        self
+    }
+
+    /// Incremental counterpart of `prepare`, run when the ISO folder changed
+    /// while clients may be installing from it. Same menus, serve tree and
+    /// seeds, but ISOs that are still there and unchanged stay mounted and
+    /// exported; see `mount_incremental`.
+    pub async fn refresh(&self) -> Result<()> {
+        self.run(RunMode::Incremental).await
+    }
+
     /// Main entry point: prepare PXE boot environment
     pub async fn prepare(&self) -> Result<()> {
+        self.run(RunMode::Full).await
+    }
+
+    async fn run(&self, mode: RunMode) -> Result<()> {
         // D38: held for the rest of this function's scope.
         let _lock = acquire_prepare_lock(&self.config.runtime_root).await?;
 
-        tracing::info!("Starting PXE boot preparation");
+        tracing::info!("Starting PXE boot preparation ({mode:?})");
 
         // 1. Discover ISOs
         let iso_paths = self.iso_discovery.discover().await?;
         tracing::info!("Discovered {} ISO files", iso_paths.len());
 
-        if iso_paths.is_empty() {
+        // A refresh must carry on with no ISOs left: the ones that vanished
+        // still have to be unexported and unmounted, and the menus emptied.
+        if iso_paths.is_empty() && mode == RunMode::Full {
             tracing::warn!(
                 "No ISO files found in {}",
                 self.config
@@ -160,21 +194,11 @@ impl PxeBootService {
         // mount content that 3 concurrent mounts never had. Mounting is a
         // once-per-prepare()-run operation, not a hot path -- the lost
         // parallelism is not a meaningful cost for correctness.
-        let mut mounted_isos = Vec::new();
-        for path in &iso_paths {
-            match self.iso_mounter.mount(path).await {
-                Ok(mount_path) => {
-                    mounted_isos.push((path.clone(), mount_path));
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        "Failed to mount {}: {}. Skipping this ISO.",
-                        path.display(),
-                        e
-                    );
-                }
-            }
-        }
+        let mounted_isos = match mode {
+            RunMode::Full => self.mount_all(&iso_paths).await,
+            RunMode::Incremental => self.mount_incremental(&iso_paths).await?,
+        };
+        self.remember_mounted(&mounted_isos).await;
 
         if mounted_isos.is_empty() {
             tracing::warn!("No ISOs could be mounted successfully. GRUB menus will only have reload entry.");
@@ -183,70 +207,7 @@ impl PxeBootService {
         }
 
         // 3. Detect distributions and extract boot info
-        let mut iso_infos = Vec::new();
-        // D41: (file_name, reason) for ISOs that mounted fine but could
-        // not be prepared for boot -- rendered as a loud, clearly-
-        // labeled placeholder GRUB entry (see generate_grub_menu) instead
-        // of silently vanishing from the menu with no operator-visible
-        // signal beyond the tracing::warn! lines below.
-        let mut failed_isos: Vec<(String, String)> = Vec::new();
-
-        for (iso_path, mount_path) in mounted_isos.iter() {
-            // A path with no final component (e.g. "/", or "..") can't
-            // happen for a real discovered ISO in practice, but panicking
-            // here would take down detection for every OTHER ISO too --
-            // skip just this one instead, matching the isolation already
-            // applied to mount/detect failures below.
-            let Some(file_name) = iso_path.file_name() else {
-                tracing::warn!(
-                    "Skipping {}: no file name component in path.",
-                    iso_path.display()
-                );
-                continue;
-            };
-            let file_name = file_name.to_string_lossy().to_string();
-
-            // Try to detect and extract boot info, skip on failure
-            match self.detector_registry.detect(mount_path).await {
-                Ok(detector) => {
-                    let mut iso_info = IsoInfo::placeholder(
-                        file_name.clone(),
-                        iso_path.clone(),
-                        mount_path.clone(),
-                    );
-
-                    match detector.extract_boot_info(&iso_info).await {
-                        Ok(boot_info) => {
-                            iso_info.apply_boot_info(&boot_info);
-
-                            tracing::info!(
-                                "Detected {} as {:?}",
-                                file_name,
-                                boot_info.distro_type
-                            );
-
-                            iso_infos.push((iso_info, boot_info, detector));
-                        }
-                        Err(e) => {
-                            tracing::warn!(
-                                "Failed to extract boot info from {}: {}. Skipping this ISO.",
-                                file_name,
-                                e
-                            );
-                            failed_isos.push((file_name, e.to_string()));
-                        }
-                    }
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        "Failed to detect distribution type for {}: {}. Skipping this ISO.",
-                        file_name,
-                        e
-                    );
-                    failed_isos.push((file_name, e.to_string()));
-                }
-            }
-        }
+        let (iso_infos, failed_isos) = self.detect_isos(&mounted_isos).await;
 
         if iso_infos.is_empty() {
             tracing::warn!("No distributions detected. GRUB menus will be empty.");
@@ -263,6 +224,10 @@ impl PxeBootService {
                 "Failed to write NFS exports: {}. ISOs booting over NFS will not be reachable until the next successful run.",
                 e
             );
+        } else if mode == RunMode::Incremental {
+            // A full run leaves this to `pxe-boot-nfs-exports`, which starts
+            // after it; a refresh has to tell the running server itself.
+            self.reload_nfs_exports().await;
         }
 
         // 4. Process autoinstall scripts. Pass the already-detected distro per ISO
@@ -335,6 +300,253 @@ impl PxeBootService {
 
         tracing::info!("PXE boot preparation complete");
         Ok(())
+    }
+
+    /// Sequential, not concurrent: see the loop-device race described in `run`.
+    async fn mount_all(
+        &self,
+        iso_paths: &[std::path::PathBuf],
+    ) -> Vec<(std::path::PathBuf, std::path::PathBuf)> {
+        let mut mounted_isos = Vec::new();
+        for path in iso_paths {
+            match self.iso_mounter.mount(path).await {
+                Ok(mount_path) => {
+                    mounted_isos.push((path.clone(), mount_path));
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to mount {}: {}. Skipping this ISO.",
+                        path.display(),
+                        e
+                    );
+                }
+            }
+        }
+        mounted_isos
+    }
+
+    /// Brings the mounts in line with the ISO folder without touching ISOs
+    /// that are still there and unchanged: those stay mounted and exported,
+    /// so a client installing from one is not interrupted by another ISO
+    /// coming or going.
+    ///
+    /// Order matters: stale ISOs (removed, or changed in place) are first
+    /// dropped from the exports and the NFS server told to re-read them,
+    /// because nfsd holds an exported ISO busy and the unmount would
+    /// otherwise fail. Only then are they unmounted and the new and changed
+    /// ones mounted. A stale ISO that stays busy past the retry window (or
+    /// that could not be unexported) is left mounted, warned about and
+    /// retried by the next refresh; a changed one is not remounted meanwhile,
+    /// as the mount would still show its old content.
+    async fn mount_incremental(
+        &self,
+        iso_paths: &[std::path::PathBuf],
+    ) -> Result<Vec<(std::path::PathBuf, std::path::PathBuf)>> {
+        let remembered = self.iso_state.load().await;
+        let mounted: std::collections::HashSet<String> =
+            self.iso_mounter.mounted_names().await?.into_iter().collect();
+
+        let mut kept = Vec::new();
+        let mut to_mount = Vec::new();
+        let mut present = std::collections::HashSet::new();
+        for path in iso_paths {
+            let Some(name) = path.file_name().map(|n| n.to_string_lossy().to_string()) else {
+                continue;
+            };
+            present.insert(name.clone());
+            let fingerprint = match Fingerprint::of(path).await {
+                Ok(f) => f,
+                Err(e) => {
+                    tracing::warn!("Skipping {}: {}", path.display(), e);
+                    continue;
+                }
+            };
+            if mounted.contains(&name) && remembered.get(&name) == Some(&fingerprint) {
+                kept.push((path.clone(), self.iso_mounter.mount_path(&name)));
+            } else {
+                to_mount.push((path.clone(), name, fingerprint));
+            }
+        }
+
+        // Mounted but gone, or mounted but changed (or not remembered).
+        let mut stale: Vec<String> = mounted
+            .iter()
+            .filter(|n| !present.contains(*n) || to_mount.iter().any(|(_, m, _)| m == *n))
+            .cloned()
+            .collect();
+        stale.sort();
+
+        let mut stuck = std::collections::HashSet::new();
+        if !stale.is_empty() {
+            tracing::info!("Unexporting and unmounting: {}", stale.join(", "));
+            let (kept_infos, _) = self.detect_isos(&kept).await;
+            let unexported = match self.write_nfs_exports(&kept_infos).await {
+                Ok(()) => self.reload_nfs_exports().await,
+                Err(e) => {
+                    tracing::warn!("Failed to write NFS exports: {}", e);
+                    false
+                }
+            };
+            for name in &stale {
+                let result = if unexported {
+                    self.iso_mounter.unmount_one(name).await
+                } else {
+                    Err(PxeBootError::Config(
+                        "still exported over NFS, so it cannot be unmounted".into(),
+                    ))
+                };
+                if let Err(e) = result {
+                    tracing::warn!(
+                        "Could not unmount {}: {}. Leaving it mounted, the next refresh retries.",
+                        name,
+                        e
+                    );
+                    stuck.insert(name.clone());
+                }
+            }
+        }
+
+        let mut fresh = std::collections::HashMap::new();
+        for (path, name, fingerprint) in to_mount {
+            if stuck.contains(&name) {
+                continue;
+            }
+            match self.iso_mounter.mount(&path).await {
+                Ok(mount_path) => {
+                    fresh.insert(name, (path, mount_path, fingerprint));
+                }
+                Err(e) => tracing::warn!(
+                    "Failed to mount {}: {}. Skipping this ISO.",
+                    path.display(),
+                    e
+                ),
+            }
+        }
+
+        // Back in discovery order, like a full run would list them.
+        let mut result = Vec::new();
+        for path in iso_paths {
+            let Some(name) = path.file_name().map(|n| n.to_string_lossy().to_string()) else {
+                continue;
+            };
+            if let Some((p, mount_path)) = kept.iter().find(|(p, _)| p == path) {
+                result.push((p.clone(), mount_path.clone()));
+            } else if let Some((p, mount_path, _)) = fresh.remove(&name) {
+                result.push((p, mount_path));
+            }
+        }
+        Ok(result)
+    }
+
+    /// Records what `mount_incremental` compares against next time. A
+    /// failure only means the next refresh remounts everything, so it is
+    /// not worth failing the run for.
+    async fn remember_mounted(&self, mounted_isos: &[(std::path::PathBuf, std::path::PathBuf)]) {
+        let mut state = std::collections::HashMap::new();
+        for (path, _) in mounted_isos {
+            let Some(name) = path.file_name().map(|n| n.to_string_lossy().to_string()) else {
+                continue;
+            };
+            if let Ok(fingerprint) = Fingerprint::of(path).await {
+                state.insert(name, fingerprint);
+            }
+        }
+        if let Err(e) = self.iso_state.save(&state).await {
+            tracing::warn!(
+                "Failed to record mounted ISOs: {}. The next refresh remounts them all.",
+                e
+            );
+        }
+    }
+
+    /// Returns whether the NFS server now has the current exports. Nothing
+    /// to do (and so `true`) when NFS is not configured.
+    async fn reload_nfs_exports(&self) -> bool {
+        if self.config.nfs.is_none() {
+            return true;
+        }
+        match self.nfs_reloader.reload().await {
+            Ok(()) => true,
+            Err(e) => {
+                tracing::warn!("Failed to reload NFS exports: {}", e);
+                false
+            }
+        }
+    }
+
+    async fn detect_isos(
+        &self,
+        mounted_isos: &[(std::path::PathBuf, std::path::PathBuf)],
+    ) -> (
+        Vec<(IsoInfo, BootInfo, &dyn DistroDetector)>,
+        Vec<(String, String)>,
+    ) {
+        let mut iso_infos = Vec::new();
+        // D41: (file_name, reason) for ISOs that mounted fine but could
+        // not be prepared for boot -- rendered as a loud, clearly-
+        // labeled placeholder GRUB entry (see generate_grub_menu) instead
+        // of silently vanishing from the menu with no operator-visible
+        // signal beyond the tracing::warn! lines below.
+        let mut failed_isos: Vec<(String, String)> = Vec::new();
+
+        for (iso_path, mount_path) in mounted_isos.iter() {
+            // A path with no final component (e.g. "/", or "..") can't
+            // happen for a real discovered ISO in practice, but panicking
+            // here would take down detection for every OTHER ISO too --
+            // skip just this one instead, matching the isolation already
+            // applied to mount/detect failures below.
+            let Some(file_name) = iso_path.file_name() else {
+                tracing::warn!(
+                    "Skipping {}: no file name component in path.",
+                    iso_path.display()
+                );
+                continue;
+            };
+            let file_name = file_name.to_string_lossy().to_string();
+
+            // Try to detect and extract boot info, skip on failure
+            match self.detector_registry.detect(mount_path).await {
+                Ok(detector) => {
+                    let mut iso_info = IsoInfo::placeholder(
+                        file_name.clone(),
+                        iso_path.clone(),
+                        mount_path.clone(),
+                    );
+
+                    match detector.extract_boot_info(&iso_info).await {
+                        Ok(boot_info) => {
+                            iso_info.apply_boot_info(&boot_info);
+
+                            tracing::info!(
+                                "Detected {} as {:?}",
+                                file_name,
+                                boot_info.distro_type
+                            );
+
+                            iso_infos.push((iso_info, boot_info, detector));
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                "Failed to extract boot info from {}: {}. Skipping this ISO.",
+                                file_name,
+                                e
+                            );
+                            failed_isos.push((file_name, e.to_string()));
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to detect distribution type for {}: {}. Skipping this ISO.",
+                        file_name,
+                        e
+                    );
+                    failed_isos.push((file_name, e.to_string()));
+                }
+            }
+        }
+
+        (iso_infos, failed_isos)
     }
 
     /// Writes the `exports(5)` file for every ISO that boots over NFS (an
@@ -579,6 +791,7 @@ impl PxeBootService {
             }
         }
         self.iso_mounter.unmount_all().await?;
+        self.iso_state.clear().await?;
         tracing::info!("Cleanup complete");
         Ok(())
     }
@@ -1623,5 +1836,357 @@ mod tests {
 
         service.cleanup().await.unwrap();
         assert!(!exports_file.exists());
+    }
+
+    /// A router with a few mock ISOs in a real folder, so `refresh` can
+    /// fingerprint them, and fakes for everything that needs root. Every
+    /// `service()` call builds a fresh service over the same shared
+    /// "mounts", like a fresh `pxe-boot-prepare` process would see them.
+    struct Rig {
+        rt: tempfile::TempDir,
+        folder: tempfile::TempDir,
+        trees: HashMap<String, tempfile::TempDir>,
+        discovery: crate::iso::discovery::FakeIsoDiscovery,
+        mounter: crate::iso::mount::FakeIsoMounter,
+        exports_file: std::path::PathBuf,
+    }
+
+    impl Rig {
+        fn new(names: &[&str]) -> Self {
+            let rt = tempfile::tempdir().unwrap();
+            let mut mounter = crate::iso::mount::FakeIsoMounter::new();
+            let mut trees = HashMap::new();
+            for name in names {
+                let tree = ubuntu_desktop_tree();
+                mounter = mounter.succeeding_for(name, tree.path().to_path_buf());
+                trees.insert(name.to_string(), tree);
+            }
+            Self {
+                exports_file: nfs_enabled(rt.path(), &[]).exports_file,
+                rt,
+                folder: tempfile::tempdir().unwrap(),
+                trees,
+                discovery: crate::iso::discovery::FakeIsoDiscovery::returning(vec![]),
+                mounter,
+            }
+        }
+
+        fn with_mounter(
+            mut self,
+            f: impl FnOnce(crate::iso::mount::FakeIsoMounter) -> crate::iso::mount::FakeIsoMounter,
+        ) -> Self {
+            self.mounter = f(self.mounter);
+            self
+        }
+
+        fn put(&self, name: &str, content: &str) {
+            std::fs::write(self.folder.path().join(name), content).unwrap();
+            self.rescan();
+        }
+
+        fn delete(&self, name: &str) {
+            std::fs::remove_file(self.folder.path().join(name)).unwrap();
+            self.rescan();
+        }
+
+        fn rescan(&self) {
+            let mut found: Vec<_> = std::fs::read_dir(self.folder.path())
+                .unwrap()
+                .map(|e| e.unwrap().path())
+                .collect();
+            found.sort();
+            self.discovery.set(found);
+        }
+
+        fn service(&self, reload_fails: bool) -> PxeBootService {
+            let mut config = config_with(&self.rt.path().join("global"), self.rt.path());
+            config.dhcp_interfaces = vec![interface(7, None)];
+            config.nfs = Some(nfs_enabled(self.rt.path(), &[]));
+            let mut reloader = iso::nfs_exports::FakeNfsReloader::new(
+                self.exports_file.clone(),
+                self.mounter.event_log(),
+            );
+            if reload_fails {
+                reloader = reloader.failing();
+            }
+            PxeBootService::new_with_dependencies(
+                config,
+                DetectorRegistry::new(),
+                Box::new(self.discovery.clone()),
+                Box::new(self.mounter.clone()),
+                Box::new(ServeTree::new(self.rt.path().to_path_buf())),
+                Box::new(crate::autoinstall::manager::FakeAutoinstallPreparing::always_succeeding()),
+            )
+            .with_nfs_reloader(Box::new(reloader))
+        }
+
+        fn export_path(&self, name: &str) -> String {
+            self.trees[name].path().display().to_string()
+        }
+
+        /// ISO names listed in the exports file right now, sorted.
+        fn exported(&self) -> Vec<String> {
+            let text = std::fs::read_to_string(&self.exports_file).unwrap_or_default();
+            let mut names: Vec<String> = self
+                .trees
+                .keys()
+                .filter(|n| text.contains(&self.export_path(n)))
+                .cloned()
+                .collect();
+            names.sort();
+            names
+        }
+
+        fn grub_cfg(&self) -> String {
+            std::fs::read_to_string(self.rt.path().join("global/7/grub/grub.cfg")).unwrap()
+        }
+
+        /// Mount/unmount/reload events since `mark` (an earlier `events().len()`).
+        fn events_since(&self, mark: usize) -> Vec<String> {
+            self.mounter.events()[mark..].to_vec()
+        }
+    }
+
+    #[tokio::test]
+    async fn refresh_leaves_unchanged_isos_mounted_and_never_unexports_them() {
+        let rig = Rig::new(&["a.iso", "b.iso", "c.iso"]);
+        rig.put("a.iso", "a");
+        rig.put("b.iso", "b");
+        rig.service(false).prepare().await.unwrap();
+        let mark = rig.mounter.events().len();
+
+        rig.put("c.iso", "c");
+        rig.service(false).refresh().await.unwrap();
+
+        let events = rig.events_since(mark);
+        for untouched in ["a.iso", "b.iso"] {
+            assert!(
+                !events.iter().any(|e| e.ends_with(untouched)),
+                "{untouched} must not be mounted or unmounted again: {events:?}"
+            );
+        }
+        for e in events.iter().filter(|e| e.starts_with("reload")) {
+            assert!(e.contains(&rig.export_path("a.iso")), "a.iso unexported: {e}");
+            assert!(e.contains(&rig.export_path("b.iso")), "b.iso unexported: {e}");
+        }
+    }
+
+    #[tokio::test]
+    async fn refresh_mounts_exports_and_lists_a_new_iso() {
+        let rig = Rig::new(&["a.iso", "c.iso"]);
+        rig.put("a.iso", "a");
+        rig.service(false).prepare().await.unwrap();
+
+        rig.put("c.iso", "c");
+        rig.service(false).refresh().await.unwrap();
+
+        assert_eq!(rig.mounter.currently_mounted(), ["a.iso", "c.iso"]);
+        assert_eq!(rig.exported(), ["a.iso", "c.iso"]);
+        assert!(rig.grub_cfg().contains("c.iso"), "{}", rig.grub_cfg());
+    }
+
+    #[tokio::test]
+    async fn refresh_unexports_a_removed_iso_before_unmounting_it() {
+        let rig = Rig::new(&["a.iso", "b.iso"]);
+        rig.put("a.iso", "a");
+        rig.put("b.iso", "b");
+        rig.service(false).prepare().await.unwrap();
+        let mark = rig.mounter.events().len();
+
+        rig.delete("b.iso");
+        rig.service(false).refresh().await.unwrap();
+
+        let events = rig.events_since(mark);
+        let unmount = events.iter().position(|e| e == "unmount b.iso").expect("b.iso unmounted");
+        let last_reload_before = events[..unmount]
+            .iter()
+            .rev()
+            .find(|e| e.starts_with("reload"))
+            .unwrap_or_else(|| panic!("no export reload before the unmount: {events:?}"));
+        assert!(!last_reload_before.contains(&rig.export_path("b.iso")), "{events:?}");
+        assert!(last_reload_before.contains(&rig.export_path("a.iso")), "{events:?}");
+        assert_eq!(rig.mounter.currently_mounted(), ["a.iso"]);
+        assert_eq!(rig.exported(), ["a.iso"]);
+        assert!(!rig.grub_cfg().contains("b.iso"), "{}", rig.grub_cfg());
+    }
+
+    #[tokio::test]
+    async fn refresh_remounts_an_iso_that_changed_in_place() {
+        let rig = Rig::new(&["a.iso", "b.iso"]);
+        rig.put("a.iso", "old content");
+        rig.put("b.iso", "b");
+        rig.service(false).prepare().await.unwrap();
+        let mark = rig.mounter.events().len();
+
+        rig.put("a.iso", "a longer, different content");
+        rig.service(false).refresh().await.unwrap();
+
+        let events = rig.events_since(mark);
+        let unmount = events.iter().position(|e| e == "unmount a.iso").expect("a.iso unmounted");
+        let mount = events.iter().position(|e| e == "mount a.iso").expect("a.iso mounted again");
+        assert!(unmount < mount, "{events:?}");
+        assert!(!events.iter().any(|e| e.ends_with("b.iso")), "{events:?}");
+        assert_eq!(rig.exported(), ["a.iso", "b.iso"]);
+    }
+
+    #[tokio::test]
+    async fn refresh_does_not_fail_when_a_removed_iso_stays_busy() {
+        let rig =
+            Rig::new(&["a.iso", "b.iso", "c.iso"]).with_mounter(|m| m.busy_on_unmount("b.iso"));
+        rig.put("a.iso", "a");
+        rig.put("b.iso", "b");
+        rig.service(false).prepare().await.unwrap();
+
+        rig.delete("b.iso");
+        rig.put("c.iso", "c");
+        rig.service(false).refresh().await.unwrap();
+
+        assert_eq!(rig.exported(), ["a.iso", "c.iso"], "busy ISO must be unexported anyway");
+        assert!(rig.mounter.currently_mounted().contains(&"b.iso".to_string()));
+        assert!(rig.grub_cfg().contains("c.iso"));
+    }
+
+    #[tokio::test]
+    async fn refresh_retries_a_busy_removed_iso_on_the_next_run() {
+        let rig = Rig::new(&["a.iso", "b.iso"]).with_mounter(|m| m.busy_on_unmount("b.iso"));
+        rig.put("a.iso", "a");
+        rig.put("b.iso", "b");
+        rig.service(false).prepare().await.unwrap();
+        rig.delete("b.iso");
+        rig.service(false).refresh().await.unwrap();
+        let mark = rig.mounter.events().len();
+
+        rig.service(false).refresh().await.unwrap();
+
+        assert!(rig.events_since(mark).contains(&"unmount b.iso".to_string()));
+    }
+
+    #[tokio::test]
+    async fn refresh_does_not_serve_the_old_content_of_a_changed_iso_it_could_not_unmount() {
+        let rig = Rig::new(&["a.iso", "b.iso"]).with_mounter(|m| m.busy_on_unmount("a.iso"));
+        rig.put("a.iso", "old");
+        rig.put("b.iso", "b");
+        rig.service(false).prepare().await.unwrap();
+        let mark = rig.mounter.events().len();
+
+        rig.put("a.iso", "new and longer");
+        rig.service(false).refresh().await.unwrap();
+
+        let events = rig.events_since(mark);
+        assert!(!events.contains(&"mount a.iso".to_string()), "{events:?}");
+        assert_eq!(rig.exported(), ["b.iso"]);
+    }
+
+    #[tokio::test]
+    async fn refresh_with_every_iso_removed_unmounts_all_and_exports_nothing() {
+        let rig = Rig::new(&["a.iso", "b.iso"]);
+        rig.put("a.iso", "a");
+        rig.put("b.iso", "b");
+        rig.service(false).prepare().await.unwrap();
+
+        rig.delete("a.iso");
+        rig.delete("b.iso");
+        rig.service(false).refresh().await.unwrap();
+
+        assert!(rig.mounter.currently_mounted().is_empty());
+        assert!(rig.exported().is_empty());
+        assert!(rig.exports_file.exists(), "an empty exports file, not a stale one");
+    }
+
+    #[tokio::test]
+    async fn refresh_with_nothing_mounted_behaves_like_prepare() {
+        let rig = Rig::new(&["a.iso", "b.iso"]);
+        rig.put("a.iso", "a");
+        rig.put("b.iso", "b");
+
+        rig.service(false).refresh().await.unwrap();
+
+        assert_eq!(rig.mounter.currently_mounted(), ["a.iso", "b.iso"]);
+        assert_eq!(rig.exported(), ["a.iso", "b.iso"]);
+        assert!(rig.events_since(0).iter().any(|e| e.starts_with("reload")));
+    }
+
+    #[tokio::test]
+    async fn a_second_refresh_with_no_changes_touches_no_mount() {
+        let rig = Rig::new(&["a.iso", "b.iso"]);
+        rig.put("a.iso", "a");
+        rig.put("b.iso", "b");
+        rig.service(false).prepare().await.unwrap();
+        rig.service(false).refresh().await.unwrap();
+        let exports_before = std::fs::read_to_string(&rig.exports_file).unwrap();
+        let mark = rig.mounter.events().len();
+
+        rig.service(false).refresh().await.unwrap();
+
+        let events = rig.events_since(mark);
+        assert!(events.iter().all(|e| e.starts_with("reload")), "{events:?}");
+        assert_eq!(std::fs::read_to_string(&rig.exports_file).unwrap(), exports_before);
+    }
+
+    #[tokio::test]
+    async fn refresh_keeps_a_stale_iso_mounted_when_unexporting_fails() {
+        let rig = Rig::new(&["a.iso", "b.iso"]);
+        rig.put("a.iso", "a");
+        rig.put("b.iso", "b");
+        rig.service(false).prepare().await.unwrap();
+        let mark = rig.mounter.events().len();
+
+        rig.delete("b.iso");
+        rig.service(true).refresh().await.unwrap();
+
+        assert!(
+            !rig.events_since(mark).contains(&"unmount b.iso".to_string()),
+            "unmounting while still exported only runs into a busy mount"
+        );
+    }
+
+    #[tokio::test]
+    async fn refresh_does_not_touch_the_nfs_server_when_nfs_is_not_configured() {
+        let rig = Rig::new(&["a.iso", "b.iso"]);
+        rig.put("a.iso", "a");
+        let mut config = config_with(&rig.rt.path().join("global"), rig.rt.path());
+        config.dhcp_interfaces = vec![interface(7, None)];
+        let service = PxeBootService::new_with_dependencies(
+            config,
+            DetectorRegistry::new(),
+            Box::new(rig.discovery.clone()),
+            Box::new(rig.mounter.clone()),
+            Box::new(ServeTree::new(rig.rt.path().to_path_buf())),
+            Box::new(crate::autoinstall::manager::FakeAutoinstallPreparing::always_succeeding()),
+        )
+        .with_nfs_reloader(Box::new(iso::nfs_exports::FakeNfsReloader::new(
+            rig.exports_file.clone(),
+            rig.mounter.event_log(),
+        )));
+        service.prepare().await.unwrap();
+        rig.put("b.iso", "b");
+        service.refresh().await.unwrap();
+
+        assert!(!rig.mounter.events().iter().any(|e| e.starts_with("reload")));
+        assert_eq!(rig.mounter.currently_mounted(), ["a.iso", "b.iso"]);
+    }
+
+    #[tokio::test]
+    async fn refresh_cannot_overlap_a_running_prepare() {
+        let rig = Rig::new(&["a.iso"]);
+        rig.put("a.iso", "a");
+        let _held = acquire_prepare_lock(rig.rt.path()).await.unwrap();
+
+        let err = rig.service(false).refresh().await.unwrap_err().to_string();
+
+        assert!(err.contains("already in progress"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn cleanup_forgets_the_remembered_isos() {
+        let rig = Rig::new(&["a.iso"]);
+        rig.put("a.iso", "a");
+        let service = rig.service(false);
+        service.prepare().await.unwrap();
+        assert!(rig.rt.path().join(".iso-state.json").exists());
+
+        service.cleanup().await.unwrap();
+
+        assert!(!rig.rt.path().join(".iso-state.json").exists());
     }
 }

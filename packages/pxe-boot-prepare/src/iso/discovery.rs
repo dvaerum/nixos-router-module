@@ -129,15 +129,24 @@ impl IsoDiscovering for IsoDiscovery {
 /// so `lib.rs`'s own test module can use it too, unlike `FakeDetector`
 /// (distro/detector.rs), which only ever needed to be used from its own
 /// file.
+/// Cloning shares the list, so a test can change what "the ISO folder"
+/// holds between two runs of the same service.
 #[cfg(test)]
+#[derive(Clone)]
 pub struct FakeIsoDiscovery {
-    isos: Vec<PathBuf>,
+    isos: std::sync::Arc<std::sync::Mutex<Vec<PathBuf>>>,
 }
 
 #[cfg(test)]
 impl FakeIsoDiscovery {
     pub fn returning(isos: Vec<PathBuf>) -> Self {
-        Self { isos }
+        Self {
+            isos: std::sync::Arc::new(std::sync::Mutex::new(isos)),
+        }
+    }
+
+    pub fn set(&self, isos: Vec<PathBuf>) {
+        *self.isos.lock().unwrap() = isos;
     }
 }
 
@@ -145,7 +154,7 @@ impl FakeIsoDiscovery {
 #[async_trait]
 impl IsoDiscovering for FakeIsoDiscovery {
     async fn discover(&self) -> Result<Vec<PathBuf>> {
-        Ok(self.isos.clone())
+        Ok(self.isos.lock().unwrap().clone())
     }
 }
 
