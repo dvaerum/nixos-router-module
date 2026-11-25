@@ -724,6 +724,45 @@ null
 
 
 
+## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.server\.ntpServerEnable
+
+
+
+Override ` dhcp.server.generalSettings.ntpServerEnable ` (the
+global value, on by default) for this subnet only: whether the
+NTP server this module runs answers this subnet’s clients and
+the default advertises this router’s address\.
+
+` null ` (the default) follows the global value\. ` false ` makes
+ntpd ignore this subnet and advertise nothing by default;
+` true ` serves this subnet even when the global value is off\.
+
+
+
+*Type:*
+null or boolean
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+false
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
 ## my\.router\.bridgeInterfaces\.\<name>\.dhcp\.server\.pxe-boot\.enable
 
 
@@ -2159,6 +2198,45 @@ null
 
 
 
+## my\.router\.configInterface\.\<name>\.dhcp\.server\.ntpServerEnable
+
+
+
+Override ` dhcp.server.generalSettings.ntpServerEnable ` (the
+global value, on by default) for this subnet only: whether the
+NTP server this module runs answers this subnet’s clients and
+the default advertises this router’s address\.
+
+` null ` (the default) follows the global value\. ` false ` makes
+ntpd ignore this subnet and advertise nothing by default;
+` true ` serves this subnet even when the global value is off\.
+
+
+
+*Type:*
+null or boolean
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+false
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
 ## my\.router\.configInterface\.\<name>\.dhcp\.server\.pxe-boot\.enable
 
 
@@ -3224,8 +3302,6 @@ false
 
 ## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.classless-static-route
 
-
-
 Expose all other subnets, declared as a ` dhcp.server.address `,
 as a classless static route (Option: 121)\.
 
@@ -3313,6 +3389,8 @@ attribute set of (open submodule of attribute set of anything)
 
 
 ## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.clientClasses\.\<name>\.test
+
+
 
 Kea classification test expression\.
 
@@ -3625,6 +3703,45 @@ null
   "192.168.1.1"
   "203.0.113.123"
 ]
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.configInterface\.\<name>\.vlans\.\*\.dhcp\.server\.ntpServerEnable
+
+
+
+Override ` dhcp.server.generalSettings.ntpServerEnable ` (the
+global value, on by default) for this subnet only: whether the
+NTP server this module runs answers this subnet’s clients and
+the default advertises this router’s address\.
+
+` null ` (the default) follows the global value\. ` false ` makes
+ntpd ignore this subnet and advertise nothing by default;
+` true ` serves this subnet even when the global value is off\.
+
+
+
+*Type:*
+null or boolean
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+false
 ```
 
 *Declared by:*
@@ -4580,6 +4697,44 @@ list of (FQDN (Fully Qualified Domain Name))
 
 
 
+## my\.router\.dhcp\.server\.generalSettings\.ntpServerEnable
+
+
+
+Whether the NTP server this module runs (ntpd) serves the
+DHCP-served subnets\. When on, ntpd answers a subnet’s clients and
+the default ` ntpServers ` advertises that subnet’s own router
+address; when off, ntpd ignores the subnet and the default
+advertises nothing\. ntpd only runs while at least one subnet has
+it on\. This is the value for every subnet; set
+` <interface>.dhcp.server.ntpServerEnable ` to override it for one\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+
+
+*Example:*
+
+```nix
+false
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
 ## my\.router\.dhcp\.server\.generalSettings\.ntpServers
 
 
@@ -4590,7 +4745,8 @@ DHCP option 42) on every subnet that does not set its own
 
  - ` null ` (the default): each subnet advertises its own router
    address, where the NTP server this module runs for DHCP-served
-   subnets answers\.
+   subnets answers (see ` ntpServerEnable `; nothing is advertised
+   where that is off)\.
  - ` [ ] `: advertise no NTP server on any such subnet\.
  - a non-empty list: advertise exactly those servers\.
 
@@ -6284,9 +6440,46 @@ null
 
 
 
+## my\.router\.vxlanInterfaces\.\<name>\.dhcp\.server\.ntpServerEnable
+
+
+
+Override ` dhcp.server.generalSettings.ntpServerEnable ` (the
+global value, on by default) for this subnet only: whether the
+NTP server this module runs answers this subnet’s clients and
+the default advertises this router’s address\.
+
+` null ` (the default) follows the global value\. ` false ` makes
+ntpd ignore this subnet and advertise nothing by default;
+` true ` serves this subnet even when the global value is off\.
+
+
+
+*Type:*
+null or boolean
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+false
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
 ## my\.router\.vxlanInterfaces\.\<name>\.dhcp\.server\.pxe-boot\.enable
-
-
 
 Enable PXE Boot support for this network interface\.
 
@@ -6551,6 +6744,8 @@ string
 
 
 ## my\.router\.vxlanInterfaces\.\<name>\.dhcp\.server\.reservations\.\<name>\.hostname
+
+
 
 DNS hostname for this reservation\.
 
