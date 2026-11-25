@@ -4697,6 +4697,75 @@ list of (FQDN (Fully Qualified Domain Name))
 
 
 
+## my\.router\.dhcp\.server\.generalSettings\.logDebugLevel
+
+
+
+How detailed Kea’s debug output is, 0 to 99 (higher is more)\.
+Only used when ` logSeverity ` is ` DEBUG `; ` null ` leaves it unset\.
+
+
+
+*Type:*
+null or integer between 0 and 99 (both inclusive)
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+50
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
+## my\.router\.dhcp\.server\.generalSettings\.logSeverity
+
+
+
+How much Kea (the DHCP server) logs, from quiet to loud: ` FATAL `,
+` ERROR `, ` WARN `, ` INFO `, ` DEBUG `\. ` INFO ` is what Kea logs at by
+default and what this module ran at in practice\. Use ` DEBUG `
+(with ` logDebugLevel `) only while investigating a problem: it is
+much louder\.
+
+
+
+*Type:*
+one of “FATAL”, “ERROR”, “WARN”, “INFO”, “DEBUG”
+
+
+
+*Default:*
+
+```nix
+"INFO"
+```
+
+
+
+*Example:*
+
+```nix
+"WARN"
+```
+
+*Declared by:*
+ - [/home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options\.nix](file:///home/runner/work/nixos-router-module/nixos-router-module/nixosModule/options.nix)
+
+
+
 ## my\.router\.dhcp\.server\.generalSettings\.ntpServerEnable
 
 
@@ -6481,6 +6550,8 @@ false
 
 ## my\.router\.vxlanInterfaces\.\<name>\.dhcp\.server\.pxe-boot\.enable
 
+
+
 Enable PXE Boot support for this network interface\.
 
 Side effect — DHCP client matching becomes MAC-only on this
@@ -6562,8 +6633,6 @@ string
 
 
 ## my\.router\.vxlanInterfaces\.\<name>\.dhcp\.server\.pxe-boot\.defaultScriptName
-
-
 
 Select which autoinstall script should be selected by default\.
 
